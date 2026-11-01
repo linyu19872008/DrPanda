@@ -1,6 +1,9 @@
-"""Elasticsearch 最小只读连接器：集群健康探测。"""
+"""Elasticsearch 只读连接器：mapping、search、health、index stats。"""
 
 from __future__ import annotations
+
+from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -15,7 +18,7 @@ class _ESClient:
     def __init__(self, target: Target) -> None:
         self.target = target
 
-    async def ping(self) -> None:
+    def _client(self) -> httpx.AsyncClient:
         options = self.target.options
         hosts = options.get("hosts")
         if isinstance(hosts, str):
@@ -23,34 +26,141 @@ class _ESClient:
         if not hosts:
             raise errors.UpstreamUnavailable("elasticsearch 目标没有配置 hosts")
         base_url = hosts[0] if "://" in hosts[0] else f"http://{hosts[0]}"
-
         username = options.get("username")
         auth = (
-            (username, self.target.secret.get("password", ""))
-            if username
-            else None
+            (username, self.target.secret.get("password", "")) if username else None
         )
-        headers = {}
+        headers: dict[str, str] = {}
         api_key = self.target.secret.get("api_key")
         if api_key:
             headers["Authorization"] = f"ApiKey {api_key}"
-
-        client = httpx.AsyncClient(
+        return httpx.AsyncClient(
             base_url=base_url,
             auth=auth,
             headers=headers,
             verify=bool(options.get("verify_tls", True)),
             timeout=base.timeout_seconds(self.target),
         )
+
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        body: dict[str, Any] | None = None,
+    ) -> httpx.Response:
+        client = self._client()
         try:
-            response = await client.get("/_cluster/health")
+            response = await client.request(method, path, json=body)
             base.check_http_response(response, "elasticsearch")
+            return response
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"elasticsearch 探测失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"elasticsearch 请求失败：{exc}") from exc
         finally:
             await client.aclose()
+
+    async def ping(self) -> None:
+        await self._request("GET", "/_cluster/health")
+
+    async def mapping(self, index: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        path = f"/{quote(index, safe='')}/_mapping"
+        mapping_payload = (await self._request("GET", path)).json()
+        settings_payload = (
+            await self._request("GET", f"/{quote(index, safe='')}/_settings")
+        ).json()
+        entry = mapping_payload.get(index, {}) if isinstance(mapping_payload, dict) else {}
+        properties = (entry.get("mappings") or {}).get("properties") or {}
+        rows: list[dict[str, Any]] = []
+
+        def walk(node: dict[str, Any], prefix: str = "") -> None:
+            for name, spec in node.items():
+                if not isinstance(spec, dict):
+                    continue
+                field = f"{prefix}.{name}" if prefix else name
+                if "properties" in spec:
+                    walk(spec["properties"], field)
+                else:
+                    rows.append(
+                        {
+                            "field": field,
+                            "type": spec.get("type"),
+                            "analyzer": spec.get("analyzer")
+                            or spec.get("search_analyzer"),
+                        }
+                    )
+
+        walk(properties)
+        settings_entry = settings_payload.get(index, {}) if isinstance(settings_payload, dict) else {}
+        settings = (settings_entry.get("settings") or {}).get("index") or {}
+        stats = {
+            "shards": settings.get("number_of_shards"),
+            "replicas": settings.get("number_of_replicas"),
+        }
+        return rows, stats
+
+    async def search(
+        self, index: str, body: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        payload = (
+            await self._request("POST", f"/{quote(index, safe='')}/_search", body=body)
+        ).json()
+        hits = payload.get("hits") or {}
+        rows: list[dict[str, Any]] = []
+        for hit in hits.get("hits") or []:
+            row = {
+                "_index": hit.get("_index"),
+                "_id": hit.get("_id"),
+                "_score": hit.get("_score"),
+            }
+            source = hit.get("_source")
+            if isinstance(source, dict):
+                row.update(source)
+            rows.append(base.to_jsonable(row))
+        total = hits.get("total")
+        if isinstance(total, dict):
+            total = total.get("value")
+        return rows, {"total": total, "took": payload.get("took")}
+
+    async def health(self) -> dict[str, Any]:
+        payload = (await self._request("GET", "/_cluster/health")).json()
+        keys = [
+            "cluster_name",
+            "status",
+            "number_of_nodes",
+            "number_of_data_nodes",
+            "active_primary_shards",
+            "active_shards",
+            "relocating_shards",
+            "initializing_shards",
+            "unassigned_shards",
+            "delayed_unassigned_shards",
+        ]
+        return {key: payload.get(key) for key in keys if key in payload}
+
+    async def index_stats(self, index: str) -> list[dict[str, Any]]:
+        payload = (
+            await self._request("GET", f"/{quote(index, safe='')}/_stats")
+        ).json()
+        rows: list[dict[str, Any]] = []
+        for name, entry in (payload.get("indices") or {}).items():
+            primaries = (entry.get("primaries") or {})
+            total = (entry.get("total") or {})
+            rows.append(
+                {
+                    "index": name,
+                    "primaries_docs": (primaries.get("docs") or {}).get("count"),
+                    "primaries_size_bytes": (primaries.get("store") or {}).get(
+                        "size_in_bytes"
+                    ),
+                    "total_docs": (total.get("docs") or {}).get("count"),
+                    "total_size_bytes": (total.get("store") or {}).get(
+                        "size_in_bytes"
+                    ),
+                }
+            )
+        return rows
 
 
 class ESConnector:
@@ -67,6 +177,26 @@ class ESConnector:
 
     async def close_client(self, client: _ESClient) -> None:
         return None
+
+    async def mapping(
+        self, client: _ESClient, target: Target, *, index: str
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        return await client.mapping(index)
+
+    async def search(
+        self, client: _ESClient, target: Target, *, index: str, body: dict[str, Any]
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        return await client.search(index, body)
+
+    async def health(
+        self, client: _ESClient, target: Target
+    ) -> dict[str, Any]:
+        return await client.health()
+
+    async def index_stats(
+        self, client: _ESClient, target: Target, *, index: str
+    ) -> list[dict[str, Any]]:
+        return await client.index_stats(index)
 
 
 connector = ESConnector()

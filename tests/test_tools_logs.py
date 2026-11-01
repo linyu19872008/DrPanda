@@ -151,15 +151,15 @@ async def test_tools_and_prompt_listed(runtime: Runtime) -> None:
         tools = await client.list_tools()
         prompts = await client.list_prompts()
 
-    names = sorted(tool.name for tool in tools)
-    assert names == [
+    names = {tool.name for tool in tools}
+    assert {
         "cls_context",
         "cls_search",
         "gitlab_blame",
         "gitlab_get_file",
         "gitlab_search_code",
         "systems_status",
-    ]
+    } <= names
     for tool in tools:
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is True
@@ -482,5 +482,5 @@ async def test_prompt_contains_order(runtime: Runtime) -> None:
     text = prompt.messages[0].content.text
     assert "systems_status" in text
     assert "trace-1" in text
-    assert "第三期上线" in text
+    assert "mysql_tables" in text and "mongo_collections" in text
     assert "全程只读" in text

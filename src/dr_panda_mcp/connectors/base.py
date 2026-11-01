@@ -9,6 +9,9 @@ import asyncio
 import json
 import time
 from dataclasses import dataclass
+from datetime import date, datetime
+from datetime import time as time_value
+from decimal import Decimal
 from typing import Any, Protocol, Self
 
 from dr_panda_mcp import errors
@@ -42,6 +45,23 @@ class Truncation:
 
     def as_dict(self) -> dict[str, Any]:
         return {"reason": self.reason, "limit": self.limit}
+
+
+def to_jsonable(value: Any) -> Any:
+    """把驱动返回的日期、Decimal、bytes 等转成可 JSON 序列化的值。"""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    if isinstance(value, (datetime, date, time_value)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [to_jsonable(item) for item in value]
+    return str(value)
 
 
 def timeout_seconds(target: Target) -> float:

@@ -325,13 +325,13 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 
 **任务**
 
-- [ ] M5.1 MySQL：guard 完整版（sqlglot AST + 危险清单 + 系统库 + 无 WHERE 排序/聚合）、连接器 `query/explain/processlist/tables/describe`（6.3/6.6/8.5）。
-- [ ] M5.2 Mongo：命令与阶段白名单、`$match` 前置规则、JS 执行与 `allowDiskUse`/`hint` 拒绝、连接器 `collections/find/aggregate/stats`（6.3/6.6/8.5）。
-- [ ] M5.3 Elasticsearch：方法+路径白名单、脚本/深分页/大小/高基数聚合拒绝、连接器 `mapping/search/health/index_stats`（6.3/6.6/8.5）。
-- [ ] M5.4 Redis：命令白名单、无界范围拒绝、长度探测、连接器 `get/scan/info/slowlog`（6.3/6.6/8.5）。
-- [ ] M5.5 十七个工具的参数、包络、截断与错误码（8.1–8.5）。
-- [ ] M5.6 四类组件危险清单拒绝用例（管理类 + 高开销类各一条以上）（6.6/12.1）。
-- [ ] M5.7 上限与并发验证：行、字节、超时、`target_max_concurrency`（8.3/9.3）。
+- [x] M5.1 MySQL：guard 完整版（sqlglot AST + 危险清单 + 系统库 + 无 WHERE 排序/聚合）、连接器 `query/explain/processlist/tables/describe`（6.3/6.6/8.5）。
+- [x] M5.2 Mongo：命令与阶段白名单、`$match` 前置规则、JS 执行与 `allowDiskUse`/`hint` 拒绝、连接器 `collections/find/aggregate/stats`（6.3/6.6/8.5）。
+- [x] M5.3 Elasticsearch：方法+路径白名单、脚本/深分页/大小/高基数聚合拒绝、连接器 `mapping/search/health/index_stats`（6.3/6.6/8.5）。
+- [x] M5.4 Redis：命令白名单、无界范围拒绝、长度探测、连接器 `get/scan/info/slowlog`（6.3/6.6/8.5）。
+- [x] M5.5 十七个工具的参数、包络、截断与错误码（8.1–8.5）。
+- [x] M5.6 四类组件危险清单拒绝用例（管理类 + 高开销类各一条以上）（6.6/12.1）。
+- [x] M5.7 上限与并发验证：行、字节、超时、`target_max_concurrency`（8.3/9.3）。
 
 **交付物**：四类连接器与 guard、十七个工具、拒绝用例、上限用例。
 
@@ -470,7 +470,7 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 | M3 | 配置台网页与 MCP 接入 | 已完成 | 验证记录见 [docs/verify/M3.md](verify/M3.md) |
 | M3.5 | 配置台视觉与主题重构 | 已完成 | 验证记录见 [docs/verify/M3.5.md](verify/M3.5.md) |
 | M4 | 日志到代码 | 已完成 | 验证记录见 [docs/verify/M4.md](verify/M4.md) |
-| M5 | 数据面 | 未开始 | |
+| M5 | 数据面 | 已完成 | 验证记录见 [docs/verify/M5.md](verify/M5.md) |
 | M6 | 消息面 | 未开始 | |
 | M7 | 登录 | 未开始 | |
 

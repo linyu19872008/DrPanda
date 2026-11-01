@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.9 |
+| 版本 | v0.10 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -27,6 +27,7 @@
 | v0.7 | 2026-11-01 | M3 落地同步：`systems_status` 是全局工具，包络 `target` 用 `*`、`type` 用 `all`；网页、系统配置页、审计清理任务按 4.x/9.6 落地 |
 | v0.8 | 2026-11-01 | M3.5 视觉重构：手写 CSS 静态资源、Cookie 三态主题、列表改单表 + 统计/搜索/类型筛选、类型选择页、表单分区与错误摘要；仍为零 JS |
 | v0.9 | 2026-11-01 | M4 落地同步：CLS/GitLab 五个工具与 `investigate_error` 上线；补充 CLS topic 语义与 GitLab 项目省略时的范围规则 |
+| v0.10 | 2026-11-01 | M5 落地同步：数据面十七个工具上线；补充强制 LIMIT、聚合尾 `$limit`、ES `size` 上限、Redis 前缀与有界读取、schema 工具可用性 |
 
 ## 1. 目标
 
@@ -909,6 +910,13 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | `redis_info` | `target`、`section` | `stats`: INFO 键值 | 只读 INFO | 字节上限 |
 | `redis_slowlog` | `target`、`count=10` | `rows`: 慢日志条目 | `SLOWLOG GET` | 目标行数 |
 
+第二批上线后补充实现约定：
+
+- `mysql_query` 对 `SELECT` 用 sqlglot 重写 `LIMIT`（取请求值与目标 `max_rows` 较小者）；`SHOW` / `DESCRIBE` / `EXPLAIN` 不补 LIMIT。`mysql_tables` / `mysql_describe` 只用 `SHOW` 类语句，不查 `information_schema`；库引用必须在 `allowed_dbs` 内，`SHOW DATABASES` 在目标级被拒绝。
+- `mongo_aggregate` 在管道末尾追加 `$limit`，并统一带 `maxTimeMS`；`mongo_find` 同样带 `maxTimeMS`。`mongo_collections` 用 `listCollections` + `collStats`，不执行空条件 `find`。
+- `es_search` 的 `size` 不能超过目标 `max_rows`（超过直接 `DANGEROUS_OPERATION`）；`from + size` 仍受 10000 窗口限制。`es_mapping` 只发 `GET _mapping` 与 `GET _settings`。
+- `redis_get` 按类型做有界读取：list/set/zset 先探测长度，超过 `max_rows` 直接拒绝；hash 用 `HSCAN`。配置了 `key_prefix` 时，`redis_scan` 的 `pattern` 也必须以该前缀开头。`redis_slowlog` 的 count 取请求值与 `max_rows` 较小者。
+
 ### 8.6 第三批：消息面
 
 | 工具 | 参数 | 返回 | 闸门与范围 | 上限 |
@@ -921,7 +929,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 ### 8.7 排查 prompt
 
-提供一个 MCP prompt `investigate_error`，参数 `description`、`service`、`trace_id`、`time_range`（均可空，缺省由模型向用户确认）。该 prompt 在第二期上线；其中第 2 步的 schema 发现工具在第三期上线，之前跳过即可。内容把推荐顺序写给模型：
+提供一个 MCP prompt `investigate_error`，参数 `description`、`service`、`trace_id`、`time_range`（均可空，缺省由模型向用户确认）。该 prompt 在第二期上线；第 2 步的 schema 发现工具已在 M5（第二期数据面）上线，可直接使用。内容把推荐顺序写给模型：
 
 1. 先用 `systems_status` 看清哪些目标可用、最近是否连通。
 2. 需要写查询前先看结构：MySQL 用 `mysql_tables`、`mysql_describe`，Mongo 用 `mongo_collections`，Elasticsearch 用 `es_mapping`。不要凭猜写表名和字段名。

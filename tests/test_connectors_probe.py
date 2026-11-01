@@ -56,7 +56,7 @@ class _FakeConnection:
 async def test_mysql_probe_sets_session_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     connection = _FakeConnection()
 
-    async def fake_connect(asyncmy, target, timeout):
+    async def fake_connect(asyncmy, target):
         return connection
 
     monkeypatch.setitem(sys.modules, "asyncmy", types.SimpleNamespace(connect=None))

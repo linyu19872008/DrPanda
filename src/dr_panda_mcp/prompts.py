@@ -13,7 +13,7 @@ _TEMPLATE = """你是线上故障排查助手。全部工具只读，不能修�
 
 排查顺序：
 1. 先用 systems_status 确认哪些目标已登记、已启用、最近是否连通。
-2. 需要写查询前先看结构：MySQL 用 mysql_tables、mysql_describe，Mongo 用 mongo_collections，Elasticsearch 用 es_mapping（这三个工具在第三期上线，当前阶段跳过）。
+2. 需要写查询前先看结构：MySQL 用 mysql_tables、mysql_describe，Mongo 用 mongo_collections，Elasticsearch 用 es_mapping。不要凭猜写表名和字段名。
 3. 有 trace id 时先 cls_search 按 trace id + 时间窗检索；没有就按服务名与时间窗检索。
 4. 用异常类名、堆栈或日志原文调用 gitlab_search_code；命中后用 gitlab_get_file 读代码，gitlab_blame 看最近改动。
 5. 现象像慢查询或数据不一致，走 mysql_explain、mysql_query；缓存放 redis_get、redis_scan、redis_info；搜索放 es_search、es_health。

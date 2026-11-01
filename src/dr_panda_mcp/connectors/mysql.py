@@ -1,7 +1,7 @@
-"""MySQL 最小只读连接器（测试连接用）。
+"""MySQL 只读连接器：探测与通用只读查询。
 
-连接建立后先把会话设为事务只读、设置语句超时与返回行数上限，
-再执行 ``SELECT 1``。真正的排查工具在后续里程碑接入。
+每次连接都先设事务只读、语句超时与返回行数上限，再执行工具传入的
+单条白名单语句；具体 SQL 由工具层解析、限库并强制 LIMIT。
 """
 
 from __future__ import annotations
@@ -14,13 +14,26 @@ from dr_panda_mcp.guards import mysql as mysql_guard
 from dr_panda_mcp.guards.protocol import Decision
 from dr_panda_mcp.store.protocol import Target
 
+SETUP_STATEMENTS = (
+    "SET SESSION TRANSACTION READ ONLY",
+    "SET SESSION max_execution_time = {timeout_ms}",
+    "SET SESSION sql_select_limit = {max_rows}",
+)
+
 
 class _MySQLClient:
     def __init__(self, target: Target) -> None:
         self.target = target
 
-    async def ping(self) -> None:
+    def _setup(self) -> list[str]:
         timeout = base.timeout_seconds(self.target)
+        return [
+            "SET SESSION TRANSACTION READ ONLY",
+            f"SET SESSION max_execution_time = {int(timeout * 1000)}",
+            f"SET SESSION sql_select_limit = {base.max_rows(self.target)}",
+        ]
+
+    async def ping(self) -> None:
         try:
             import asyncmy
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
@@ -28,29 +41,57 @@ class _MySQLClient:
                 "mysql 客户端未安装：uv sync --extra mysql"
             ) from exc
 
-        connection = await _connect(asyncmy, self.target, timeout)
-        statements = [
-            "SET SESSION TRANSACTION READ ONLY",
-            f"SET SESSION max_execution_time = {int(timeout * 1000)}",
-            f"SET SESSION sql_select_limit = {base.max_rows(self.target)}",
-            "SELECT 1",
-        ]
+        connection = await _connect(asyncmy, self.target)
         try:
             async with connection.cursor() as cursor:
-                for statement in statements:
+                for statement in [*self._setup(), "SELECT 1"]:
                     await cursor.execute(statement)
                 await cursor.fetchone()
+        except errors.DrPandaError:
+            raise
         except Exception as exc:
             raise errors.UpstreamUnavailable(f"mysql 探测失败：{exc}") from exc
         finally:
-            closer = getattr(connection, "ensure_closed", None)
-            if closer is not None:
-                await closer()
-            else:  # pragma: no cover - asyncmy 走 ensure_closed
-                connection.close()
+            await _close(connection)
+
+    async def fetch_rows(self, sql: str) -> list[dict[str, Any]]:
+        try:
+            import asyncmy
+        except ImportError as exc:  # pragma: no cover - 依赖缺失路径
+            raise errors.UpstreamUnavailable(
+                "mysql 客户端未安装：uv sync --extra mysql"
+            ) from exc
+
+        async def _fetch() -> list[dict[str, Any]]:
+            connection = await _connect(asyncmy, self.target)
+            try:
+                async with connection.cursor() as cursor:
+                    for statement in self._setup():
+                        await cursor.execute(statement)
+                    await cursor.execute(sql)
+                    columns = [item[0] for item in (cursor.description or [])]
+                    records = await cursor.fetchall()
+                    return [
+                        {
+                            str(column): base.to_jsonable(value)
+                            for column, value in zip(columns, record)
+                        }
+                        for record in records
+                    ]
+            finally:
+                await _close(connection)
+
+        try:
+            return await base.run_with_timeout(
+                _fetch(), base.timeout_seconds(self.target)
+            )
+        except errors.DrPandaError:
+            raise
+        except Exception as exc:
+            raise errors.UpstreamUnavailable(f"mysql 查询失败：{exc}") from exc
 
 
-async def _connect(asyncmy: Any, target: Target, timeout: float) -> Any:
+async def _connect(asyncmy: Any, target: Target) -> Any:
     options = target.options
     return await asyncmy.connect(
         host=options.get("host", "127.0.0.1"),
@@ -58,9 +99,17 @@ async def _connect(asyncmy: Any, target: Target, timeout: float) -> Any:
         user=options.get("user", ""),
         password=target.secret.get("password", ""),
         db=options.get("default_db") or None,
-        connect_timeout=timeout,
+        connect_timeout=base.timeout_seconds(target),
         autocommit=True,
     )
+
+
+async def _close(connection: Any) -> None:
+    closer = getattr(connection, "ensure_closed", None)
+    if closer is not None:
+        await closer()
+    else:  # pragma: no cover - asyncmy 走 ensure_closed
+        connection.close()
 
 
 class MySQLConnector:
@@ -77,6 +126,11 @@ class MySQLConnector:
 
     async def close_client(self, client: _MySQLClient) -> None:
         return None
+
+    async def fetch_rows(
+        self, client: _MySQLClient, target: Target, sql: str
+    ) -> list[dict[str, Any]]:
+        return await client.fetch_rows(sql)
 
 
 connector = MySQLConnector()
