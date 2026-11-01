@@ -7,11 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
 
 import uvicorn
 
+from dr_panda_mcp.audit import run_cleanup_loop
 from dr_panda_mcp.config import Config, load_config
 from dr_panda_mcp.errors import ConfigError, StartupError
 from dr_panda_mcp.runtime import create_runtime
@@ -48,6 +50,7 @@ def main() -> int:
 async def _run(config: Config) -> int:
     check_port_available(config.host, config.port)
     runtime = await create_runtime(config)
+    cleanup_task = asyncio.create_task(run_cleanup_loop(runtime))
     try:
         app = create_app(config, runtime)
         server = uvicorn.Server(
@@ -67,6 +70,9 @@ async def _run(config: Config) -> int:
         await server.serve()
         return 0
     finally:
+        cleanup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await cleanup_task
         await runtime.close()
 
 

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{{ "新建目标" if mode == "create" else "编辑目标" }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<h2>{{ "新建目标：" if mode == "create" else "编辑目标：" }}{{ spec.label }}</h2>
+{% if errors.get("_form") %}<p class="error">{{ errors["_form"] }}</p>{% endif %}
+<form method="post" action="{{ '/targets' if mode == 'create' else '/targets/' ~ existing.id }}">
+  {% if mode == "create" %}<input type="hidden" name="type" value="{{ spec.type }}">{% endif %}
+
+  <label>名称
+    <input name="name" value="{{ values.get('name', '') }}" {% if mode == 'edit' %}readonly{% endif %}>
+    {% if errors.get("name") %}<span class="error">{{ errors["name"] }}</span>{% endif %}
+    <small>{{ "创建后不可修改；" if mode == "edit" else "" }}只允许小写字母、数字与连字符</small>
+  </label>
+
+  <label class="inline"><input type="checkbox" name="enabled" {% if values.get('enabled') %}checked{% endif %}> 启用</label>
+
+  <h3>连接与范围</h3>
+  {% for row in option_rows %}
+    <label>{{ row.label }}{% if row.required %} *{% endif %}
+      {% if row.kind == "bool" %}
+        <input type="checkbox" name="{{ row.key }}" {% if row.value %}checked{% endif %}>
+      {% elif row.kind == "list" %}
+        <textarea name="{{ row.key }}" rows="3">{{ row.value }}</textarea>
+      {% elif row.kind == "select" %}
+        <select name="{{ row.key }}">
+          {% for choice in row.choices %}<option value="{{ choice }}" {% if choice == row.value %}selected{% endif %}>{{ choice }}</option>{% endfor %}
+        </select>
+      {% elif row.kind == "int" %}
+        <input type="number" name="{{ row.key }}" value="{{ row.value }}">
+      {% else %}
+        <input name="{{ row.key }}" value="{{ row.value }}">
+      {% endif %}
+      {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      {% if row.help %}<small>{{ row.help }}</small>{% endif %}
+    </label>
+  {% endfor %}
+
+  <h3>密钥</h3>
+  {% for row in secret_rows %}
+    <label>{{ row.label }}{% if row.required %} *{% endif %}
+      <input type="password" name="secret_{{ row.key }}" value="" autocomplete="new-password">
+      {% if row.has_value %}
+        <small>已设置；留空沿用原值</small>
+        <label class="inline"><input type="checkbox" name="clear_{{ row.key }}"> 清除</label>
+      {% else %}
+        <small>未设置</small>
+      {% endif %}
+      {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      {% if row.help %}<small>{{ row.help }}</small>{% endif %}
+    </label>
+  {% endfor %}
+
+  <h3>公共限制</h3>
+  {% for row in common_rows %}
+    <label>{{ row.label }}
+      <input type="number" name="{{ row.key }}" value="{{ row.value }}">
+      {% if row.error %}<span class="error">{{ row.error }}</span>{% endif %}
+      <small>{{ row.help }}</small>
+    </label>
+  {% endfor %}
+
+  <p>
+    <button type="submit">保存</button>
+    <a href="/">取消</a>
+  </p>
+</form>
+{% endblock %}

@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.6 |
+| 版本 | v0.7 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -24,6 +24,7 @@
 | v0.4 | 2026-11-01 | 系统配置入数据库并加 `/settings` 页（审计保留期默认 90 天、每 target 并发默认 10）；新增危险与高开销命令绝对规则（6.6） |
 | v0.5 | 2026-11-01 | M1 落地同步：`Target` 增加 `secret_fields` / `secret_ok`，`ConfigStore` 增加 `ping`；SQLite 备份路径改为数据库同目录 `backup/` |
 | v0.6 | 2026-11-01 | M2 落地同步：`Decision` 增加 `error_code`/`reason`，管理类与高开销类分别由白名单、危险清单拦截；Mongo 允许 `$lookup`（须先 `$match`）；补充连接器可选依赖 |
+| v0.7 | 2026-11-01 | M3 落地同步：`systems_status` 是全局工具，包络 `target` 用 `*`、`type` 用 `all`；网页、系统配置页、审计清理任务按 4.x/9.6 落地 |
 
 ## 1. 目标
 
@@ -850,7 +851,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 | 工具 | 参数 | 返回 | 闸门与范围 | 上限 |
 |---|---|---|---|---|
-| `systems_status` | 无 | `rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
+| `systems_status` | 无 | 全局工具：包络 `target="*"`、`type="all"`；`rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
 | `cls_search` | `target`、`query`、`from`、`to`（缺省按类型默认窗口）、`topic`、`limit` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
 | `cls_context` | `target`、`topic`、`log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
 | `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |

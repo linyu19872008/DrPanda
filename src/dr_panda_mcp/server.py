@@ -17,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from dr_panda_mcp.errors import StartupError
+from dr_panda_mcp.tools import register_tools
+from dr_panda_mcp.web.routes import register_web_routes
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
@@ -34,6 +36,7 @@ SERVER_INSTRUCTIONS = (
     "不接受主机、DSN、账号或密码。八个排查组件绝对只读，"
     "日志与搜索必须带时间窗，优先使用 trace id，"
     "拒绝全表扫描与无上限拉取，结果被截断时必须向用户说明。"
+    "先调用 systems_status 了解已登记且启用的目标。"
 )
 
 
@@ -64,6 +67,8 @@ def create_server(config: Config, runtime: Runtime) -> FastMCP:
             )
         return JSONResponse({"ok": True, "version": package_version(), "db": "ok"})
 
+    register_tools(server, runtime)
+    register_web_routes(server, runtime)
     return server
 
 

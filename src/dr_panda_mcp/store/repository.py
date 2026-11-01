@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -180,6 +181,35 @@ class SqlConfigStore:
                 )
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
+
+    async def cleanup_audit(
+        self,
+        retention_days: int,
+        *,
+        batch_size: int = 1000,
+        max_seconds: float = 300.0,
+    ) -> int:
+        """分批删除早于保留期的审计；返回删除条数（planning 9.6）。"""
+        cutoff = utc_now() - timedelta(days=retention_days)
+        total = 0
+        deadline = time.monotonic() + max_seconds
+        while time.monotonic() < deadline:
+            async with self._session_factory() as session, session.begin():
+                ids = (
+                    await session.execute(
+                        select(AuditRow.id)
+                        .where(AuditRow.created_at < cutoff)
+                        .order_by(AuditRow.created_at)
+                        .limit(batch_size)
+                    )
+                ).scalars().all()
+                if not ids:
+                    break
+                await session.execute(delete(AuditRow).where(AuditRow.id.in_(ids)))
+            total += len(ids)
+            if len(ids) < batch_size:
+                break
+        return total
 
     async def get_settings(self) -> dict[str, str]:
         async with self._session_factory() as session:

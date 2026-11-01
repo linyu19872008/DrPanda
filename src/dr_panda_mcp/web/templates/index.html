@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}目标列表 · Dr Panda MCP{% endblock %}
+{% block content %}
+<h2>已登记目标</h2>
+<p>
+  新建：
+  {% for type, label in type_options %}<a href="/targets/new?type={{ type }}">{{ label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}
+</p>
+{% if not groups %}<p>还没有登记任何目标。</p>{% endif %}
+{% for group in groups %}
+  <h3>{{ group.label }}</h3>
+  <table>
+    <tr><th>名称</th><th>启用</th><th>最近测试</th><th>操作</th></tr>
+    {% for target in group.targets %}
+    <tr>
+      <td>
+        <a href="/targets/{{ target.id }}/edit">{{ target.name }}</a>
+        {% if target.secret_fields and not target.secret_ok %}<div class="warn">密钥不可用，请重新录入</div>{% endif %}
+      </td>
+      <td>{{ "启用" if target.enabled else "停用" }}</td>
+      <td>
+        {% if target.last_test_at %}
+          {{ target.last_test_at }} ·
+          {% if target.last_test_ok %}<span class="ok">成功</span>{% else %}<span class="error">失败</span>{% endif %}
+          {% if target.last_test_error %}<br><small>{{ target.last_test_error }}</small>{% endif %}
+        {% else %}未测试{% endif %}
+      </td>
+      <td>
+        <form method="post" action="/targets/{{ target.id }}/test" class="inline"><button type="submit">测试连接</button></form>
+        <form method="post" action="/targets/{{ target.id }}/toggle" class="inline"><button type="submit">{{ "停用" if target.enabled else "启用" }}</button></form>
+        <a href="/targets/{{ target.id }}/edit">编辑</a>
+        <a href="/targets/{{ target.id }}/delete">删除</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+{% endfor %}
+{% endblock %}

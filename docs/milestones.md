@@ -205,14 +205,15 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 
 **任务**
 
-- [ ] M3.1 `web/routes.py`：planning 4.1 全部路由（含 `/settings`、删除确认页、`/healthz` 已在 M0）。
-- [ ] M3.2 `web/forms.py`：表单解析与校验（名称规则、多行列表、公共字段、`type` 不可变）（4.2）。
-- [ ] M3.3 `web/views.py` + `web/templates/`：`TargetView`（密钥只暴露字段名）、列表/新建/编辑/删除确认/系统配置页，Jinja2 自动转义（4.3/4.4/4.5）。
-- [ ] M3.4 测试连接按钮接 M2 能力，结果落库并在列表展示（4.1）。
-- [ ] M3.5 MCP：注册 `systems_status`，写服务器说明，声明 `readOnlyHint`（8.4/8.8/8.9）。
-- [ ] M3.6 三客户端接入说明：Cursor / Codex / DeepSeek Harness 配置示例（3.4）。
-- [ ] M3.7 冒烟脚本扩展：起服务 → 客户端连 `/mcp` → 列工具 → 调 `systems_status`（12.1）。
-- [ ] M3.8 跑完第一期验收清单（12.2）。
+- [x] M3.1 `web/routes.py`：planning 4.1 全部路由（含 `/settings`、删除确认页、`/healthz` 已在 M0）。
+- [x] M3.2 `web/forms.py`：表单解析与校验（名称规则、多行列表、公共字段、`type` 不可变）（4.2）。
+- [x] M3.3 `web/views.py` + `web/templates/`：`TargetView`（密钥只暴露字段名）、列表/新建/编辑/删除确认/系统配置页，Jinja2 自动转义（4.3/4.4/4.5）。
+- [x] M3.4 测试连接按钮接 M2 能力，结果落库并在列表展示（4.1）。
+- [x] M3.5 MCP：注册 `systems_status`，写服务器说明，声明 `readOnlyHint`（8.4/8.8/8.9）。
+- [x] M3.6 三客户端接入说明：Cursor / Codex / DeepSeek Harness 配置示例（3.4）。
+- [x] M3.7 冒烟脚本扩展：起服务 → 客户端连 `/mcp` → 列工具 → 调 `systems_status`（12.1）。
+- [x] M3.8 审计清理任务：启动 60 秒首跑、每小时一轮，按保留期分批删除且不写审计（9.6/12.2）。
+- [x] M3.9 跑完第一期验收清单（12.2）。
 
 **交付物**：`web/` 全套、`systems_status`、客户端接入文档、第一期验收记录。
 
@@ -425,7 +426,7 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 | M0 | 工程地基 | 已完成 | 验证记录见 [docs/verify/M0.md](verify/M0.md) |
 | M1 | 配置库与系统配置 | 已完成 | 验证记录见 [docs/verify/M1.md](verify/M1.md) |
 | M2 | 闸门与最小只读连接 | 已完成 | 验证记录见 [docs/verify/M2.md](verify/M2.md) |
-| M3 | 配置台网页与 MCP 接入 | 未开始 | |
+| M3 | 配置台网页与 MCP 接入 | 已完成 | 验证记录见 [docs/verify/M3.md](verify/M3.md) |
 | M4 | 日志到代码 | 未开始 | |
 | M5 | 数据面 | 未开始 | |
 | M6 | 消息面 | 未开始 | |

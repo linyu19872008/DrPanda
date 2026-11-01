@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from dr_panda_mcp.catalog import Catalog
 from dr_panda_mcp.config import Config
 from dr_panda_mcp.crypto import DEFAULT_KEY_FILE, SecretBox, load_or_create_secret_box
 from dr_panda_mcp.errors import StartupError
@@ -29,8 +30,10 @@ class Runtime:
     session_factory: async_sessionmaker[AsyncSession]
     store: SqlConfigStore
     secret_box: SecretBox
+    catalog: Catalog
 
     async def close(self) -> None:
+        await self.catalog.close()
         await self.engine.dispose()
 
 
@@ -55,6 +58,7 @@ async def create_runtime(
             session_factory=session_factory,
             store=store,
             secret_box=secret_box,
+            catalog=Catalog(store),
         )
     except BaseException:
         await engine.dispose()

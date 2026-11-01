@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dr Panda MCP{% endblock %}</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", "PingFang SC", sans-serif; margin: 2rem auto; max-width: 1000px; color: #222; }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.2rem; margin-top: 1.5rem; }
+    h3 { font-size: 1rem; margin-top: 1.5rem; }
+    nav a { margin-right: 1rem; }
+    table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; }
+    th, td { border: 1px solid #ddd; padding: .4rem .5rem; text-align: left; vertical-align: top; }
+    th { background: #f5f5f5; }
+    label { display: block; margin: .5rem 0; }
+    label.inline, form.inline { display: inline; }
+    input[type=text], input:not([type]), input[type=password], input[type=number], textarea, select { min-width: 16rem; padding: .2rem; }
+    textarea { vertical-align: top; }
+    button { padding: .2rem .6rem; }
+    .error { color: #b00020; margin-left: .5rem; }
+    .warn { color: #a05000; }
+    .ok { color: #1a7f37; }
+    small { color: #666; }
+  </style>
+</head>
+<body>
+  <h1><a href="/">Dr Panda MCP</a></h1>
+  <nav><a href="/">目标列表</a><a href="/settings">系统配置</a></nav>
+  <main>
+  {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
