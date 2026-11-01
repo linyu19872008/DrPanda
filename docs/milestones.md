@@ -365,10 +365,10 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 
 **任务**
 
-- [ ] M6.1 RabbitMQ guard（只 GET、拒绝 purge/publish/ack/策略）与连接器（`rabbit_queues`、`rabbit_queue`）（6.3/6.6/8.6）。
-- [ ] M6.2 Kafka guard（描述类、拉取上限、单分区、offset 不早于 low watermark）与连接器（`kafka_lag`、`kafka_offsets`、`kafka_peek`）（6.3/6.6/8.6）。
-- [ ] M6.3 两类组件的危险清单拒绝用例（6.6/12.1）。
-- [ ] M6.4 工具参数、包络、截断、错误码收口（8.1–8.6）。
+- [x] M6.1 RabbitMQ guard（只 GET、拒绝 purge/publish/ack/策略）与连接器（`rabbit_queues`、`rabbit_queue`）（6.3/6.6/8.6）。
+- [x] M6.2 Kafka guard（描述类、拉取上限、单分区、offset 不早于 low watermark）与连接器（`kafka_lag`、`kafka_offsets`、`kafka_peek`）（6.3/6.6/8.6）。
+- [x] M6.3 两类组件的危险清单拒绝用例（6.6/12.1）。
+- [x] M6.4 工具参数、包络、截断、错误码收口（8.1–8.6）。
 
 **交付物**：RabbitMQ 与 Kafka 连接器、五个工具、拒绝用例。
 
@@ -471,7 +471,7 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 | M3.5 | 配置台视觉与主题重构 | 已完成 | 验证记录见 [docs/verify/M3.5.md](verify/M3.5.md) |
 | M4 | 日志到代码 | 已完成 | 验证记录见 [docs/verify/M4.md](verify/M4.md) |
 | M5 | 数据面 | 已完成 | 验证记录见 [docs/verify/M5.md](verify/M5.md) |
-| M6 | 消息面 | 未开始 | |
+| M6 | 消息面 | 已完成 | 验证记录见 [docs/verify/M6.md](verify/M6.md) |
 | M7 | 登录 | 未开始 | |
 
 状态取值：未开始 / 进行中 / 已完成 / 阻塞（阻塞时备注写具体原因与待决事项）。

@@ -195,13 +195,13 @@ async def _error(runtime: Runtime, tool: str, arguments: dict[str, Any]) -> str:
     return str(excinfo.value)
 
 
-async def test_tool_list_has_23(runtime: Runtime) -> None:
+async def test_tool_list_has_28(runtime: Runtime) -> None:
     server = create_server(runtime.config, runtime)
     async with Client(server) as client:
         tools = await client.list_tools()
 
     names = {tool.name for tool in tools}
-    assert len(names) == 23
+    assert len(names) == 28
     assert DATA_TOOLS <= names
     for tool in tools:
         assert tool.annotations is not None and tool.annotations.read_only_hint is True

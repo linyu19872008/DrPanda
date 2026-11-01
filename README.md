@@ -4,7 +4,7 @@
 
 ## 当前进度
 
-已完成 **M0 工程地基**、**M1 配置库与系统配置**、**M2 闸门与最小只读连接**、**M3 配置台网页与 MCP 接入**、**M3.5 配置台视觉与主题重构**、**M4 日志到代码**、**M5 数据面**（第一期完成）：
+已完成 **M0 工程地基**、**M1 配置库与系统配置**、**M2 闸门与最小只读连接**、**M3 配置台网页与 MCP 接入**、**M3.5 配置台视觉与主题重构**、**M4 日志到代码**、**M5 数据面**、**M6 消息面**（第一期完成）：
 
 - 进程可启动，提供 `/healthz`（含配置库连通性）与 `/mcp` 端点，Host/Origin 校验与端口检查就位。
 - 配置库三张表（`targets` / `audit` / `settings`）通过 Alembic 迁移创建；目标读写、密钥加密、系统配置校验、配置变更审计可用。
@@ -13,11 +13,11 @@
 - 浏览器打开 `http://127.0.0.1:8111/` 可登记/编辑/停用/删除目标、测试连接、修改系统配置。
 - 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现、零 JS），列表带统计/搜索/类型筛选，窄屏自动转卡片。
 - 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
-- `/mcp` 已提供 23 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
+- `/mcp` 已提供 28 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个；RabbitMQ 2 个；Kafka 3 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
 
 ![配置台](docs/verify/assets/ui/light-index.png)
 
-消息面工具与 login 按 [docs/milestones.md](docs/milestones.md) 的 M6–M7 推进；真实上游连通性需要安装对应组件 extras 与只读凭证。
+login 按 [docs/milestones.md](docs/milestones.md) 的 M7 推进；真实上游连通性需要安装对应组件 extras 与只读凭证。
 
 ## 启动
 

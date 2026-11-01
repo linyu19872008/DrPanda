@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.10 |
+| 版本 | v0.11 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -28,6 +28,7 @@
 | v0.8 | 2026-11-01 | M3.5 视觉重构：手写 CSS 静态资源、Cookie 三态主题、列表改单表 + 统计/搜索/类型筛选、类型选择页、表单分区与错误摘要；仍为零 JS |
 | v0.9 | 2026-11-01 | M4 落地同步：CLS/GitLab 五个工具与 `investigate_error` 上线；补充 CLS topic 语义与 GitLab 项目省略时的范围规则 |
 | v0.10 | 2026-11-01 | M5 落地同步：数据面十七个工具上线；补充强制 LIMIT、聚合尾 `$limit`、ES `size` 上限、Redis 前缀与有界读取、schema 工具可用性 |
+| v0.11 | 2026-11-01 | M6 落地同步：RabbitMQ/Kafka 五个工具上线；补充 vhost 遍历、消费组位点读取、low watermark 硬校验与无消费组拉取 |
 
 ## 1. 目标
 
@@ -926,6 +927,13 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | `kafka_lag` | `target`、`group`、`topic`（可空） | `rows`: 组、topic、分区、位点、滞后 | 只读描述消费组；topic 在允许列表 | 目标行数 |
 | `kafka_offsets` | `target`、`topic` | `rows`: 分区、low、high | 只读描述；topic 在允许列表 | 目标行数 |
 | `kafka_peek` | `target`、`topic`、`partition`、`offset`、`limit` | `rows`: 消息 | `assign` + `seek` 有限拉取；不加入消费组、不提交 offset、不建生产者 | 目标行数/字节 |
+
+第三批上线后补充实现约定：
+
+- `rabbit_queues` 不传 `vhost` 时只遍历目标授权的 vhost，逐个 `GET /api/queues/{vhost}`，不做一次全量拉取后再过滤；`rabbit_queue` 只 `GET /api/queues/{vhost}/{queue}`。两者都只发 GET。
+- `kafka_lag` 用 Admin API 读取消费组已提交位点，再用 `group_id=None` 的消费者读取分区 high watermark，计算滞后；不加入消费组、不提交 offset。
+- `kafka_offsets` 用 `group_id=None` 的消费者读取各分区 low/high watermark。
+- `kafka_peek` 用 `assign + seek` 单分区拉取；low watermark 由连接器硬校验，offset 早于 low 直接 `DANGEROUS_OPERATION`；不创建生产者、不提交 offset，条数受目标 `max_rows` 约束。
 
 ### 8.7 排查 prompt
 
