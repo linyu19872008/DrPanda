@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.8 |
+| 版本 | v0.9 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -26,6 +26,7 @@
 | v0.6 | 2026-11-01 | M2 落地同步：`Decision` 增加 `error_code`/`reason`，管理类与高开销类分别由白名单、危险清单拦截；Mongo 允许 `$lookup`（须先 `$match`）；补充连接器可选依赖 |
 | v0.7 | 2026-11-01 | M3 落地同步：`systems_status` 是全局工具，包络 `target` 用 `*`、`type` 用 `all`；网页、系统配置页、审计清理任务按 4.x/9.6 落地 |
 | v0.8 | 2026-11-01 | M3.5 视觉重构：手写 CSS 静态资源、Cookie 三态主题、列表改单表 + 统计/搜索/类型筛选、类型选择页、表单分区与错误摘要；仍为零 JS |
+| v0.9 | 2026-11-01 | M4 落地同步：CLS/GitLab 五个工具与 `investigate_error` 上线；补充 CLS topic 语义与 GitLab 项目省略时的范围规则 |
 
 ## 1. 目标
 
@@ -875,11 +876,16 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 工具 | 参数 | 返回 | 闸门与范围 | 上限 |
 |---|---|---|---|---|
 | `systems_status` | 无 | 全局工具：包络 `target="*"`、`type="all"`；`rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
-| `cls_search` | `target`、`query`、`from`、`to`（缺省按类型默认窗口）、`topic`、`limit` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
+| `cls_search` | `target`、`query`、`from`、`to`（必填）、`topic`（唯一授权时可省略）、`limit` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
 | `cls_context` | `target`、`topic`、`log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
 | `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |
 | `gitlab_get_file` | `target`、`project`、`path`、`ref` | `rows`: path、ref、content | 只发 GET；项目在允许列表 | 字节上限 |
 | `gitlab_blame` | `target`、`project`、`path`、`ref`、`line_from`、`line_to` | `rows`: 提交、作者、时间、行号范围 | 只发 GET；项目在允许列表 | 条数上限 |
+
+第一批上线后补充两条实现约定：
+
+- CLS 的 `topic` 使用网页登记值；值里带 `/` 时（如 `日志集/topic`），调用 CLS API 时取最后一段作为 `TopicId`。`cls_search` 必须指定 `topic`；目标只授权了一个主题时可省略，自动使用该主题。
+- `gitlab_search_code` 不填 `project` 时，只在目标授权的项目列表内逐个搜索，不发起全局搜索；跨项目结果总量仍受 `limit` 与目标上限约束。
 
 ### 8.5 第二批：数据面
 

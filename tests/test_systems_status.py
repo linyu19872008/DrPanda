@@ -11,9 +11,11 @@ async def test_systems_status_tool_listed(runtime: Runtime) -> None:
     async with Client(server) as client:
         tools = await client.list_tools()
 
-    assert [tool.name for tool in tools] == ["systems_status"]
-    assert tools[0].annotations is not None
-    assert tools[0].annotations.read_only_hint is True
+    names = sorted(tool.name for tool in tools)
+    assert "systems_status" in names
+    systems_tool = next(tool for tool in tools if tool.name == "systems_status")
+    assert systems_tool.annotations is not None
+    assert systems_tool.annotations.read_only_hint is True
 
 
 async def test_systems_status_returns_envelope(runtime: Runtime) -> None:

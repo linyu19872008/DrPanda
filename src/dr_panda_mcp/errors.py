@@ -88,6 +88,14 @@ class InvalidSettings(DrPandaError):
     """系统配置键或取值不合法。"""
 
 
+class ScopeDenied(DrPandaError):
+    """请求超出该目标授权的范围（库/索引/topic/项目/vhost）。"""
+
+
+class InvalidArgument(DrPandaError):
+    """工具参数不合法（缺失、越界、时间窗超限等）。"""
+
+
 class TargetDisabled(DrPandaError):
     """目标已停用，工具拒绝使用。"""
 

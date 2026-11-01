@@ -287,14 +287,14 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 
 **任务**
 
-- [ ] M4.1 CLS guard：检索与只读描述白名单、时间窗规则、主题作用域、危险清单（6.3/6.6）。
-- [ ] M4.2 CLS 连接器与两个工具：`cls_search`、`cls_context`（8.4）。
-- [ ] M4.3 GitLab guard：只 GET、项目作用域、搜索必须带 term（6.3/6.6）。
-- [ ] M4.4 GitLab 连接器与三个工具：`gitlab_search_code`、`gitlab_get_file`、`gitlab_blame`（8.4）。
-- [ ] M4.5 `tool.call` 审计：工具名、target、参数摘要（截断 200 字符）、返回条数、耗时、错误码，不含密钥（5.4/9.1）。
-- [ ] M4.6 `prompts.py` 的 `investigate_error` 完整版；schema 步骤标注"第三期上线前跳过"（8.7）。
-- [ ] M4.7 CLS/GitLab 拒绝用例：管理类与高开销类各至少一条，断言无外呼（6.5/6.6）。
-- [ ] M4.8 真实只读凭证手测（用户提供时执行）：一次从日志到代码的完整链路（13.1 第二期验收）。
+- [x] M4.1 CLS guard：检索与只读描述白名单、时间窗规则、主题作用域、危险清单（6.3/6.6）。
+- [x] M4.2 CLS 连接器与两个工具：`cls_search`、`cls_context`（8.4）。
+- [x] M4.3 GitLab guard：只 GET、项目作用域、搜索必须带 term（6.3/6.6）。
+- [x] M4.4 GitLab 连接器与三个工具：`gitlab_search_code`、`gitlab_get_file`、`gitlab_blame`（8.4）。
+- [x] M4.5 `tool.call` 审计：工具名、target、参数摘要（截断 200 字符）、返回条数、耗时、错误码，不含密钥（5.4/9.1）。
+- [x] M4.6 `prompts.py` 的 `investigate_error` 完整版；schema 步骤标注"第三期上线前跳过"（8.7）。
+- [x] M4.7 CLS/GitLab 拒绝用例：管理类与高开销类各至少一条，断言无外呼（6.5/6.6）。
+- [x] M4.8 真实只读凭证手测（用户提供时执行）：一次从日志到代码的完整链路（13.1 第二期验收）。
 
 **交付物**：CLS 与 GitLab 连接器、五个工具、prompt、拒绝用例、手测记录。
 
@@ -469,7 +469,7 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 | M2 | 闸门与最小只读连接 | 已完成 | 验证记录见 [docs/verify/M2.md](verify/M2.md) |
 | M3 | 配置台网页与 MCP 接入 | 已完成 | 验证记录见 [docs/verify/M3.md](verify/M3.md) |
 | M3.5 | 配置台视觉与主题重构 | 已完成 | 验证记录见 [docs/verify/M3.5.md](verify/M3.5.md) |
-| M4 | 日志到代码 | 未开始 | |
+| M4 | 日志到代码 | 已完成 | 验证记录见 [docs/verify/M4.md](verify/M4.md) |
 | M5 | 数据面 | 未开始 | |
 | M6 | 消息面 | 未开始 | |
 | M7 | 登录 | 未开始 | |

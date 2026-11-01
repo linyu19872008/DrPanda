@@ -1,6 +1,9 @@
-"""GitLab 最小只读连接器：读取当前用户（只发 GET）。"""
+"""GitLab 只读连接器：当前用户、代码搜索、读文件、blame（只发 GET）。"""
 
 from __future__ import annotations
+
+from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -15,25 +18,91 @@ class _GitLabClient:
     def __init__(self, target: Target) -> None:
         self.target = target
 
-    async def ping(self) -> None:
+    def _client(self) -> httpx.AsyncClient:
         options = self.target.options
-        base_url = options.get("base_url", "").rstrip("/")
+        base_url = str(options.get("base_url", "")).rstrip("/")
         if not base_url:
             raise errors.UpstreamUnavailable("gitlab 目标没有配置 base_url")
-        client = httpx.AsyncClient(
+        return httpx.AsyncClient(
             base_url=base_url,
             headers={"PRIVATE-TOKEN": self.target.secret.get("token", "")},
             timeout=base.timeout_seconds(self.target),
         )
+
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
+        client = self._client()
         try:
-            response = await client.get("/api/v4/user")
+            response = await client.get(path, params=params)
             base.check_http_response(response, "gitlab")
+            return response
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"gitlab 探测失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"gitlab 请求失败：{exc}") from exc
         finally:
             await client.aclose()
+
+    async def ping(self) -> None:
+        await self._get("/api/v4/user")
+
+    async def search_code(
+        self, project: str, query: str, *, ref: str | None, per_page: int
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {
+            "scope": "blobs",
+            "search": query,
+            "per_page": per_page,
+        }
+        if ref:
+            params["ref"] = ref
+        response = await self._get(
+            f"/api/v4/projects/{quote(project, safe='')}/search", params=params
+        )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise errors.UpstreamUnavailable("gitlab 返回的不是 JSON") from exc
+        if not isinstance(payload, list):
+            raise errors.UpstreamUnavailable("gitlab 搜索结果格式不符合预期")
+        return [item for item in payload if isinstance(item, dict)]
+
+    async def get_file(self, project: str, path: str, *, ref: str | None) -> str:
+        params = {"ref": ref} if ref else None
+        response = await self._get(
+            f"/api/v4/projects/{quote(project, safe='')}"
+            f"/repository/files/{quote(path, safe='')}/raw",
+            params=params,
+        )
+        return response.text
+
+    async def blame(
+        self,
+        project: str,
+        path: str,
+        *,
+        ref: str | None,
+        line_from: int | None,
+        line_to: int | None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if ref:
+            params["ref"] = ref
+        if line_from is not None:
+            params["range[start]"] = line_from
+        if line_to is not None:
+            params["range[end]"] = line_to
+        response = await self._get(
+            f"/api/v4/projects/{quote(project, safe='')}"
+            f"/repository/files/{quote(path, safe='')}/blame",
+            params=params or None,
+        )
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise errors.UpstreamUnavailable("gitlab blame 返回的不是 JSON") from exc
+        if not isinstance(payload, list):
+            raise errors.UpstreamUnavailable("gitlab blame 结果格式不符合预期")
+        return [item for item in payload if isinstance(item, dict)]
 
 
 class GitLabConnector:
@@ -50,6 +119,44 @@ class GitLabConnector:
 
     async def close_client(self, client: _GitLabClient) -> None:
         return None
+
+    async def search_code(
+        self,
+        client: _GitLabClient,
+        target: Target,
+        *,
+        project: str,
+        query: str,
+        ref: str | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        return await client.search_code(project, query, ref=ref, per_page=limit)
+
+    async def get_file(
+        self,
+        client: _GitLabClient,
+        target: Target,
+        *,
+        project: str,
+        path: str,
+        ref: str | None,
+    ) -> str:
+        return await client.get_file(project, path, ref=ref)
+
+    async def blame(
+        self,
+        client: _GitLabClient,
+        target: Target,
+        *,
+        project: str,
+        path: str,
+        ref: str | None,
+        line_from: int | None,
+        line_to: int | None,
+    ) -> list[dict[str, Any]]:
+        return await client.blame(
+            project, path, ref=ref, line_from=line_from, line_to=line_to
+        )
 
 
 connector = GitLabConnector()

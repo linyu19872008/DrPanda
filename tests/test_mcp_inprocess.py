@@ -12,4 +12,6 @@ async def test_mcp_in_process_client_connects(runtime: Runtime) -> None:
     async with Client(server) as client:
         tools = await client.list_tools()
 
-    assert [tool.name for tool in tools] == ["systems_status"]
+    names = sorted(tool.name for tool in tools)
+    assert "systems_status" in names
+    assert "cls_search" in names and "gitlab_blame" in names
