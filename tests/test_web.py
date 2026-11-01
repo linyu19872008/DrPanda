@@ -306,3 +306,184 @@ async def test_unknown_target_404(runtime: Runtime) -> None:
         ]:
             response = await client.request(method, path)
             assert response.status_code == 404, (method, path)
+
+
+# ---------------------------------------------------------------------------
+# 界面骨架、主题与静态资源
+# ---------------------------------------------------------------------------
+async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        page = await client.get("/")
+
+    text = page.text
+    assert '<html lang="zh-CN">' in text
+    assert 'class="skip-link"' in text
+    assert 'id="main"' in text
+    assert 'aria-current="page"' in text
+    assert 'aria-label="主导航"' in text
+    assert 'name="mode" value="dark"' in text
+    assert "/static/app.css?v=" in text
+    assert "还没有登记任何目标" in text
+    assert text.count("<h1") == 1
+
+
+async def test_theme_cookie_roundtrip(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        dark = await client.post("/theme", data={"mode": "dark", "next": "/"})
+        page = await client.get("/")
+        assert dark.status_code == 303
+        assert dark.headers["location"] == "/"
+        assert 'data-theme="dark"' in page.text
+
+        await client.post("/theme", data={"mode": "light", "next": "/"})
+        page = await client.get("/")
+        assert 'data-theme="light"' in page.text
+
+        await client.post("/theme", data={"mode": "system", "next": "/"})
+        page = await client.get("/")
+        assert '<html lang="zh-CN">' in page.text
+
+
+async def test_theme_rejects_open_redirect(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/theme", data={"mode": "dark", "next": "//evil.example/x"}
+        )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+async def test_static_css_route(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        first = await client.get("/static/app.css")
+        cached = await client.get(
+            "/static/app.css", headers={"if-none-match": first.headers["etag"]}
+        )
+        missing = await client.get("/static/nope.css")
+
+    assert first.status_code == 200
+    assert "text/css" in first.headers["content-type"]
+    assert "--accent" in first.text
+    assert first.headers.get("etag")
+    assert cached.status_code == 304
+    assert missing.status_code == 404
+
+
+async def test_type_chooser_page(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        page = await client.get("/targets/new")
+
+    assert page.status_code == 200
+    assert "选择目标类型" in page.text
+    for label in ["MySQL", "Mongo", "Elasticsearch", "Redis", "GitLab", "RabbitMQ", "Kafka", "CLS"]:
+        assert label in page.text
+    assert "/targets/new?type=mysql" in page.text
+
+
+# ---------------------------------------------------------------------------
+# 搜索、筛选、统计与反馈
+# ---------------------------------------------------------------------------
+async def test_search_and_type_filter(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mysql"])
+        await client.post("/targets", data=PAYLOADS["redis"])
+
+        search = await client.get("/", params={"q": "mysql-target"})
+        filtered = await client.get("/", params={"type": "redis"})
+        no_match = await client.get("/", params={"q": "no-such-target"})
+
+    assert "mysql-target" in search.text
+    assert "redis-target" not in search.text
+    assert "redis-target" in filtered.text
+    assert "mysql-target" not in filtered.text
+    assert "没有匹配的目标" in no_match.text
+
+
+async def test_stats_and_flash_messages(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        created = await client.post("/targets", data=PAYLOADS["redis"])
+        location = created.headers["location"]
+        page = await client.get(location)
+        target = await runtime.store.get("redis-target")
+
+        toggled = await client.post(f"/targets/{target.id}/toggle")
+        toggled_page = await client.get(toggled.headers["location"])
+
+        deleted = await client.post(f"/targets/{target.id}/delete")
+        deleted_page = await client.get(deleted.headers["location"])
+
+    assert "flash=created" in location
+    assert "目标已创建" in page.text
+    assert "目标总数" in page.text
+    assert "启用状态已切换" in toggled_page.text
+    assert "目标已删除" in deleted_page.text
+
+
+# ---------------------------------------------------------------------------
+# 表单与错误页
+# ---------------------------------------------------------------------------
+async def test_form_sections_and_error_summary(runtime: Runtime) -> None:
+    payload = dict(PAYLOADS["mysql"])
+    payload.pop("secret_password")
+
+    async with _client(runtime) as client:
+        form = await client.get("/targets/new?type=mysql")
+        invalid = await client.post("/targets", data=payload)
+
+    assert form.status_code == 200
+    for section in ["基本信息", "连接", "授权范围", "密钥", "运行限制"]:
+        assert section in form.text
+    assert 'name="secret_password"' in form.text
+    assert invalid.status_code == 400
+    assert "有 1 处需要修改" in invalid.text
+    assert 'aria-invalid="true"' in invalid.text
+    assert "#err-secret_password" in invalid.text
+
+
+async def test_edit_form_shows_secret_badge(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mysql"])
+        target = await runtime.store.get("mysql-target")
+        page = await client.get(f"/targets/{target.id}/edit")
+
+    assert page.status_code == 200
+    assert "已设置" in page.text
+    assert "清除已保存的密钥" in page.text
+    assert "value=\"pw\"" not in page.text
+
+
+async def test_html_error_pages(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        not_found = await client.get("/targets/999/edit")
+        bad_type = await client.get("/targets/new?type=oracle")
+
+    assert not_found.status_code == 404
+    assert "找不到目标" in not_found.text
+    assert "返回排查目标" in not_found.text
+    assert bad_type.status_code == 400
+    assert "未知的目标类型" in bad_type.text
+
+
+async def test_table_accessibility_markup(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mysql"])
+        page = await client.get("/")
+
+    assert page.text.count('scope="col"') >= 6
+    assert 'aria-label="按类型筛选"' in page.text
+    assert 'class="status status--none"' in page.text
+
+
+async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        pages = [
+            await client.get("/"),
+            await client.get("/targets/new?type=mysql"),
+            await client.get("/settings"),
+        ]
+        css = await client.get("/static/app.css")
+
+    for page in pages:
+        assert "<script" not in page.text
+    assert len(css.content) < 40_000

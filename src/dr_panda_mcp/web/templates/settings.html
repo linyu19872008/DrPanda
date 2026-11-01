@@ -1,16 +1,46 @@
 {% extends "base.html" %}
 {% block title %}系统配置 · Dr Panda MCP{% endblock %}
 {% block content %}
-<h2>系统配置</h2>
-{% if errors.get("_form") %}<p class="error">{{ errors["_form"] }}</p>{% endif %}
-<form method="post" action="/settings">
+<div class="page-header">
+  <div>
+    <h1>系统配置</h1>
+    <p class="page-subtitle">少量运行策略，修改后立即生效并写入审计。</p>
+  </div>
+</div>
+
+{% if errors.get("_form") %}
+<div class="alert alert--danger" role="alert">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
+  </span>
+  <div class="alert__body"><strong>保存失败</strong><span class="alert__detail">{{ errors["_form"] }}</span></div>
+</div>
+{% endif %}
+
+<form class="card settings-form" method="post" action="/settings">
   {% for row in rows %}
-    <label>{{ row.label }}
-      <input type="number" name="{{ row.key }}" value="{{ row.value }}">
-      <small>默认 {{ row.default }}，范围 {{ row.low }}–{{ row.high }}</small>
-    </label>
+  <div class="field">
+    <label class="field__label" for="setting-{{ row.key }}">{{ row.label }}</label>
+    <div class="input-group input-group--narrow">
+      <input class="input" type="number" inputmode="numeric" id="setting-{{ row.key }}"
+             name="{{ row.key }}" value="{{ row.value }}">
+      <span class="input-group__suffix">{{ row.unit }}</span>
+    </div>
+    <p class="field__hint">默认 {{ row.default }}，允许范围 {{ row.low }}–{{ row.high }}。{{ row.help }}</p>
+  </div>
   {% endfor %}
-  <p><button type="submit">保存</button></p>
+  <div class="form-actions form-actions--inline">
+    <button class="btn btn--primary" type="submit">保存配置</button>
+  </div>
 </form>
-<p><small>改动立即生效并写入审计；系统配置不能放宽只读、危险命令、密钥与目标范围限制。</small></p>
+
+<div class="alert alert--info">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+  </span>
+  <div class="alert__body">
+    <strong>这些配置不能放宽安全边界</strong>
+    <span class="alert__detail">只读白名单、危险命令规则、密钥处理与目标范围都不受系统配置影响。</span>
+  </div>
+</div>
 {% endblock %}

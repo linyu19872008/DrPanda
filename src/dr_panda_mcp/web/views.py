@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from dr_panda_mcp.store.protocol import Target
 from dr_panda_mcp.web.forms import TYPE_SPECS
+
+EMPTY = "—"
 
 
 @dataclass(frozen=True)
@@ -16,16 +19,97 @@ class TargetView:
     type_label: str
     name: str
     enabled: bool
+    endpoint: str
+    scope: str
     secret_fields: tuple[str, ...]
     secret_ok: bool
-    updated_at: str | None
-    last_test_at: str | None
+    updated_at_display: str | None
+    last_test_at_display: str | None
     last_test_ok: bool | None
     last_test_error: str | None
 
 
-def _iso(value: datetime | None) -> str | None:
-    return value.isoformat(timespec="seconds") if value is not None else None
+@dataclass(frozen=True)
+class Stats:
+    total: int = 0
+    enabled: int = 0
+    failed: int = 0
+    key_issues: int = 0
+
+
+def _display_time(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _first(value: Any) -> str | None:
+    if isinstance(value, (list, tuple)):
+        return str(value[0]) if value else None
+    if isinstance(value, str):
+        return value.splitlines()[0].strip() or None
+    return None
+
+
+def _endpoint(target: Target) -> str:
+    options = target.options
+    kind = target.type
+    if kind == "mysql":
+        host = options.get("host") or EMPTY
+        port = options.get("port") or 3306
+        db = options.get("default_db") or EMPTY
+        return f"{host}:{port} / {db}"
+    if kind == "mongo":
+        host = options.get("host")
+        if host:
+            return f"{host}:{options.get('port') or 27017}"
+        return "URI（已配置）"
+    if kind == "elasticsearch":
+        host = _first(options.get("hosts"))
+        return host or EMPTY
+    if kind == "redis":
+        host = options.get("host") or EMPTY
+        port = options.get("port") or 6379
+        db = options.get("db") or 0
+        return f"{host}:{port} / db{db}"
+    if kind == "gitlab":
+        return str(options.get("base_url") or EMPTY)
+    if kind == "rabbitmq":
+        return str(options.get("management_url") or EMPTY)
+    if kind == "kafka":
+        server = _first(options.get("bootstrap_servers"))
+        protocol = options.get("security_protocol") or "PLAINTEXT"
+        return f"{server or EMPTY} · {protocol}"
+    if kind == "cls":
+        return str(options.get("region") or EMPTY)
+    return EMPTY
+
+
+def _scope(target: Target) -> str:
+    options = target.options
+    kind = target.type
+    if kind == "mysql":
+        dbs = options.get("allowed_dbs") or []
+        return f"{len(dbs)} 个库" if dbs else "默认库"
+    if kind in {"mongo", "elasticsearch"}:
+        key = "allowed_dbs" if kind == "mongo" else "allowed_indices"
+        items = options.get(key) or []
+        label = "个库" if kind == "mongo" else "个索引"
+        return f"{len(items)} {label}" if items else "未授权"
+    if kind == "redis":
+        prefix = options.get("key_prefix")
+        return f"前缀 {prefix}" if prefix else "全部 key"
+    if kind == "gitlab":
+        items = options.get("allowed_projects") or []
+        return f"{len(items)} 个项目" if items else "未授权"
+    if kind == "rabbitmq":
+        items = options.get("allowed_vhosts") or []
+        return f"{len(items)} 个 vhost" if items else "未授权"
+    if kind in {"kafka", "cls"}:
+        items = options.get("allowed_topics") or []
+        label = "个 topic" if kind == "kafka" else "个日志主题"
+        return f"{len(items)} {label}" if items else "未授权"
+    return EMPTY
 
 
 def to_view(target: Target) -> TargetView:
@@ -36,21 +120,44 @@ def to_view(target: Target) -> TargetView:
         type_label=spec.label if spec else target.type,
         name=target.name,
         enabled=target.enabled,
+        endpoint=_endpoint(target),
+        scope=_scope(target),
         secret_fields=tuple(sorted(target.secret_fields)),
         secret_ok=target.secret_ok,
-        updated_at=_iso(target.updated_at),
-        last_test_at=_iso(target.last_test_at),
+        updated_at_display=_display_time(target.updated_at),
+        last_test_at_display=_display_time(target.last_test_at),
         last_test_ok=target.last_test_ok,
         last_test_error=target.last_test_error,
     )
 
 
-def grouped(targets: list[Target]) -> list[dict]:
-    """按类型分组，保持表单里的类型顺序；空组不出现。"""
-    views = [to_view(target) for target in targets]
-    groups: list[dict] = []
-    for type_, spec in TYPE_SPECS.items():
-        members = [view for view in views if view.type == type_]
-        if members:
-            groups.append({"type": type_, "label": spec.label, "targets": members})
-    return groups
+def list_views(targets: list[Target]) -> list[TargetView]:
+    return [to_view(target) for target in targets]
+
+
+def filter_views(
+    views: list[TargetView], *, q: str = "", type_: str | None = None
+) -> list[TargetView]:
+    needle = q.strip().lower()
+    filtered = views
+    if type_:
+        filtered = [view for view in filtered if view.type == type_]
+    if needle:
+        filtered = [
+            view
+            for view in filtered
+            if needle
+            in f"{view.name} {view.type} {view.type_label} {view.endpoint} {view.scope}".lower()
+        ]
+    return filtered
+
+
+def stats(views: list[TargetView]) -> Stats:
+    return Stats(
+        total=len(views),
+        enabled=sum(1 for view in views if view.enabled),
+        failed=sum(1 for view in views if view.last_test_ok is False),
+        key_issues=sum(
+            1 for view in views if view.secret_fields and not view.secret_ok
+        ),
+    )

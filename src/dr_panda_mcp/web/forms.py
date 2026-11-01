@@ -172,6 +172,13 @@ def type_options() -> list[tuple[str, str]]:
     return [(spec.type, spec.label) for spec in TYPE_SPECS.values()]
 
 
+def type_cards() -> list[dict[str, str]]:
+    return [
+        {"type": spec.type, "label": spec.label, "note": spec.note}
+        for spec in TYPE_SPECS.values()
+    ]
+
+
 def initial_values(spec: TypeSpec, target: Target | None = None) -> dict[str, str]:
     """新建用默认值；编辑用库里的 options。"""
     values: dict[str, str] = {
@@ -390,6 +397,9 @@ def secret_rows(
     return rows
 
 
+COMMON_UNITS = {"timeout_s": "秒", "max_rows": "行", "max_bytes": "字节"}
+
+
 def common_rows(values: Mapping[str, str], errors: Mapping[str, str]) -> list[dict[str, Any]]:
     return [
         {
@@ -398,6 +408,7 @@ def common_rows(values: Mapping[str, str], errors: Mapping[str, str]) -> list[di
             "value": values.get(key, str(default)),
             "error": errors.get(key),
             "help": f"范围 {low}–{high}",
+            "unit": COMMON_UNITS[key],
         }
         for key, label, default, (low, high) in COMMON_FIELDS
     ]

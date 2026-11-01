@@ -1,0 +1,65 @@
+{% macro control(row, field_id) -%}
+  {%- set invalid = ' aria-invalid="true" aria-describedby="err-' ~ row.key ~ '"' if row.error else '' -%}
+  {%- if row.kind == "bool" -%}
+    <input class="checkbox" type="checkbox" id="{{ field_id }}" name="{{ row.key }}"{% if row.value %} checked{% endif %}>
+  {%- elif row.kind == "list" -%}
+    <textarea class="input textarea" id="{{ field_id }}" name="{{ row.key }}" rows="3" spellcheck="false"{{ invalid }}>{{ row.value }}</textarea>
+  {%- elif row.kind == "select" -%}
+    <select class="input select" id="{{ field_id }}" name="{{ row.key }}"{{ invalid }}>
+      {%- for choice in row.choices %}<option value="{{ choice }}"{% if choice == row.value %} selected{% endif %}>{{ choice }}</option>{% endfor -%}
+    </select>
+  {%- elif row.kind == "int" -%}
+    <input class="input" type="number" inputmode="numeric" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ invalid }}>
+  {%- else -%}
+    <input class="input" type="text" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ invalid }}>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro option_field(row) -%}
+<div class="field{% if row.error %} field--invalid{% endif %}">
+  {% if row.kind == "bool" %}
+  <label class="checkline checkline--field" for="field-{{ row.key }}">
+    {{ control(row, 'field-' ~ row.key) }}
+    <span>{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</span>
+  </label>
+  {% else %}
+  <label class="field__label" for="field-{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
+  {{ control(row, 'field-' ~ row.key) }}
+  {% endif %}
+  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
+  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro secret_field(row) -%}
+<div class="field{% if row.error %} field--invalid{% endif %}">
+  <div class="field__label-row">
+    <label class="field__label" for="secret-{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
+    {% if row.has_value %}<span class="badge badge--success">已设置</span>{% else %}<span class="badge badge--muted">未设置</span>{% endif %}
+  </div>
+  <input class="input" type="password" autocomplete="new-password" id="secret-{{ row.key }}"
+         name="secret_{{ row.key }}" value=""
+         placeholder="{{ '留空表示不修改' if row.has_value else '请输入' }}"
+         {% if row.error %}aria-invalid="true" aria-describedby="err-secret_{{ row.key }}"{% endif %}>
+  {% if row.has_value %}
+  <label class="checkline" for="clear-{{ row.key }}">
+    <input class="checkbox" type="checkbox" id="clear-{{ row.key }}" name="clear_{{ row.key }}"> 清除已保存的密钥
+  </label>
+  {% endif %}
+  {% if row.error %}<p class="field__error" id="err-secret_{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
+  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro number_field(row) -%}
+<div class="field{% if row.error %} field--invalid{% endif %}">
+  <label class="field__label" for="field-{{ row.key }}">{{ row.label }}</label>
+  <div class="input-group">
+    <input class="input" type="number" inputmode="numeric" id="field-{{ row.key }}" name="{{ row.key }}"
+           value="{{ row.value }}"{% if row.error %} aria-invalid="true" aria-describedby="err-{{ row.key }}"{% endif %}>
+    <span class="input-group__suffix">{{ row.unit }}</span>
+  </div>
+  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
+  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+</div>
+{%- endmacro %}
