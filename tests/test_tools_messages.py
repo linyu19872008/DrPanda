@@ -263,7 +263,7 @@ async def test_kafka_offsets_and_peek(
 
     assert offsets["rows"][0]["low"] == 5
     assert peek["rows"][0]["value"] == "payload"
-    assert kafka.calls[-1][1]["limit"] == 2  # 受目标 max_rows 约束
+    assert kafka.calls[-1][1]["limit"] == 3  # cap+1 哨兵
     assert peek["stats"]["limit"] == 2
 
 

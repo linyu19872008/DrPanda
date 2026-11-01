@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -34,6 +34,11 @@ def safe_next(candidate: str | None, fallback: str = "/") -> str:
     """只允许站内路径，避免开放重定向。"""
     value = (candidate or "").strip()
     if not value.startswith("/") or value.startswith("//"):
+        return fallback
+    # 反斜杠在部分浏览器的 URL 规范化中会被当成 "/"，可形成 //evil.com 开放重定向。
+    if "\\" in value or "\\" in unquote(value):
+        return fallback
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
         return fallback
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc:

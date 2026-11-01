@@ -18,14 +18,17 @@ class _ESClient:
     def __init__(self, target: Target) -> None:
         self.target = target
 
-    def _client(self) -> httpx.AsyncClient:
+    def _base_urls(self) -> list[str]:
         options = self.target.options
         hosts = options.get("hosts")
         if isinstance(hosts, str):
             hosts = [part.strip() for part in hosts.split(",") if part.strip()]
         if not hosts:
             raise errors.UpstreamUnavailable("elasticsearch 目标没有配置 hosts")
-        base_url = hosts[0] if "://" in hosts[0] else f"http://{hosts[0]}"
+        return [host if "://" in host else f"http://{host}" for host in hosts]
+
+    def _client(self, base_url: str) -> httpx.AsyncClient:
+        options = self.target.options
         username = options.get("username")
         auth = (
             (username, self.target.secret.get("password", "")) if username else None
@@ -49,17 +52,27 @@ class _ESClient:
         *,
         body: dict[str, Any] | None = None,
     ) -> httpx.Response:
-        client = self._client()
-        try:
-            response = await client.request(method, path, json=body)
-            base.check_http_response(response, "elasticsearch")
-            return response
-        except errors.DrPandaError:
-            raise
-        except Exception as exc:
-            raise errors.UpstreamUnavailable(f"elasticsearch 请求失败：{exc}") from exc
-        finally:
-            await client.aclose()
+        last_error: Exception | None = None
+        for base_url in self._base_urls():
+            client = self._client(base_url)
+            try:
+                response = await client.request(method, path, json=body)
+                if response.status_code >= 500:
+                    last_error = errors.UpstreamUnavailable(
+                        f"elasticsearch 返回 HTTP {response.status_code}"
+                    )
+                    continue
+                base.check_http_response(response, "elasticsearch")
+                return response
+            except errors.UpstreamNotFound:
+                raise
+            except Exception as exc:  # noqa: BLE001 - 统一映射并尝试下一个 host
+                last_error = exc
+            finally:
+                await client.aclose()
+        raise errors.UpstreamUnavailable(
+            f"elasticsearch 所有 host 均不可用：{last_error}"
+        )
 
     async def ping(self) -> None:
         await self._request("GET", "/_cluster/health")

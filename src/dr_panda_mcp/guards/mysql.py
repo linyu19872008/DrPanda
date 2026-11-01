@@ -26,6 +26,13 @@ def check_sql(sql: str) -> Decision:
     """检查一条只读 SQL；返回放行（含规范化信息）或拒绝。"""
     if not isinstance(sql, str) or not sql.strip():
         return guard_rejected("mysql.empty_sql", "SQL 不能为空")
+    # MySQL 会执行 /*! ... */ 版本注释中的 SQL；sqlglot 会把它当普通注释丢掉，
+    # 因此必须在解析前显式拒绝，否则可绕过系统库与危险函数检查。
+    if "/*!" in sql:
+        return dangerous(
+            "mysql.executable_comment",
+            "不允许 MySQL 可执行版本注释（/*! ... */）",
+        )
 
     try:
         statements = [stmt for stmt in sqlglot.parse(sql, dialect=DIALECT) if stmt is not None]

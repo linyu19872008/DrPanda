@@ -187,13 +187,13 @@ async def test_cls_search_envelope_and_truncation(
 
     assert payload["target"] == "logs-cls"
     assert payload["type"] == "cls"
-    assert payload["time_range"]["from"] == "2026-01-01T00:00:00+00:00"
+    assert payload["time_range"]["from"] == "2026-01-01T00:00:00Z"
     assert payload["returned"] == 2
     assert payload["truncated"] is True
     assert payload["truncation"]["reason"] == "rows"
     assert payload["notes"]
     assert fake.search_calls[0]["topic"] == "logset/app"
-    assert fake.search_calls[0]["limit"] == 2
+    assert fake.search_calls[0]["limit"] == 3
 
 
 async def test_cls_search_dangerous_window(

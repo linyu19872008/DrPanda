@@ -185,8 +185,11 @@ class _FakeRedis:
     async def ttl(self, key):
         return -1
 
+    async def strlen(self, key):
+        return len(self.value) if hasattr(self, "value") else 1
+
     async def get(self, key):
-        return "v"
+        return getattr(self, "value", "v")
 
     async def llen(self, key):
         return self.size
@@ -221,18 +224,18 @@ async def test_redis_inspect_bounded_and_unbounded(
     client = redis_module.connector.create_client(_redis_target())
     monkeypatch.setattr(client, "_client", lambda: fake)
 
-    string_row = await client.inspect("pay:1", limit=10)
+    string_row = await client.inspect("pay:1", limit=10, byte_limit=1024)
     assert string_row["value"] == "v"
     assert string_row["type"] == "string"
 
     fake.kind = "list"
     fake.size = 100
     with pytest.raises(errors.GuardRejected) as excinfo:
-        await client.inspect("pay:1", limit=10)
+        await client.inspect("pay:1", limit=10, byte_limit=1024)
     assert excinfo.value.code == errors.DANGEROUS_OPERATION
 
     fake.size = 2
-    list_row = await client.inspect("pay:1", limit=10)
+    list_row = await client.inspect("pay:1", limit=10, byte_limit=1024)
     assert list_row["value"] == [str(index) for index in range(10)]
     assert fake.closed is True
 
@@ -321,3 +324,29 @@ async def test_mongo_find_limit_and_aggregate_tail(monkeypatch: pytest.MonkeyPat
     pipeline, _ = cursor.aggregate_args
     assert pipeline[-1] == {"$limit": 3}
     assert fake.closed is True
+
+
+def test_mongo_uri_encodes_credentials() -> None:
+    from dr_panda_mcp.connectors.mongo import _build_uri
+
+    target = make_target(
+        type_="mongo",
+        options={"host": "mongo", "port": 27017, "user": "ro@corp", "auth_source": "admin"},
+        secret={"password": "p@ss:word"},
+    )
+
+    assert _build_uri(target) == "mongodb://ro%40corp:p%40ss%3Aword@mongo:27017/?authSource=admin"
+
+
+async def test_redis_string_over_byte_limit_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeRedis()
+    fake.value = "x" * 100
+    client = redis_module.connector.create_client(_redis_target())
+    monkeypatch.setattr(client, "_client", lambda: fake)
+
+    with pytest.raises(errors.GuardRejected) as excinfo:
+        await client.inspect("pay:1", limit=10, byte_limit=50)
+
+    assert excinfo.value.code == errors.DANGEROUS_OPERATION

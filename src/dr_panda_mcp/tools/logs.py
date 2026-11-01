@@ -24,7 +24,12 @@ from dr_panda_mcp.tools.base import (
     ensure_topic,
     finish,
     run_tool,
+    trim_rows,
 )
+
+
+def _utc_iso(value) -> str:
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
@@ -55,15 +60,16 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
             connector = get_connector("cls")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.search_log(
+            fetched = await connector.search_log(
                 client,
                 tgt,
                 topic=chosen_topic,
                 query=query,
                 start=window["from"],
                 end=window["to"],
-                limit=cap,
+                limit=cap + 1,
             )
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"SearchLog topic={chosen_topic} query={query[:80]}",
@@ -71,9 +77,10 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                 rows=rows,
                 stats={"topic": chosen_topic, "query": query},
                 time_range={
-                    "from": window["from"].isoformat(),
-                    "to": window["to"].isoformat(),
+                    "from": _utc_iso(window["from"]),
+                    "to": _utc_iso(window["to"]),
                 },
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -150,7 +157,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             client = await runtime.catalog.client(tgt, connector)
             rows: list[dict[str, Any]] = []
             for name in projects:
-                if len(rows) >= cap:
+                if len(rows) >= cap + 1:
                     break
                 items = await connector.search_code(
                     client,
@@ -158,7 +165,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                     project=name,
                     query=query,
                     ref=ref or None,
-                    limit=min(cap - len(rows), 100),
+                    limit=min(cap + 1 - len(rows), 100),
                 )
                 for item in items:
                     rows.append(
@@ -170,13 +177,14 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                         }
                     )
             # 跨项目搜索时保持结果总量受上限约束
-            rows = rows[:cap]
+            rows, truncation = trim_rows(rows, cap)
             return finish(
                 tgt,
                 summary=f"GitLab search blobs query={query[:80]} projects={len(projects)}",
                 started=started,
                 rows=rows,
                 stats={"projects": projects, "query": query},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -209,7 +217,10 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             byte_limit = connectors_base.max_bytes(tgt)
             truncated = len(content.encode("utf-8")) > byte_limit
             if truncated:
-                content = content.encode("utf-8")[:byte_limit].decode("utf-8", "ignore")
+                # 给 JSON 字段名留余量，避免包络二次字节检查把整行丢掉
+                content = content.encode("utf-8")[: max(byte_limit - 1024, 1)].decode(
+                    "utf-8", "ignore"
+                )
             return finish(
                 tgt,
                 summary=f"GitLab file {chosen_project}/{path}",

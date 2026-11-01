@@ -73,3 +73,21 @@ async def test_backup_created_and_pruned(tmp_path: Path) -> None:
 
 def test_backup_skipped_for_memory_database() -> None:
     assert backup_sqlite_database("sqlite+aiosqlite:///:memory:") is None
+
+
+async def test_backup_includes_wal_transactions(tmp_path: Path) -> None:
+    database = tmp_path / "dr-panda.sqlite"
+    writer = sqlite3.connect(database)
+    try:
+        writer.execute("PRAGMA journal_mode=WAL")
+        writer.execute("PRAGMA wal_autocheckpoint=0")
+        writer.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, value TEXT)")
+        writer.execute("INSERT INTO t (value) VALUES ('in-wal')")
+        writer.commit()
+
+        backup = backup_sqlite_database(_url(tmp_path))
+        assert backup is not None
+        with sqlite3.connect(backup) as reader:
+            assert reader.execute("SELECT value FROM t").fetchone() == ("in-wal",)
+    finally:
+        writer.close()

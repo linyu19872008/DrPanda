@@ -21,6 +21,7 @@ DEFAULT_LOG_LEVEL = "INFO"
 
 # 数据目录：配置库、备份与加密密钥都放在这里（不进 git）
 DEFAULT_DATA_DIR = "data"
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 
@@ -66,6 +67,11 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         secret_key_b64=secret_key_b64,
         log_level=log_level,
     )
+
+
+def is_loopback_host(host: str) -> bool:
+    """M7 之前只允许本机监听；避免无认证服务被误暴露到内网。"""
+    return (host or "").strip().lower() in LOOPBACK_HOSTS
 
 
 def _parse_port(raw: str) -> int:

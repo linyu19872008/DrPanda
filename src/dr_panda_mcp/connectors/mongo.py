@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from dr_panda_mcp import errors
 from dr_panda_mcp.connectors import base
@@ -142,7 +143,10 @@ def _build_uri(target: Target) -> str:
     password = target.secret.get("password")
     auth_source = options.get("auth_source", "admin")
     if user:
-        return f"mongodb://{user}:{password}@{host}:{port}/?authSource={auth_source}"
+        return (
+            f"mongodb://{quote(str(user), safe='')}:{quote(str(password or ''), safe='')}"
+            f"@{host}:{port}/?authSource={quote(str(auth_source), safe='')}"
+        )
     return f"mongodb://{host}:{port}/"
 
 

@@ -14,7 +14,7 @@ import sys
 import uvicorn
 
 from dr_panda_mcp.audit import run_cleanup_loop
-from dr_panda_mcp.config import Config, load_config
+from dr_panda_mcp.config import Config, is_loopback_host, load_config
 from dr_panda_mcp.errors import ConfigError, StartupError
 from dr_panda_mcp.runtime import create_runtime
 from dr_panda_mcp.server import SERVER_NAME, check_port_available, create_app
@@ -48,6 +48,11 @@ def main() -> int:
 
 
 async def _run(config: Config) -> int:
+    if not is_loopback_host(config.host):
+        raise StartupError(
+            "M7 登录完成前只允许监听 127.0.0.1 / ::1 / localhost；"
+            "如需远程访问，请先用 SSH 隧道或反向代理，并在 M7 加认证后再改 DR_PANDA_HOST"
+        )
     check_port_available(config.host, config.port)
     runtime = await create_runtime(config)
     cleanup_task = asyncio.create_task(run_cleanup_loop(runtime))

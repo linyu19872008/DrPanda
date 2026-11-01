@@ -50,7 +50,7 @@ class _RedisClient:
     async def ping(self) -> None:
         await self._run(lambda client: client.ping())
 
-    async def inspect(self, key: str, limit: int) -> dict[str, Any]:
+    async def inspect(self, key: str, limit: int, byte_limit: int) -> dict[str, Any]:
         async def operation(client):
             require(redis_guard.check_redis("TYPE", [key]))
             kind = await client.type(key)
@@ -58,6 +58,13 @@ class _RedisClient:
             ttl = await client.ttl(key)
             value: Any = None
             if kind == "string":
+                require(redis_guard.check_redis("STRLEN", [key]))
+                size = await client.strlen(key)
+                if size > byte_limit:
+                    raise errors.GuardRejected(
+                        f"redis string {key} 有 {size} 字节，超过目标字节上限 {byte_limit}",
+                        code=errors.DANGEROUS_OPERATION,
+                    )
                 require(redis_guard.check_redis("GET", [key]))
                 value = await client.get(key)
             elif kind == "list":
@@ -150,9 +157,15 @@ class RedisConnector:
         return None
 
     async def inspect(
-        self, client: _RedisClient, target: Target, *, key: str, limit: int
+        self,
+        client: _RedisClient,
+        target: Target,
+        *,
+        key: str,
+        limit: int,
+        byte_limit: int,
     ) -> dict[str, Any]:
-        return await client.inspect(key, limit)
+        return await client.inspect(key, limit, byte_limit)
 
     async def scan(
         self,

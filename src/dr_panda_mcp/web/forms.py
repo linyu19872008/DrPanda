@@ -238,8 +238,12 @@ def parse_form(
             secrets_set[secret.key] = raw
         elif _checked(form, f"clear_{secret.key}"):
             secrets_clear.add(secret.key)
-        elif mode == "create" and secret.required:
-            errors[f"secret_{secret.key}"] = f"{secret.label}不能为空"
+            if secret.required:
+                errors[f"secret_{secret.key}"] = f"{secret.label}不能为空"
+        elif secret.required:
+            present = bool(existing and secret.key in existing.secret_fields)
+            if not present:
+                errors[f"secret_{secret.key}"] = f"{secret.label}不能为空"
 
     _cross_validate(spec, options, secrets_set, secrets_clear, existing, errors, form)
 

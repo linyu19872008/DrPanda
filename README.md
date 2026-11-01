@@ -4,7 +4,7 @@
 
 ## 当前进度
 
-已完成 **M0 工程地基**、**M1 配置库与系统配置**、**M2 闸门与最小只读连接**、**M3 配置台网页与 MCP 接入**、**M3.5 配置台视觉与主题重构**、**M4 日志到代码**、**M5 数据面**、**M6 消息面**（第一期完成）：
+已完成 **M0–M6**（工程地基、配置台、日志到代码、数据面、消息面）；**M7 登录待做**：
 
 - 进程可启动，提供 `/healthz`（含配置库连通性）与 `/mcp` 端点，Host/Origin 校验与端口检查就位。
 - 配置库三张表（`targets` / `audit` / `settings`）通过 Alembic 迁移创建；目标读写、密钥加密、系统配置校验、配置变更审计可用。
@@ -12,12 +12,13 @@
 - 八类组件都有只读闸门与最小只读探测（测试连接）；管理/变更命令由白名单拦截，高开销操作由危险清单拦截，二者都在建立连接之前判定。
 - 浏览器打开 `http://127.0.0.1:8111/` 可登记/编辑/停用/删除目标、测试连接、修改系统配置。
 - 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现、零 JS），列表带统计/搜索/类型筛选，窄屏自动转卡片。
+- M7 前只允许监听 `127.0.0.1` / `::1` / `localhost`；请勿把当前无认证服务直接暴露到内网。
 - 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
 - `/mcp` 已提供 28 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个；RabbitMQ 2 个；Kafka 3 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
 
 ![配置台](docs/verify/assets/ui/light-index.png)
 
-login 按 [docs/milestones.md](docs/milestones.md) 的 M7 推进；真实上游连通性需要安装对应组件 extras 与只读凭证。
+M7 登录（网页 + `/mcp` 同一套身份）按 [docs/milestones.md](docs/milestones.md) 推进；真实上游连通性需要安装对应组件 extras 与只读凭证。
 
 ## 启动
 
@@ -105,4 +106,4 @@ uv run ruff check .               # 静态检查
 - [docs/planning.md](docs/planning.md)：方案与实现契约（接口、表结构、只读与危险规则、工具清单）
 - [docs/milestones.md](docs/milestones.md)：里程碑拆分与每个检查点的验证目标
 - [docs/ui-design.md](docs/ui-design.md)：配置台设计系统、主题机制与页面规格
-- [docs/verify/](docs/verify/)：各里程碑的验证记录
+- [docs/verify/](docs/verify/)：各里程碑的验证记录；[hardening-01.md](docs/verify/hardening-01.md) 记录 2026-11-02 复核硬化

@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.11 |
+| 版本 | v0.12 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -29,6 +29,7 @@
 | v0.9 | 2026-11-01 | M4 落地同步：CLS/GitLab 五个工具与 `investigate_error` 上线；补充 CLS topic 语义与 GitLab 项目省略时的范围规则 |
 | v0.10 | 2026-11-01 | M5 落地同步：数据面十七个工具上线；补充强制 LIMIT、聚合尾 `$limit`、ES `size` 上限、Redis 前缀与有界读取、schema 工具可用性 |
 | v0.11 | 2026-11-01 | M6 落地同步：RabbitMQ/Kafka 五个工具上线；补充 vhost 遍历、消费组位点读取、low watermark 硬校验与无消费组拉取 |
+| v0.12 | 2026-11-02 | 硬化：MySQL 可执行注释拒绝、工具级并发/超时、截断哨兵、必填密钥、SSL、重定向与若干连接器修复；文档与验证口径同步 |
 
 ## 1. 目标
 
@@ -864,10 +865,10 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 ### 8.3 上限与截断
 
-- 行数：读取时最多取 `max_rows + 1` 条，多出一条即 `truncated=true`、`reason="rows"`。
-- 字节：序列化 `rows` 时增量累计，超过 `max_bytes` 即停，`reason="bytes"`。
-- 时间：整个调用包在 `asyncio.timeout(timeout_s)` 内；上游超时映射 `UPSTREAM_TIMEOUT`。
-- 并发：每 target 的并发上限读系统配置 `target_max_concurrency`（默认 10），用 Semaphore 控制；排队时间计入该 target 的超时，超时返回 `UPSTREAM_TIMEOUT` 并在 message 里说明"目标繁忙"。
+- 行数：上游支持 `limit` 的工具取 `min(请求值, 目标上限) + 1` 作为哨兵，多出一条即 `truncated=true`、`reason="rows"`；schema/list 这类没有 limit 参数的接口只能返回后按上限截断（此时无法区分"恰好等于上限"与"还有更多"）。
+- 字节：序列化 `rows` 时增量累计，超过 `max_bytes` 即停，`reason="bytes"`；显式截断同样受字节上限约束。Redis 字符串先 `STRLEN`，超过目标 `max_bytes` 直接拒绝，避免先读入大 value。
+- 时间：整个工具调用（含排队）包在 `asyncio.timeout(timeout_s)` 内；上游超时映射 `UPSTREAM_TIMEOUT`。
+- 并发：每 target 的并发上限读系统配置 `target_max_concurrency`（默认 10），用 Semaphore 控制；工具调用与测试连接共用这个闸门，排队时间计入该 target 的超时。
 - 行数、字节、时间三者先触达者为准；截断信息必须回传。
 - 上限优先于结果完整性；不允许为了"取全"绕过上限。
 
@@ -895,7 +896,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 |---|---|---|---|---|
 | `mysql_tables` | `target`、`db`（可空，默认 `default_db`） | `rows`: 表名、类型（基表/视图）、行数估算、注释 | `SHOW TABLES` 等价；库在允许列表 | 目标行数 |
 | `mysql_describe` | `target`、`table`、`db`（可空） | `rows`: 字段名、类型、是否可空、键、默认值、额外信息；`stats`: 索引 | `SHOW COLUMNS` / `SHOW INDEX`；表与库在允许范围 | 目标行数 |
-| `mysql_query` | `target`、`sql`、`limit`（不超过目标上限） | `rows`；`stats`: 行数 | 单条 SELECT/SHOW/DESCRIBE/EXPLAIN；库在允许列表；强制补 LIMIT | 目标行数/字节 |
+| `mysql_query` | `target`、`sql`、`limit`（不超过目标上限） | `rows`；`stats`: db、limit | 单条 SELECT/SHOW/DESCRIBE/EXPLAIN；库在允许列表；强制补 LIMIT | 目标行数/字节 |
 | `mysql_explain` | `target`、`sql` | `rows`: 执行计划行 | `EXPLAIN` 内层语句同白名单；库在允许列表 | 目标行数 |
 | `mysql_processlist` | `target` | `rows`: 会话列表 | 等价 `SHOW PROCESSLIST`，只读 | 目标行数 |
 | `mongo_collections` | `target`、`db`（必填） | `rows`: 集合名、类型、文档数估算、索引数 | `listCollections` + `collStats`；库在允许列表 | 目标行数 |
@@ -937,7 +938,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 ### 8.7 排查 prompt
 
-提供一个 MCP prompt `investigate_error`，参数 `description`、`service`、`trace_id`、`time_range`（均可空，缺省由模型向用户确认）。该 prompt 在第二期上线；第 2 步的 schema 发现工具已在 M5（第二期数据面）上线，可直接使用。内容把推荐顺序写给模型：
+提供一个 MCP prompt `investigate_error`，参数 `description`、`service`、`trace_id`、`time_range`（均可空，缺省由模型向用户确认）。该 prompt 在第二期上线；第 2 步的 schema 发现工具已在 M5（第三期数据面）上线，可直接使用。内容把推荐顺序写给模型：
 
 1. 先用 `systems_status` 看清哪些目标可用、最近是否连通。
 2. 需要写查询前先看结构：MySQL 用 `mysql_tables`、`mysql_describe`，Mongo 用 `mongo_collections`，Elasticsearch 用 `es_mapping`。不要凭猜写表名和字段名。
@@ -984,10 +985,10 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 `GET /healthz` 返回 `200 {"ok": true, "version": "...", "db": "ok"}`；配置库 ping（`SELECT 1`）失败返回 `503 {"ok": false, "db": "error"}`。健康检查不检查各排查目标，避免每次探活外呼八个系统。
 
-### 9.3 连接池与并发
+### 9.3 连接器缓存与并发
 
-- 排查客户端按 target 懒加载，key 为 `(target_id, updated_at)`；配置一保存就丢弃旧客户端，下次调用重建。
-- 进程内最多保留 32 个 target 客户端，LRU 淘汰最久未用并关闭其连接。
+- 按 target 缓存**连接器对象**（不是网络连接池），key 为 `(target_id, updated_at)`；配置一保存就丢弃旧对象，下次调用重建。具体网络客户端（httpx / asyncmy / motor / redis / kafka）仍由连接器在每次操作内创建与关闭。
+- 进程内最多保留 32 个 target 连接器对象，LRU 淘汰最久未用并关闭；创建过程由进程内锁串行化，避免并发首次访问重复创建。
 - 每 target 并发上限读系统配置 `target_max_concurrency`（默认 10，范围 1–50）；上限变化后重新构造该目标的信号量，下一次调用生效；等待时间计入该 target 的超时。
 - 进程退出时关闭全部客户端与配置库引擎。
 - 不缓存 target 配置：每次调用按主键读一次库足够轻，也避免多进程共用 MySQL/PostgreSQL 时读到过期配置。

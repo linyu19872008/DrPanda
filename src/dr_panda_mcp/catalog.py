@@ -48,6 +48,7 @@ class Catalog:
         self._pool: OrderedDict[int, _Pooled] = OrderedDict()
         self._semaphores: dict[int, asyncio.Semaphore] = {}
         self._limits: dict[int, int] = {}
+        self._pool_lock = asyncio.Lock()
 
     async def resolve(self, name: str, *, expected_type: str | None = None) -> Target:
         """按名字取目标并校验：存在、启用、类型匹配、密钥可解密。"""
@@ -67,23 +68,24 @@ class Catalog:
         return target
 
     async def client(self, target: Target, connector: Any) -> Any:
-        """取该目标的客户端；配置变更或连接器变化时重建。"""
-        pooled = self._pool.get(target.id)
-        if (
-            pooled is not None
-            and pooled.updated_at == target.updated_at
-            and pooled.connector.name == connector.name
-        ):
-            self._pool.move_to_end(target.id)
-            return pooled.client
+        """取该目标的连接器缓存；配置变更或连接器变化时重建。"""
+        async with self._pool_lock:
+            pooled = self._pool.get(target.id)
+            if (
+                pooled is not None
+                and pooled.updated_at == target.updated_at
+                and pooled.connector.name == connector.name
+            ):
+                self._pool.move_to_end(target.id)
+                return pooled.client
 
-        if pooled is not None:
-            await self._close_pooled(target.id, pooled)
+            if pooled is not None:
+                await self._close_pooled(target.id, pooled)
 
-        client = connector.create_client(target)
-        self._pool[target.id] = _Pooled(target.updated_at, connector, client)
-        await self._evict_if_needed()
-        return client
+            client = connector.create_client(target)
+            self._pool[target.id] = _Pooled(target.updated_at, connector, client)
+            await self._evict_if_needed()
+            return client
 
     async def drop(self, target_id: int) -> None:
         pooled = self._pool.pop(target_id, None)

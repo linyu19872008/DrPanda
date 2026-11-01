@@ -101,3 +101,23 @@ async def test_eight_types_test_connection(type_: str) -> None:
     assert connector.created == 1
     assert connector.probes == 1
     await catalog.close()
+
+
+async def test_mysql_connect_passes_ssl_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    class FakeAsyncmy:
+        @staticmethod
+        async def connect(**kwargs):
+            captured.update(kwargs)
+            return object()
+
+    target = make_target(
+        type_="mysql",
+        options={"host": "127.0.0.1", "default_db": "app", "ssl": True},
+        secret={"password": "pw"},
+    )
+
+    await mysql_module._connect(FakeAsyncmy, target)
+
+    assert captured["ssl"] is not None

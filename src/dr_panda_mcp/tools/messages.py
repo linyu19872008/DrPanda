@@ -16,7 +16,13 @@ from dr_panda_mcp.guards import rabbit as rabbit_guard
 from dr_panda_mcp.guards.protocol import require
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import Target
-from dr_panda_mcp.tools.base import TOOL_ANNOTATIONS, clamp_limit, finish, run_tool
+from dr_panda_mcp.tools.base import (
+    TOOL_ANNOTATIONS,
+    clamp_limit,
+    finish,
+    run_tool,
+    trim_rows,
+)
 
 
 def _allowed(target: Target, key: str) -> list[str]:
@@ -233,20 +239,22 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
             connector = get_connector("kafka")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.peek(
+            fetched = await connector.peek(
                 client,
                 tgt,
                 topic=chosen,
                 partition=partition,
                 offset=offset,
-                limit=cap,
+                limit=cap + 1,
             )
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"Kafka peek {chosen}[{partition}]@{offset} limit={cap}",
                 started=started,
                 rows=rows,
                 stats={"topic": chosen, "partition": partition, "offset": offset, "limit": cap},
+                truncation=truncation,
             )
 
         return await run_tool(

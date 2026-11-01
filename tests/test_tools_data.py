@@ -25,6 +25,9 @@ class FakeMySQL:
 
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.delay = 0.0
+        self.active = 0
+        self.max_active = 0
         self.rows: dict[str, list[dict[str, Any]]] = {
             "TABLE STATUS": [
                 {"Name": "users", "Engine": "InnoDB", "Rows": 10, "Comment": ""},
@@ -48,8 +51,20 @@ class FakeMySQL:
     def create_client(self, target):
         return object()
 
+    async def close_client(self, client):
+        return None
+
     async def fetch_rows(self, client, target, sql):
         self.calls.append(sql)
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        try:
+            if self.delay:
+                import asyncio
+
+                await asyncio.sleep(self.delay)
+        finally:
+            self.active -= 1
         for marker, rows in self.rows.items():
             if marker in sql:
                 return [dict(row) for row in rows]
@@ -64,6 +79,9 @@ class FakeMongo:
 
     def create_client(self, target):
         return object()
+
+    async def close_client(self, client):
+        return None
 
     async def collections(self, client, target, *, db, limit):
         self.calls.append(("collections", {"db": db, "limit": limit}))
@@ -90,6 +108,9 @@ class FakeES:
 
     def create_client(self, target):
         return object()
+
+    async def close_client(self, client):
+        return None
 
     async def mapping(self, client, target, *, index):
         self.calls.append(("mapping", index))
@@ -119,8 +140,11 @@ class FakeRedis:
     def create_client(self, target):
         return object()
 
-    async def inspect(self, client, target, *, key, limit):
-        self.calls.append(("inspect", {"key": key, "limit": limit}))
+    async def close_client(self, client):
+        return None
+
+    async def inspect(self, client, target, *, key, limit, byte_limit):
+        self.calls.append(("inspect", {"key": key, "limit": limit, "byte_limit": byte_limit}))
         return {"key": key, "type": "string", "ttl": -1, "value": "v"}
 
     async def scan(self, client, target, *, pattern, count, cursor):
@@ -133,7 +157,10 @@ class FakeRedis:
 
     async def slowlog(self, client, target, *, count):
         self.calls.append(("slowlog", count))
-        return [{"id": 1, "duration": 1000, "command": "GET"}]
+        return [
+            {"id": 1, "duration": 1000, "command": "GET pay:1"},
+            {"id": 2, "duration": 2000, "command": "GET other:1"},
+        ]
 
 
 async def _target(runtime: Runtime, type_: str, name: str, options: dict, secret: dict | None = None) -> None:
@@ -240,7 +267,8 @@ async def test_mysql_query_forces_limit(
     )
 
     assert payload["returned"] == 2
-    assert "LIMIT 2" in mysql.calls[-1]
+    assert payload["truncated"] is True
+    assert "LIMIT 3" in mysql.calls[-1]
     assert payload["stats"]["limit"] == 2
 
 
@@ -417,3 +445,51 @@ async def test_redis_scope_and_scan_limit(
     assert errors.SCOPE_DENIED in pattern_scope
     assert errors.DANGEROUS_OPERATION in too_large
     assert redis.calls == []
+
+
+async def test_tool_calls_respect_target_concurrency(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    await _setup(runtime)
+    mysql = FakeMySQL()
+    mysql.delay = 0.03
+    _patch(monkeypatch, mysql=mysql)
+    server = create_server(runtime.config, runtime)
+
+    async with Client(server) as client:
+        await asyncio.gather(
+            *[
+                client.call_tool(
+                    "mysql_query",
+                    {"target": "db-mysql", "sql": "SELECT * FROM users"},
+                )
+                for _ in range(11)
+            ]
+        )
+
+    assert mysql.max_active <= 10
+    assert mysql.max_active >= 2
+
+
+async def test_tool_call_has_whole_call_timeout(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _setup(runtime)
+    mysql = FakeMySQL()
+    mysql.delay = 0.2
+    _patch(monkeypatch, mysql=mysql)
+    monkeypatch.setattr(
+        "dr_panda_mcp.connectors.base.timeout_seconds", lambda _target: 0.05
+    )
+    server = create_server(runtime.config, runtime)
+
+    async with Client(server) as client:
+        with pytest.raises(ToolError) as excinfo:
+            await client.call_tool(
+                "mysql_query",
+                {"target": "db-mysql", "sql": "SELECT * FROM users"},
+            )
+
+    assert errors.UPSTREAM_TIMEOUT in str(excinfo.value)

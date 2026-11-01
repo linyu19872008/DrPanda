@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -63,13 +64,23 @@ async def run_tool(
     target: Target | None = None
     returned = 0
     error_code: str | None = None
+    timeout = connectors_base.DEFAULT_TIMEOUT_SECONDS
     try:
         target = await runtime.catalog.resolve(name, expected_type=target_type)
-        envelope = await handler(target)
+        timeout = connectors_base.timeout_seconds(target)
+        # 整个调用（含排队）共用同一个 deadline；排队时间计入超时（planning 8.3/9.3）。
+        async with asyncio.timeout(timeout):
+            async with runtime.catalog.slot(target):
+                envelope = await handler(target)
         returned = int(envelope.get("returned", 0))
         return envelope
     except ToolError:
         raise
+    except TimeoutError as exc:
+        error_code = errors.UPSTREAM_TIMEOUT
+        raise ToolError(
+            f"{errors.UPSTREAM_TIMEOUT}: 工具调用超过 {timeout:.0f} 秒（含排队），目标可能繁忙"
+        ) from exc
     except errors.DrPandaError as exc:
         error_code = code_for(exc)
         message = redact(str(exc), target.secret.values() if target else [])
@@ -111,17 +122,14 @@ def finish(
 
     调用方已显式截断（例如文件内容）时只标记、不再二次裁行，避免把行整条丢掉。
     """
-    if truncation is not None:
-        kept, auto_truncation = rows, None
-    else:
-        kept, auto_truncation = connectors_base.apply_row_limits(
-            rows, connectors_base.max_rows(target), connectors_base.max_bytes(target)
-        )
+    kept, auto_truncation = connectors_base.apply_row_limits(
+        rows, connectors_base.max_rows(target), connectors_base.max_bytes(target)
+    )
     effective = truncation or auto_truncation
     notes = ["结果已截断，请缩小查询范围、时间窗或返回条数。"] if effective else []
     return connectors_base.build_envelope(
         target,
-        summary=summary,
+        summary=summary[:200],
         elapsed_ms=int((time.monotonic() - started) * 1000),
         rows=kept,
         stats=stats,
@@ -129,6 +137,15 @@ def finish(
         truncation=effective,
         notes=notes,
     )
+
+
+def trim_rows(
+    rows: list[dict[str, Any]], cap: int
+) -> tuple[list[dict[str, Any]], connectors_base.Truncation | None]:
+    """用 cap+1 哨兵判断是否还有更多数据；返回前 cap 行与截断信息。"""
+    if len(rows) > cap:
+        return rows[:cap], connectors_base.Truncation("rows", cap)
+    return rows, None
 
 
 def ensure_topic(target: Target, topic: str) -> str:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -36,8 +36,16 @@ def backup_sqlite_database(url: str, *, keep: int = BACKUP_KEEP) -> Path | None:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     target = backup_dir / f"{stamp}.sqlite"
 
-    shutil.copy2(source, target)
-    # copy2 会沿用源文件的 mtime，按 mtime 排序时会误判新旧；这里改成当前时间
+    # SQLite 的 backup API 会正确包含 WAL 中尚未 checkpoint 的已提交事务；
+    # 直接 copy2 主文件在 WAL 模式下可能得到不完整备份。
+    source_connection = sqlite3.connect(source)
+    target_connection = sqlite3.connect(target)
+    try:
+        source_connection.backup(target_connection)
+    finally:
+        target_connection.close()
+        source_connection.close()
+    # 备份文件按 mtime 排序；这里改成当前时间，避免沿用源库 mtime 被误判为旧
     os.utime(target, None)
     _prune_backups(backup_dir, keep)
     return target

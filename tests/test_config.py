@@ -106,3 +106,13 @@ def test_sqlite_database_path() -> None:
     assert url_module.database_path("sqlite+aiosqlite:///data/dr-panda.sqlite") is not None
     assert url_module.database_path("sqlite+aiosqlite:///:memory:") is None
     assert url_module.database_path("postgresql+asyncpg://u:p@h/db") is None
+
+
+def test_is_loopback_host() -> None:
+    from dr_panda_mcp.config import is_loopback_host
+
+    assert is_loopback_host("127.0.0.1") is True
+    assert is_loopback_host("::1") is True
+    assert is_loopback_host("localhost") is True
+    assert is_loopback_host("0.0.0.0") is False
+    assert is_loopback_host("10.0.0.1") is False

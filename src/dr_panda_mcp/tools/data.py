@@ -26,6 +26,7 @@ from dr_panda_mcp.tools.base import (
     clamp_limit,
     finish,
     run_tool,
+    trim_rows,
 )
 
 
@@ -119,6 +120,18 @@ def force_limit(sql: str, cap: int) -> str:
     if isinstance(expression, exp.Select):
         return expression.limit(cap).sql(dialect=mysql_guard.DIALECT)
     return sql
+
+
+def _slowlog_matches(entry: dict[str, Any], prefix: str) -> bool:
+    """慢日志条目里至少有一个参数以 key 前缀开头才允许返回。"""
+    command = entry.get("command")
+    if isinstance(command, str):
+        tokens = command.split()
+    elif isinstance(command, (list, tuple)):
+        tokens = [str(token) for token in command]
+    else:
+        return False
+    return any(token.startswith(prefix) for token in tokens[1:])
 
 
 def _pick(row: dict[str, Any], *names: str) -> Any:
@@ -233,16 +246,18 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             default_db = ensure_db(tgt, "")
             _mysql_scope(tgt, sql, default_db)
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
-            effective = force_limit(sql, cap)
+            effective = force_limit(sql, cap + 1)
             connector = get_connector("mysql")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.fetch_rows(client, tgt, effective)
+            fetched = await connector.fetch_rows(client, tgt, effective)
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"MySQL {decision.get('kind', 'read')} (limit={cap})",
                 started=started,
                 rows=rows,
                 stats={"db": default_db, "limit": cap},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -310,15 +325,16 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             require(mongo_guard.check_mongo_command("listCollections", {}))
             connector = get_connector("mongo")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.collections(
-                client, tgt, db=chosen, limit=connectors_base.max_rows(tgt)
-            )
+            cap = connectors_base.max_rows(tgt)
+            fetched = await connector.collections(client, tgt, db=chosen, limit=cap + 1)
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"listCollections {chosen}",
                 started=started,
                 rows=rows,
                 stats={"db": chosen},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -364,7 +380,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
             connector = get_connector("mongo")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.find(
+            fetched = await connector.find(
                 client,
                 tgt,
                 db=chosen,
@@ -372,14 +388,16 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
                 filter_=filter_obj,
                 projection=projection_obj,
                 sort=sort_obj,
-                limit=cap,
+                limit=cap + 1,
             )
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"find {chosen}.{collection} (limit={cap})",
                 started=started,
                 rows=rows,
                 stats={"db": chosen, "collection": collection, "limit": cap},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -408,15 +426,17 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
             connector = get_connector("mongo")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.aggregate(
-                client, tgt, db=chosen, collection=collection, pipeline=stages, limit=cap
+            fetched = await connector.aggregate(
+                client, tgt, db=chosen, collection=collection, pipeline=stages, limit=cap + 1
             )
+            rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
                 summary=f"aggregate {chosen}.{collection} (limit={cap})",
                 started=started,
                 rows=rows,
                 stats={"db": chosen, "collection": collection, "limit": cap},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -512,7 +532,8 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             if from_ < 0:
                 raise errors.InvalidArgument("from 不能为负数")
             body["from"] = from_
-            body["size"] = requested
+            available = max(10_000 - from_, 1)
+            body["size"] = min(requested + 1, available)
             if sort:
                 try:
                     body["sort"] = json.loads(sort)
@@ -521,13 +542,15 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             require(es_guard.check_http("POST", f"/{chosen}/_search", body))
             connector = get_connector("elasticsearch")
             client = await runtime.catalog.client(tgt, connector)
-            rows, stats = await connector.search(client, tgt, index=chosen, body=body)
+            fetched, stats = await connector.search(client, tgt, index=chosen, body=body)
+            rows, truncation = trim_rows(fetched, requested)
             return finish(
                 tgt,
                 summary=f"POST /{chosen}/_search (from={from_}, size={requested})",
                 started=started,
                 rows=rows,
                 stats={"index": chosen, **stats},
+                truncation=truncation,
             )
 
         return await run_tool(
@@ -592,7 +615,11 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             connector = get_connector("redis")
             client = await runtime.catalog.client(tgt, connector)
             row = await connector.inspect(
-                client, tgt, key=chosen, limit=connectors_base.max_rows(tgt)
+                client,
+                tgt,
+                key=chosen,
+                limit=connectors_base.max_rows(tgt),
+                byte_limit=connectors_base.max_bytes(tgt),
             )
             return finish(
                 tgt,
@@ -681,12 +708,15 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             connector = get_connector("redis")
             client = await runtime.catalog.client(tgt, connector)
             rows = await connector.slowlog(client, tgt, count=cap)
+            prefix = str(tgt.options.get("key_prefix") or "")
+            if prefix:
+                rows = [row for row in rows if _slowlog_matches(row, prefix)]
             return finish(
                 tgt,
                 summary=f"SLOWLOG GET {cap}",
                 started=started,
                 rows=rows,
-                stats={"count": cap},
+                stats={"count": cap, "key_prefix": prefix or None},
             )
 
         return await run_tool(

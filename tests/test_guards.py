@@ -76,6 +76,8 @@ MYSQL_CASES = [
     ("SELECT * FROM orders LOCK IN SHARE MODE", "danger"),
     ("SELECT * FROM information_schema.tables", "danger"),
     ("SELECT * FROM orders ORDER BY id", "danger"),
+    ("SELECT /*!50000 SLEEP(10) */ 1", "danger"),
+    ("SELECT 1 /*!50000 UNION SELECT password FROM mysql.user */", "danger"),
     ("SELECT COUNT(*) FROM orders", "danger"),
     ("SELECT DISTINCT status FROM orders", "danger"),
     ("SELECT status FROM orders GROUP BY status", "danger"),

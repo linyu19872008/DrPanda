@@ -201,9 +201,11 @@ async def test_secret_keep_clear_and_replace(runtime: Runtime) -> None:
 
         cleared = dict(keep)
         cleared["clear_password"] = "on"
-        await client.post(f"/targets/{target.id}", data=cleared)
+        rejected = await client.post(f"/targets/{target.id}", data=cleared)
         cleared_target = await runtime.store.get("mysql-target")
-        assert cleared_target.secret_fields == frozenset()
+        assert rejected.status_code == 400
+        assert "不能为空" in rejected.text
+        assert cleared_target.secret_fields == frozenset({"password"})
 
         replaced = dict(keep)
         replaced["secret_password"] = "new-pass"
@@ -487,3 +489,28 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
     for page in pages:
         assert "<script" not in page.text
     assert len(css.content) < 40_000
+
+
+async def test_required_secret_cannot_be_cleared_on_edit(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mysql"])
+        target = await runtime.store.get("mysql-target")
+        payload = dict(PAYLOADS["mysql"])
+        payload["clear_password"] = "on"
+        payload.pop("secret_password", None)
+        response = await client.post(f"/targets/{target.id}", data=payload)
+
+    assert response.status_code == 400
+    assert "不能为空" in response.text
+    stored = await runtime.store.get("mysql-target")
+    assert stored is not None and "password" in stored.secret_fields
+
+
+def test_theme_next_rejects_backslash_variants() -> None:
+    from dr_panda_mcp.web.theme import safe_next
+
+    assert safe_next("/") == "/"
+    assert safe_next("/settings?x=1") == "/settings?x=1"
+    assert safe_next("/\\evil.example") == "/"
+    assert safe_next("/%5Cevil.example") == "/"
+    assert safe_next("//evil.example") == "/"

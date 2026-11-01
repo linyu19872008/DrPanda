@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import ssl
 from typing import Any
 
 from dr_panda_mcp import errors
@@ -93,15 +94,18 @@ class _MySQLClient:
 
 async def _connect(asyncmy: Any, target: Target) -> Any:
     options = target.options
-    return await asyncmy.connect(
-        host=options.get("host", "127.0.0.1"),
-        port=int(options.get("port", 3306)),
-        user=options.get("user", ""),
-        password=target.secret.get("password", ""),
-        db=options.get("default_db") or None,
-        connect_timeout=base.timeout_seconds(target),
-        autocommit=True,
-    )
+    kwargs: dict[str, Any] = {
+        "host": options.get("host", "127.0.0.1"),
+        "port": int(options.get("port", 3306)),
+        "user": options.get("user", ""),
+        "password": target.secret.get("password", ""),
+        "db": options.get("default_db") or None,
+        "connect_timeout": base.timeout_seconds(target),
+        "autocommit": True,
+    }
+    if options.get("ssl"):
+        kwargs["ssl"] = ssl.create_default_context()
+    return await asyncmy.connect(**kwargs)
 
 
 async def _close(connection: Any) -> None:

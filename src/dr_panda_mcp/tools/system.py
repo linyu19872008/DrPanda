@@ -49,4 +49,8 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
 
 
 def _iso(value) -> str | None:
-    return value.isoformat(timespec="seconds") if value is not None else None
+    return (
+        value.isoformat(timespec="seconds").replace("+00:00", "Z")
+        if value is not None
+        else None
+    )
