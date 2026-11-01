@@ -1,7 +1,7 @@
 [project]
 name = "dr-panda-mcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "线上排查用的只读 MCP 服务：网页登记连接，模型按名字调用只读排查工具"
 readme = "README.md"
 authors = [
     { name = "linyu19872008", email = "linyu19872008@gmail.com" }
@@ -9,6 +9,30 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=4.1.4",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "alembic>=1.13",
+    "jinja2>=3.1",
+    "uvicorn>=0.30",
+    "aiosqlite>=0.20",
+    "cryptography>=42.0",
+    "sqlglot>=25.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+mysql = ["asyncmy>=0.2.9"]
+postgres = ["asyncpg>=0.29"]
+mongo = ["motor>=3.4"]
+redis = ["redis>=5.0"]
+kafka = ["aiokafka>=0.10"]
+cls = ["tencentcloud-sdk-python-cls>=3.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.6",
 ]
 
 [project.scripts]
@@ -17,3 +41,12 @@ dr-panda-mcp = "dr_panda_mcp:main"
 [build-system]
 requires = ["uv_build>=0.13.2,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
