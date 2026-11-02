@@ -353,3 +353,13 @@ async def test_concurrent_same_name_only_one_wins(runtime: Runtime) -> None:
     assert len(successes) == 1
     assert len(failures) == 1
     assert isinstance(failures[0], TargetNameTaken)
+
+
+async def test_settings_changes_are_listed(runtime: Runtime) -> None:
+    await settings.update(
+        runtime.store, {"audit_cleanup_interval_minutes": "15"}, "anonymous"
+    )
+    changes = await runtime.store.list_settings_changes(5)
+    assert changes
+    assert "audit_cleanup_interval_minutes" in (changes[0].summary or "")
+    assert changes[0].actor == "anonymous"

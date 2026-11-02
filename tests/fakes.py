@@ -55,6 +55,9 @@ class FakeStore:
     async def get_settings(self) -> dict[str, str]:
         return {"audit_retention_days": "90", "target_max_concurrency": "10"}
 
+    async def list_settings_changes(self, limit: int = 5):
+        return []
+
 
 class FakeConnector:
     def __init__(

@@ -65,11 +65,25 @@ class AuditEntry:
 
 
 @dataclass(frozen=True)
+class SettingsChange:
+    """一次系统配置修改的审计摘要。"""
+
+    created_at: datetime
+    actor: str
+    summary: str | None
+
+
+@dataclass(frozen=True)
 class Settings:
     """解析并校验后的运行时策略（planning 4.5）。"""
 
     audit_retention_days: int
     target_max_concurrency: int
+    default_target_timeout_s: int = 15
+    default_target_max_rows: int = 100
+    default_target_max_bytes: int = 102_400
+    audit_cleanup_interval_minutes: int = 60
+    catalog_max_clients: int = 32
 
 
 @runtime_checkable
@@ -93,3 +107,6 @@ class ConfigStore(Protocol):
 
     async def get_settings(self) -> dict[str, str]: ...
     async def update_settings(self, patch: Mapping[str, str], actor: str) -> dict[str, str]: ...
+    async def list_settings_changes(
+        self, limit: int = 5
+    ) -> list[SettingsChange]: ...

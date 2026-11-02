@@ -163,3 +163,26 @@ async def test_close_releases_clients() -> None:
     await catalog.close()
 
     assert connector.closed == 1
+
+
+async def test_catalog_evicts_by_configured_client_limit() -> None:
+    targets = [
+        make_target(target_id=i, name=f"mysql-{i}") for i in range(1, 6)
+    ]
+    store = FakeStore(targets)
+
+    async def loader(_store) -> Settings:
+        return Settings(
+            audit_retention_days=90,
+            target_max_concurrency=10,
+            catalog_max_clients=4,
+        )
+
+    catalog = Catalog(store, settings_loader=loader)
+    connector = FakeConnector()
+    try:
+        for target in targets:
+            await catalog.client(target, connector)
+        assert len(catalog._pool) == 4
+    finally:
+        await catalog.close()

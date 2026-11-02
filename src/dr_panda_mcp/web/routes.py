@@ -32,6 +32,7 @@ _FLASH_MESSAGES = {
     "toggled": ("success", "启用状态已切换"),
     "deleted": ("success", "目标已删除"),
     "saved": ("success", "系统配置已保存"),
+    "reset": ("success", "系统配置已恢复默认值"),
 }
 
 
@@ -70,9 +71,17 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         spec = forms.spec_for(type_)
         if spec is None:
             return _error(request, "未知的目标类型", 400, "无法新建目标")
-        values = forms.initial_values(spec)
+        current = await settings_module.load(store)
+        defaults = settings_module.target_form_defaults(current)
+        values = forms.initial_values(spec, defaults=defaults)
         return _form_page(
-            request, spec, values=values, errors={}, mode="create", existing=None
+            request,
+            spec,
+            values=values,
+            errors={},
+            mode="create",
+            existing=None,
+            common_defaults=defaults,
         )
 
     @server.custom_route("/targets", methods=["POST"])
@@ -81,7 +90,11 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         spec = forms.spec_for(str(form.get("type", "")))
         if spec is None:
             return _error(request, "未知的目标类型", 400, "无法新建目标")
-        draft, errors, values = forms.parse_form(form, spec=spec, mode="create")
+        current = await settings_module.load(store)
+        defaults = settings_module.target_form_defaults(current)
+        draft, errors, values = forms.parse_form(
+            form, spec=spec, mode="create", defaults=defaults
+        )
         if draft is None:
             return _form_page(
                 request,
@@ -91,6 +104,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 mode="create",
                 existing=None,
                 status=400,
+                common_defaults=defaults,
             )
         try:
             await store.create(draft, ACTOR)
@@ -104,6 +118,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 mode="create",
                 existing=None,
                 status=400,
+                common_defaults=defaults,
             )
         return _redirect("/", flash="created")
 
@@ -184,20 +199,84 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     @server.custom_route("/settings", methods=["GET"])
     async def settings_view(request: Request) -> HTMLResponse:
         current = await settings_module.load(store)
-        return _settings_page(request, current, errors={}, flash=_flash(request))
+        return _settings_page(
+            request,
+            current,
+            errors={},
+            values=None,
+            startup_rows=_startup_rows(runtime),
+            history=await _settings_history(store),
+            flash=_flash(request),
+        )
 
     @server.custom_route("/settings", methods=["POST"])
     async def settings_save(request: Request) -> Response:
         form = await request.form()
-        patch = {key: str(form.get(key, "")) for key in settings_module.DEFAULTS}
-        try:
-            await settings_module.update(store, patch, ACTOR)
-        except app_errors.InvalidSettings as exc:
-            current = await settings_module.load(store)
+        current = await settings_module.load(store)
+        values = {
+            spec.key: str(form.get(spec.key, getattr(current, spec.key))).strip()
+            for spec in settings_module.SETTING_SPECS
+        }
+        patch: dict[str, str] = {}
+        errors: dict[str, str] = {}
+        for key, raw in values.items():
+            if key not in form:
+                continue
+            try:
+                normalized = settings_module.validate_patch({key: raw})
+            except app_errors.InvalidSettings as exc:
+                errors[key] = str(exc)
+            else:
+                patch.update(normalized)
+        if not errors:
+            try:
+                await settings_module.update(store, patch, ACTOR)
+            except app_errors.InvalidSettings as exc:
+                errors["_form"] = str(exc)
+        if errors:
             return _settings_page(
-                request, current, errors={"_form": str(exc)}, status=400
+                request,
+                current,
+                errors=errors,
+                values=values,
+                startup_rows=_startup_rows(runtime),
+                history=await _settings_history(store),
+                status=400,
             )
         return _redirect("/settings", flash="saved")
+
+    @server.custom_route("/settings/reset", methods=["GET"])
+    async def settings_reset_confirm(request: Request) -> HTMLResponse:
+        key = request.query_params.get("key", "").strip()
+        if key and key not in settings_module.DEFAULTS:
+            return _error(request, "未知的系统配置键", 400, "无法恢复默认值")
+        specs = (
+            [settings_module.SPEC_BY_KEY[key]]
+            if key
+            else list(settings_module.SETTING_SPECS)
+        )
+        current = await settings_module.load(store)
+        return render.render(
+            "settings_reset.html",
+            request=request,
+            key=key,
+            specs=specs,
+            current_values={spec.key: getattr(current, spec.key) for spec in specs},
+        )
+
+    @server.custom_route("/settings/reset", methods=["POST"])
+    async def settings_reset(request: Request) -> Response:
+        form = await request.form()
+        key = str(form.get("key", "")).strip()
+        if key and key not in settings_module.DEFAULTS:
+            return _error(request, "未知的系统配置键", 400, "无法恢复默认值")
+        patch = (
+            {key: settings_module.DEFAULTS[key]}
+            if key
+            else dict(settings_module.DEFAULTS)
+        )
+        await settings_module.update(store, patch, ACTOR)
+        return _redirect("/settings", flash="reset")
 
     @server.custom_route("/theme", methods=["POST"])
     async def set_theme(request: Request) -> Response:
@@ -291,6 +370,7 @@ def _form_page(
     mode: str,
     existing: Target | None,
     status: int = 200,
+    common_defaults: dict[str, int] | None = None,
 ) -> HTMLResponse:
     return render.render(
         "form.html",
@@ -302,7 +382,9 @@ def _form_page(
         errors=errors,
         option_rows=forms.option_rows(spec, values, errors),
         secret_rows=forms.secret_rows(spec, errors, existing),
-        common_rows=forms.common_rows(values, errors),
+        common_rows=forms.common_rows(
+            values, errors, defaults=common_defaults
+        ),
         status_code=status,
     )
 
@@ -327,31 +409,79 @@ def _edit_page(
     )
 
 
+async def _settings_history(store) -> list[dict[str, str]]:
+    changes = await store.list_settings_changes(5)
+    return [
+        {
+            "at": change.created_at.strftime("%Y-%m-%d %H:%M"),
+            "actor": change.actor,
+            "summary": change.summary or "（无摘要）",
+        }
+        for change in changes
+    ]
+
+
+def _startup_rows(runtime: Runtime) -> list[dict[str, str]]:
+    config = runtime.config
+    scheme = config.database_url.split(":", 1)[0].split("+", 1)[0]
+    db_label = {
+        "sqlite": "SQLite",
+        "mysql": "MySQL",
+        "postgresql": "PostgreSQL",
+    }.get(scheme, scheme or "未知")
+    secret_source = (
+        "环境变量 DR_PANDA_SECRET_KEY"
+        if config.secret_key_b64
+        else "data/secret.key"
+    )
+    return [
+        {"label": "监听地址", "value": f"{config.host}:{config.port}", "note": "环境变量"},
+        {"label": "配置库", "value": db_label, "note": "环境变量"},
+        {"label": "日志级别", "value": config.log_level, "note": "环境变量"},
+        {"label": "加密密钥来源", "value": secret_source, "note": "只读"},
+    ]
+
+
 def _settings_page(
     request: Request,
     current: settings_module.Settings,
     *,
     errors: dict[str, str],
+    values: dict[str, str] | None = None,
+    startup_rows: list[dict[str, str]] | None = None,
+    history: list[dict[str, str]] | None = None,
     flash: dict[str, str] | None = None,
     status: int = 200,
 ) -> HTMLResponse:
-    rows = [
-        {
-            "key": key,
-            "label": _SETTINGS_LABELS[key],
-            "value": getattr(current, key),
-            "default": default,
-            "low": settings_module.RANGES[key][0],
-            "high": settings_module.RANGES[key][1],
-                "help": _SETTINGS_HELP[key],
-            "unit": "天" if key == "audit_retention_days" else "个",
-        }
-        for key, default in settings_module.DEFAULTS.items()
-    ]
+    groups: list[dict[str, object]] = []
+    for group in settings_module.SETTING_GROUPS:
+        rows = []
+        for spec in settings_module.SETTING_SPECS:
+            if spec.group != group["key"]:
+                continue
+            current_value = getattr(current, spec.key)
+            values_for_key = values or {}
+            rows.append(
+                {
+                    "key": spec.key,
+                    "label": spec.label,
+                    "value": values_for_key.get(spec.key, str(current_value)),
+                    "default": spec.default,
+                    "low": spec.low,
+                    "high": spec.high,
+                    "unit": spec.unit,
+                    "effect": spec.effect,
+                    "help": spec.help,
+                    "error": errors.get(spec.key),
+                }
+            )
+        groups.append({**group, "rows": rows})
     return render.render(
         "settings.html",
         request=request,
-        rows=rows,
+        groups=groups,
+        startup_rows=startup_rows or [],
+        history=history or [],
         errors=errors,
         flash=flash,
         status_code=status,
@@ -369,14 +499,3 @@ def _error(
         status_code=status,
         title=title or ("页面不存在" if status == 404 else "请求有误"),
     )
-
-
-_SETTINGS_LABELS = {
-    "audit_retention_days": "审计保留天数",
-    "target_max_concurrency": "每 target 并发上限",
-}
-
-_SETTINGS_HELP = {
-    "audit_retention_days": "超过该天数的审计记录会被定时清理；清理只记日志。",
-    "target_max_concurrency": "同一个目标同时进行的工具调用上限，超出会排队。",
-}

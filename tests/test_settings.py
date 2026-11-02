@@ -81,3 +81,49 @@ async def test_update_rejects_invalid_without_writing() -> None:
         await settings.update(store, {"target_max_concurrency": "0"}, "anonymous")
 
     assert store.updated is None
+
+
+def test_validate_patch_accepts_new_defaults_and_cleanup_interval() -> None:
+    assert settings.validate_patch(
+        {
+            "default_target_timeout_s": "30",
+            "default_target_max_rows": "50",
+            "default_target_max_bytes": "8192",
+            "audit_cleanup_interval_minutes": "15",
+        }
+    ) == {
+        "default_target_timeout_s": "30",
+        "default_target_max_rows": "50",
+        "default_target_max_bytes": "8192",
+        "audit_cleanup_interval_minutes": "15",
+    }
+
+
+def test_target_form_defaults_are_derived_from_settings() -> None:
+    current = Settings(
+        audit_retention_days=90,
+        target_max_concurrency=10,
+        default_target_timeout_s=30,
+        default_target_max_rows=50,
+        default_target_max_bytes=8192,
+        audit_cleanup_interval_minutes=15,
+    )
+    assert settings.target_form_defaults(current) == {
+        "timeout_s": 30,
+        "max_rows": 50,
+        "max_bytes": 8192,
+    }
+
+
+def test_catalog_max_clients_and_cleanup_interval_validation() -> None:
+    assert settings.validate_patch(
+        {"catalog_max_clients": "64", "audit_cleanup_interval_minutes": "15"}
+    ) == {"catalog_max_clients": "64", "audit_cleanup_interval_minutes": "15"}
+
+
+def test_setting_groups_cover_all_specs() -> None:
+    grouped = {
+        spec.key for group in settings.SETTING_GROUPS for spec in settings.SETTING_SPECS
+        if spec.group == group["key"]
+    }
+    assert grouped == settings.SETTING_KEYS

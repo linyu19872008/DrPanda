@@ -31,6 +31,7 @@ from dr_panda_mcp.store.protocol import (
     TARGET_TYPES,
     AuditEntry,
     SecretPatch,
+    SettingsChange,
     Target,
     TargetDraft,
 )
@@ -246,6 +247,29 @@ class SqlConfigStore:
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
         return await self.get_settings()
+
+    async def list_settings_changes(
+        self, limit: int = 5
+    ) -> list[SettingsChange]:
+        if limit < 1:
+            return []
+        async with self._session_factory() as session:
+            rows = (
+                await session.execute(
+                    select(AuditRow)
+                    .where(AuditRow.action == "settings.update")
+                    .order_by(AuditRow.created_at.desc(), AuditRow.id.desc())
+                    .limit(min(limit, 50))
+                )
+            ).scalars().all()
+        return [
+            SettingsChange(
+                created_at=row.created_at,
+                actor=row.actor,
+                summary=row.summary,
+            )
+            for row in rows
+        ]
 
     async def _select_targets(self, *, type: str | None = None) -> list[Target]:
         query = select(TargetRow).order_by(TargetRow.type, TargetRow.name)

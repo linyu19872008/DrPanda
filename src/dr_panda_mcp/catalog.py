@@ -136,7 +136,16 @@ class Catalog:
                 "关闭 %s 客户端失败", pooled.connector.name, exc_info=True
             )
 
+    async def _max_clients_limit(self) -> int:
+        try:
+            current = await self._settings_loader(self._store)
+            value = int(getattr(current, "catalog_max_clients", self._max_clients))
+        except Exception:  # noqa: BLE001 - 配置读取失败时回退构造参数
+            value = self._max_clients
+        return min(max(value, 4), 128)
+
     async def _evict_if_needed(self) -> None:
-        while len(self._pool) > self._max_clients:
+        limit = await self._max_clients_limit()
+        while len(self._pool) > limit:
             _target_id, pooled = self._pool.popitem(last=False)
             await self._close_client(pooled)

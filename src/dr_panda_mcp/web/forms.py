@@ -305,8 +305,16 @@ def type_cards() -> list[dict[str, str]]:
     ]
 
 
-def initial_values(spec: TypeSpec, target: Target | None = None) -> dict[str, str]:
-    """新建用默认值；编辑用库里的 options。"""
+def initial_values(
+    spec: TypeSpec,
+    target: Target | None = None,
+    *,
+    defaults: Mapping[str, int] | None = None,
+) -> dict[str, str]:
+    """新建用默认值；编辑用库里的 options。
+
+    ``defaults`` 可覆盖全局的新建目标默认值；既有 target 仍以自己的 options 为准。
+    """
     values: dict[str, str] = {
         "name": target.name if target else "",
         "enabled": "on" if (target is None or target.enabled) else "",
@@ -319,7 +327,8 @@ def initial_values(spec: TypeSpec, target: Target | None = None) -> dict[str, st
         current = options.get(field.key, field.default)
         values[field.key] = _as_text(field, current)
     for key, _label, default, _ranges in COMMON_FIELDS:
-        values[key] = str(options.get(key, default))
+        configured = defaults.get(key, default) if defaults else default
+        values[key] = str(options.get(key, configured))
     return values
 
 
@@ -329,10 +338,11 @@ def parse_form(
     spec: TypeSpec,
     mode: str,
     existing: Target | None = None,
+    defaults: Mapping[str, int] | None = None,
 ) -> tuple[TargetDraft | None, dict[str, str], dict[str, str]]:
     """解析并校验表单。返回 ``(draft, errors, values)``；有错误时 draft 为 None。"""
     errors: dict[str, str] = {}
-    values = initial_values(spec, existing)
+    values = initial_values(spec, existing, defaults=defaults)
 
     name = existing.name if existing else _text(form, "name")
     values["name"] = name
@@ -353,11 +363,12 @@ def parse_form(
     for key, _label, default, (low, high) in COMMON_FIELDS:
         raw = _raw(form, key)
         values[key] = raw
+        configured = defaults.get(key, default) if defaults else default
         parsed, error = _parse_int(raw, low, high)
         if error:
             errors[key] = f"{key} 必须是 {low}–{high} 的整数"
         else:
-            options[key] = parsed if parsed is not None else default
+            options[key] = parsed if parsed is not None else configured
 
     secrets_set: dict[str, str] = {}
     secrets_clear: set[str] = set()
@@ -645,14 +656,19 @@ def secret_rows(
 COMMON_UNITS = {"timeout_s": "秒", "max_rows": "行", "max_bytes": "字节"}
 
 
-def common_rows(values: Mapping[str, str], errors: Mapping[str, str]) -> list[dict[str, Any]]:
+def common_rows(
+    values: Mapping[str, str],
+    errors: Mapping[str, str],
+    *,
+    defaults: Mapping[str, int] | None = None,
+) -> list[dict[str, Any]]:
     return [
         {
             "key": key,
             "label": label,
-            "value": values.get(key, str(default)),
+            "value": values.get(key, str((defaults or {}).get(key, default))),
             "error": errors.get(key),
-            "help": f"范围 {low}–{high}",
+            "help": f"默认 {(defaults or {}).get(key, default)}；范围 {low}–{high}",
             "unit": COMMON_UNITS[key],
         }
         for key, label, default, (low, high) in COMMON_FIELDS

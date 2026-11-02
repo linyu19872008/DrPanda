@@ -676,3 +676,138 @@ async def test_kafka_sasl_fields_validation(runtime: Runtime) -> None:
     assert target.options["sasl_mechanism"] == "SCRAM-SHA-256"
     assert target.secret_fields == frozenset({"sasl_password"})
     assert conflict.status_code == 400 and "非 SASL" in conflict.text
+
+
+async def test_settings_page_is_grouped(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        page = await client.get("/settings")
+
+    assert "新建目标默认值" in page.text
+    assert "并发与审计" in page.text
+    assert "安全边界不在此页" in page.text
+    assert "启动配置" in page.text
+    assert "settings-section" in page.text
+    assert "仅新建目标" in page.text
+    assert "立即生效" in page.text
+
+
+async def test_new_target_uses_system_default_limits(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_test(name: str, connector) -> None:
+        return None
+
+    monkeypatch.setattr(runtime.catalog, "test_connection", fake_test)
+    async with _client(runtime) as client:
+        await client.post(
+            "/settings",
+            data={
+                "default_target_timeout_s": "30",
+                "default_target_max_rows": "20",
+                "default_target_max_bytes": "8192",
+            },
+        )
+        page = await client.get("/targets/new?type=mysql")
+        payload = dict(PAYLOADS["mysql"])
+        payload.pop("timeout_s")
+        payload.pop("max_rows")
+        payload.pop("max_bytes")
+        created = await client.post("/targets", data=payload)
+        target = await runtime.store.get("mysql-target")
+
+    assert created.status_code == 303
+    assert target is not None
+    assert target.options["timeout_s"] == 30
+    assert target.options["max_rows"] == 20
+    assert target.options["max_bytes"] == 8192
+    assert 'value="30"' in page.text
+    assert 'value="20"' in page.text
+    assert 'value="8192"' in page.text
+
+
+async def test_settings_field_error_preserves_input(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/settings",
+            data={
+                "default_target_timeout_s": "0",
+                "default_target_max_rows": "100",
+                "default_target_max_bytes": "102400",
+                "target_max_concurrency": "10",
+                "audit_retention_days": "90",
+                "audit_cleanup_interval_minutes": "60",
+            },
+        )
+
+    assert response.status_code == 400
+    assert "默认超时" in response.text
+    assert 'value="0"' in response.text
+
+
+async def test_settings_reset_and_history(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        saved = await client.post(
+            "/settings",
+            data={
+                "default_target_timeout_s": "30",
+                "default_target_max_rows": "20",
+                "default_target_max_bytes": "8192",
+                "target_max_concurrency": "5",
+                "audit_retention_days": "30",
+                "audit_cleanup_interval_minutes": "15",
+            },
+        )
+        confirm = await client.get("/settings/reset")
+        page = await client.get("/settings")
+        reset = await client.post("/settings/reset")
+        after = await client.get("/settings")
+
+    assert saved.status_code == 303
+    assert confirm.status_code == 200
+    assert "恢复默认配置" in confirm.text
+    assert "最近变更" in page.text
+    assert "default_target_timeout_s" in page.text
+    assert reset.status_code == 303
+    assert "60" in after.text
+    current = await runtime.store.get_settings()
+    assert current["default_target_timeout_s"] == "15"
+    assert current["audit_cleanup_interval_minutes"] == "60"
+
+
+async def test_single_setting_reset(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post(
+            "/settings",
+            data={
+                "default_target_timeout_s": "30",
+                "default_target_max_rows": "20",
+                "default_target_max_bytes": "8192",
+                "target_max_concurrency": "5",
+                "audit_retention_days": "30",
+                "audit_cleanup_interval_minutes": "15",
+                "catalog_max_clients": "16",
+            },
+        )
+        confirm = await client.get("/settings/reset?key=default_target_timeout_s")
+        reset = await client.post(
+            "/settings/reset", data={"key": "default_target_timeout_s"}
+        )
+        row = await runtime.store.get_settings()
+
+    assert confirm.status_code == 200
+    assert "默认超时" in confirm.text
+    assert "每 target 并发" not in confirm.text
+    assert reset.status_code == 303
+    assert row["default_target_timeout_s"] == "15"
+    assert row["default_target_max_rows"] == "20"
+    assert row["target_max_concurrency"] == "5"
+
+
+async def test_settings_group_advanced_and_single_reset_links(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        page = await client.get("/settings")
+
+    assert "高级资源" in page.text
+    assert "连接器缓存上限" in page.text
+    assert "settings/reset?key=catalog_max_clients" in page.text
+    assert "settings/reset?key=default_target_timeout_s" in page.text

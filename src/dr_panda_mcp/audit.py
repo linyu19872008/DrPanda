@@ -34,13 +34,22 @@ async def run_cleanup_loop(
     runtime: Runtime,
     *,
     initial_delay: float = INITIAL_DELAY_SECONDS,
-    interval: float = INTERVAL_SECONDS,
+    interval: float | None = None,
 ) -> None:
-    """启动后稍等再首跑，之后固定间隔执行；进程退出时取消。"""
+    """启动后稍等再首跑；未显式指定 interval 时每轮读取系统配置。"""
     await asyncio.sleep(initial_delay)
     while True:
         try:
             await cleanup_once(runtime)
         except Exception:
             logger.warning("审计清理失败，下一轮重试", exc_info=True)
-        await asyncio.sleep(interval)
+        if interval is not None:
+            await asyncio.sleep(interval)
+            continue
+        try:
+            current = await settings_module.load(runtime.store)
+            delay = current.audit_cleanup_interval_minutes * 60
+        except Exception:
+            logger.warning("读取审计清理间隔失败，使用默认间隔", exc_info=True)
+            delay = INTERVAL_SECONDS
+        await asyncio.sleep(delay)
