@@ -120,3 +120,15 @@ def test_stopwatch_elapsed() -> None:
         pass
 
     assert watch.elapsed_ms >= 0
+
+
+def test_tls_context_requires_cert_and_key_together() -> None:
+    with pytest.raises(errors.UpstreamUnavailable):
+        base.build_tls_context(
+            client_cert="-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----"
+        )
+
+
+def test_tls_context_rejects_invalid_ca() -> None:
+    with pytest.raises(errors.UpstreamUnavailable):
+        base.build_tls_context(ca_pem="not a pem certificate")

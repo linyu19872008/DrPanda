@@ -35,6 +35,7 @@ class SecretField:
     label: str
     required: bool = False
     help: str = ""
+    pem: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,21 @@ TYPE_SPECS: dict[str, TypeSpec] = {
                 help="粘贴 PEM 证书；配置后必须启用 SSL。",
             ),
         ),
-        (SecretField("password", "密码", required=True),),
+        (
+            SecretField("password", "密码", required=True),
+            SecretField(
+                "client_cert",
+                "客户端证书 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端证书，与私钥必须同时提供；不加密的私钥。",
+            ),
+            SecretField(
+                "client_key",
+                "客户端私钥 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。",
+            ),
+        ),
         "只允许单条 SELECT / SHOW / DESCRIBE / EXPLAIN；连接后强制事务只读。",
     ),
     "mongo": TypeSpec(
@@ -101,6 +116,18 @@ TYPE_SPECS: dict[str, TypeSpec] = {
         (
             SecretField("password", "密码"),
             SecretField("api_key", "API Key（与用户名密码二选一）"),
+            SecretField(
+                "client_cert",
+                "客户端证书 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端证书，与私钥必须同时提供；不加密的私钥。",
+            ),
+            SecretField(
+                "client_key",
+                "客户端私钥 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。",
+            ),
         ),
         "只发 GET / HEAD 与 _search / _count 的 POST；拒绝脚本与深分页。",
     ),
@@ -298,6 +325,16 @@ def _cross_validate(
         has_user_auth = bool(options.get("username")) and bool(password)
         if has_user_auth == bool(api_key):
             errors["_form"] = "Elasticsearch 需要「用户名 + 密码」或 API Key，二选一"
+    if spec.type in {"mysql", "elasticsearch"}:
+        cert = _secret_present(existing, secrets_set, secrets_clear, "client_cert")
+        key = _secret_present(existing, secrets_set, secrets_clear, "client_key")
+        if cert != key:
+            errors["_form"] = "客户端证书与私钥必须同时提供或同时清除"
+        elif cert:
+            if spec.type == "mysql" and not options.get("ssl"):
+                errors["ssl"] = "配置客户端证书时必须启用 SSL"
+            if spec.type == "elasticsearch" and not options.get("verify_tls"):
+                errors["verify_tls"] = "配置客户端证书时必须保持 TLS 校验开启"
     if spec.type == "mysql" and options.get("ca_pem") and not options.get("ssl"):
         errors["ssl"] = "配置 CA 证书时必须启用 SSL"
     if spec.type == "elasticsearch" and options.get("ca_pem") and not options.get("verify_tls"):
@@ -314,6 +351,21 @@ def _cross_validate(
                 errors["default_window_minutes"] = "默认时间窗不能大于最大时间窗"
             if not 1 <= max_window <= 1440:
                 errors["max_window_minutes"] = "最大时间窗必须在 1–1440 分钟"
+
+
+def _secret_present(
+    existing: Target | None,
+    secrets_set: Mapping[str, str],
+    secrets_clear: set[str],
+    key: str,
+) -> bool:
+    if secrets_set.get(key):
+        return True
+    return bool(
+        existing
+        and key in existing.secret_fields
+        and key not in secrets_clear
+    )
 
 
 def _parse_field(field: Field, raw: str, form: Mapping[str, Any]) -> tuple[Any, str | None]:
@@ -422,6 +474,7 @@ def secret_rows(
                 "label": secret.label,
                 "required": secret.required,
                 "has_value": has_value,
+                "pem": secret.pem,
                 "error": errors.get(f"secret_{secret.key}"),
                 "help": secret.help,
             }

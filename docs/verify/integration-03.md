@@ -37,7 +37,7 @@ uv run python scripts/integration/check_p1.py
 
 ## 未覆盖
 
-- MySQL 客户端证书/mTLS、`require_secure_transport=ON` 的强制 TLS 形态
+- MySQL 客户端证书/mTLS 已由 [integration-05.md](integration-05.md) 覆盖；`require_secure_transport=ON` 的强制 TLS 形态仍未覆盖
 - target 级 CA 的客户端证书（当前只有服务端 CA 校验）
 - ES HTTPS/TLS（本次多 host 仍是 HTTP + basic auth）
 - ES failover 仅验证连接失败场景，未验证 5xx/超时的行为

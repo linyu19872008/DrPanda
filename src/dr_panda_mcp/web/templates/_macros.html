@@ -37,10 +37,17 @@
     <label class="field__label" for="secret-{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
     {% if row.has_value %}<span class="badge badge--success">已设置</span>{% else %}<span class="badge badge--muted">未设置</span>{% endif %}
   </div>
+  {% if row.pem %}
+  <textarea class="input textarea" rows="6" spellcheck="false" id="secret-{{ row.key }}"
+            name="secret_{{ row.key }}"
+            placeholder="{{ '留空表示不修改' if row.has_value else '粘贴 PEM 内容' }}"
+            {% if row.error %}aria-invalid="true" aria-describedby="err-secret_{{ row.key }}"{% endif %}></textarea>
+  {% else %}
   <input class="input" type="password" autocomplete="new-password" id="secret-{{ row.key }}"
          name="secret_{{ row.key }}" value=""
          placeholder="{{ '留空表示不修改' if row.has_value else '请输入' }}"
          {% if row.error %}aria-invalid="true" aria-describedby="err-secret_{{ row.key }}"{% endif %}>
+  {% endif %}
   {% if row.has_value %}
   <label class="checkline" for="clear-{{ row.key }}">
     <input class="checkbox" type="checkbox" id="clear-{{ row.key }}" name="clear_{{ row.key }}"> 清除已保存的密钥

@@ -8,7 +8,7 @@
 # 0. 生成 MySQL TLS 测试证书（/tmp/drpanda-mysql-certs）
 bash scripts/integration/mysql-tls/gen-certs.sh
 
-# 1. 起 7 个上游（MySQL TLS + 3 个 ES；Kafka 暂不启动）
+# 1. 起 8 个上游（MySQL TLS/mTLS + 4 个 ES；Kafka 暂不启动）
 docker compose -f scripts/integration/compose.yaml up -d
 
 # 2. 安装驱动
@@ -23,14 +23,16 @@ bash scripts/integration/seed.sh
 bash scripts/integration/prepare_matrix.sh
 bash scripts/integration/prepare_p1.sh
 bash scripts/integration/prepare_target_ca.sh
+bash scripts/integration/prepare_mtls.sh
 
-# 5. 跑基础检查、扩展矩阵、P1、target CA
+# 5. 跑基础检查、扩展矩阵、P1、target CA、mTLS
 uv run python scripts/integration/check_tools.py
 uv run python scripts/integration/check_refusals.py
 uv run python scripts/integration/check_matrix.py
 # MySQL TLS 与 ES 多 host（脚本会停/启 ES 容器）
 uv run python scripts/integration/check_p1.py
 uv run python scripts/integration/check_target_ca.py
+uv run python scripts/integration/check_mtls.py
 ```
 
 ## 两套检查
@@ -40,11 +42,13 @@ uv run python scripts/integration/check_target_ca.py
 - `check_matrix.py`：integration-02 参数/边界/失败矩阵（69 条）
 - `check_p1.py`：MySQL TLS 与 ES 多 host（4 条）
 - `check_target_ca.py`：target 级 CA（MySQL/ES，4 条）
+- `check_mtls.py`：MySQL REQUIRE X509 / ES 客户端证书（4 条）
 
 ## P1 与 target 级 CA
 
 - MySQL 启用测试 CA/服务端证书（`mysql-tls/gen-certs.sh`）；`prepare_p1.sh` 给 `drpanda-mysql-tls` 直接写入 `ca_pem`，无需进程级 `SSL_CERT_FILE`。
 - `prepare_target_ca.sh` 额外登记 MySQL/ES 的 CA 与无 CA 对照 target；`check_target_ca.py` 验证 target 级 CA 生效、无 CA 时证书校验失败。
+- `prepare_mtls.sh` / `check_mtls.py` 验证 MySQL `REQUIRE X509` 用户和 ES `client_authentication=required`；无客户端证书必须失败。
 - 两个 ES 容器 `drpanda-elasticsearch`（19200）与 `drpanda-elasticsearch-2`（19201），target `drpanda-es-multi` 配两个 host；停第一个验证 failover，停两个验证 `UPSTREAM_UNAVAILABLE`。
 
 ## 端口与凭证（仅本地）
@@ -56,6 +60,7 @@ uv run python scripts/integration/check_target_ca.py
 | Elasticsearch | `drpanda-elasticsearch` | 19200 | `elastic` / `drpanda_es_pw`，HTTP 明文、单节点 |
 | Elasticsearch 2 | `drpanda-elasticsearch-2` | 19201 | 同上，用于多 host failover |
 | Elasticsearch TLS | `drpanda-elasticsearch-tls` | 19202 | HTTPS + 测试 CA，用于 target 级 CA |
+| Elasticsearch mTLS | `drpanda-elasticsearch-mtls` | 19203 | HTTPS + 客户端证书必填，用于 mTLS |
 | Redis | `drpanda-redis` | 16379 | 密码 `drpanda_redis_pw`，key 前缀 `drpanda:` |
 | RabbitMQ | `drpanda-rabbitmq` | 15673 | `drpanda` / `drpanda_rabbit_pw`，vhost `/` |
 

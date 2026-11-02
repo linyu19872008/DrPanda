@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.13 |
+| 版本 | v0.14 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -31,6 +31,7 @@
 | v0.11 | 2026-11-01 | M6 落地同步：RabbitMQ/Kafka 五个工具上线；补充 vhost 遍历、消费组位点读取、low watermark 硬校验与无消费组拉取 |
 | v0.12 | 2026-11-02 | 硬化：MySQL 可执行注释拒绝、工具级并发/超时、截断哨兵、必填密钥、SSL、重定向与若干连接器修复；文档与验证口径同步 |
 | v0.13 | 2026-11-02 | 目标级 CA：MySQL / Elasticsearch 增加可选 `ca_pem`，私有 CA 不再依赖进程级 `SSL_CERT_FILE` |
+| v0.14 | 2026-11-02 | mTLS：MySQL / Elasticsearch 增加可选客户端证书与私钥（加密字段），支持双向 TLS |
 
 ## 1. 目标
 
@@ -692,6 +693,8 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 端口 | `options.port` | 否 | 3306 | 1–65535 |
 | 用户 | `options.user` | 是 | — | |
 | 密码 | `secret.password` | 是 | — | 保存后不回显 |
+| 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥必须同时提供 |
+| 客户端私钥 | `secret.client_key` | 否 | 空 | PEM；加密落盘，当前不支持带口令私钥 |
 | 默认库 | `options.default_db` | 是 | — | |
 | 允许的库 | `options.allowed_dbs` | 否 | `[]` | 空表示只允许默认库 |
 | 是否 SSL | `options.ssl` | 否 | false | |
@@ -721,6 +724,8 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 用户名 | `options.username` | 二选一 | — | 与 API Key 互斥 |
 | 密码 | `secret.password` | 二选一 | — | |
 | API Key | `secret.api_key` | 二选一 | — | |
+| 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥必须同时提供 |
+| 客户端私钥 | `secret.client_key` | 否 | 空 | PEM；加密落盘，当前不支持带口令私钥 |
 | 允许的索引 | `options.allowed_indices` | 是 | — | 空表示拒绝；`_all` 与单独 `*` 不接受 |
 | 校验 TLS | `options.verify_tls` | 否 | true | |
 | CA 证书 | `options.ca_pem` | 否 | 空 | PEM 文本；配置时 `verify_tls` 必须为 true，仅用于校验服务端证书 |

@@ -550,3 +550,23 @@ async def test_ca_pem_validation_and_persistence(runtime: Runtime) -> None:
     assert rejected.status_code == 400 and "必须启用 SSL" in rejected.text
     assert created.status_code == 303
     assert target is not None and target.options["ca_pem"].startswith("-----BEGIN CERTIFICATE-----")
+
+
+async def test_client_cert_pair_validation(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        only_cert = dict(PAYLOADS["mysql"])
+        only_cert["ssl"] = "on"
+        only_cert["secret_client_cert"] = "-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----"
+        rejected = await client.post("/targets", data=only_cert)
+
+        both = dict(only_cert)
+        both["secret_client_key"] = "-----BEGIN PRIVATE KEY-----\ny\n-----END PRIVATE KEY-----"
+        created = await client.post("/targets", data=both)
+        target = await runtime.store.get("mysql-target")
+
+    assert rejected.status_code == 400
+    assert "必须同时提供" in rejected.text
+    assert created.status_code == 303
+    assert target is not None
+    assert {"client_cert", "client_key"} <= target.secret_fields
+    assert target.secret["client_key"].startswith("-----BEGIN PRIVATE KEY-----")

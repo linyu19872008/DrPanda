@@ -26,13 +26,19 @@ async def wait_es() -> None:
     async with httpx.AsyncClient(
         auth=("elastic", "drpanda_es_pw"), timeout=2
     ) as client:
-        for _ in range(60):
-            try:
-                response = await client.get("http://127.0.0.1:19200/_cluster/health")
-                if response.status_code < 500:
-                    return
-            except httpx.HTTPError:
-                pass
+        for _ in range(120):
+            ready = 0
+            for port in (19200, 19201):
+                try:
+                    response = await client.get(
+                        f"http://127.0.0.1:{port}/_cluster/health"
+                    )
+                    if response.status_code < 500:
+                        ready += 1
+                except httpx.HTTPError:
+                    pass
+            if ready == 2:
+                return
             await asyncio.sleep(1)
     raise RuntimeError("Elasticsearch 未就绪")
 

@@ -49,7 +49,7 @@ uv run python scripts/integration/check_target_ca.py
 
 ## 未覆盖
 
-- MySQL 客户端证书/mTLS、`require_secure_transport=ON`
-- ES 客户端证书/mTLS
+- MySQL 客户端证书/mTLS 已由 [integration-05.md](integration-05.md) 覆盖；`require_secure_transport=ON` 仍未覆盖
+- ES 客户端证书/mTLS 已由 [integration-05.md](integration-05.md) 覆盖
 - target 级 CA 的证书链/过期/轮换与错误提示细节
 - CA 文本大小上限 64KB 之外的大证书

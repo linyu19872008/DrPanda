@@ -13,4 +13,6 @@ INSERT INTO orders (status, amount, note) VALUES
   ('refunded', 5.25, 'drpanda integration order 3');
 CREATE USER IF NOT EXISTS 'drpanda_ro'@'%' IDENTIFIED BY 'drpanda_mysql_ro_pw';
 GRANT SELECT, SHOW VIEW, PROCESS ON *.* TO 'drpanda_ro'@'%';
+CREATE USER IF NOT EXISTS 'drpanda_mtls'@'%' IDENTIFIED BY 'drpanda_mtls_pw' REQUIRE X509;
+GRANT SELECT, SHOW VIEW, PROCESS ON *.* TO 'drpanda_mtls'@'%';
 FLUSH PRIVILEGES;

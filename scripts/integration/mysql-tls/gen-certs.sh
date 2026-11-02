@@ -29,5 +29,16 @@ EOF
 openssl x509 -req -in es-server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
   -out es-server-cert.pem -days 3650 -sha256 -extfile es-san.cnf 2>/dev/null
 
-chmod 644 ca.pem server-cert.pem server-key.pem es-server-cert.pem es-server-key.pem
-echo "generated MySQL/Elasticsearch TLS certs in $DIR"
+# mTLS 客户端证书（同一个 CA）
+openssl genrsa -out client-key.pem 2048 2>/dev/null
+openssl req -new -key client-key.pem -subj "/CN=drpanda-client" -out client.csr 2>/dev/null
+cat > client.cnf <<EOF
+extendedKeyUsage=clientAuth
+subjectAltName=DNS:localhost,IP:127.0.0.1
+EOF
+openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+  -out client-cert.pem -days 3650 -sha256 -extfile client.cnf 2>/dev/null
+
+chmod 644 ca.pem server-cert.pem server-key.pem es-server-cert.pem es-server-key.pem client-cert.pem
+chmod 600 client-key.pem
+echo "generated MySQL/Elasticsearch TLS + mTLS client certs in $DIR"
