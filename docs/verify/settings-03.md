@@ -48,7 +48,7 @@
   - 元数据 seed 完整；
   - 更新后历史保留 old/new；
   - 原有值迁移后不被默认值覆盖。
-- 全量 `pytest`：**434 passed**；`ruff` 通过。
+- 全量 `pytest`：**435 passed**；`ruff` 通过。
 
 ## 后续
 

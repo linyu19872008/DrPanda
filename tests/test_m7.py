@@ -360,6 +360,8 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
             assert created.status_code == 200
             assert 'id="copy-mcp-token"' in created.text
             assert 'src="/static/copy-token.js' in created.text
+            assert 'id="token-create"' in created.text
+            assert 'data-open-on-load="true"' in created.text
             assert "无 JS 时可点击 Token 全选" in created.text or "Without JS, click the token" in created.text
             import re
             match = re.search(r'<pre id="mcp-token-value" class="mono setup-secret">([^<]+)</pre>', created.text)
@@ -530,5 +532,34 @@ async def test_copy_token_script_is_served(tmp_path: Path) -> None:
         assert response.status_code == 200
         assert "navigator.clipboard" in response.text
         assert "copy-mcp-token" in response.text
+    finally:
+        await runtime.close()
+
+
+async def test_me_uses_dialog_with_no_js_fallbacks(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            me = await client.get("/me")
+            new_page = await client.get("/me/tokens/new")
+            script = await client.get("/static/app.js")
+
+        assert me.status_code == 200
+        assert 'data-dialog-open="token-create"' in me.text
+        assert '<dialog id="token-create"' in me.text
+        assert 'href="/me/tokens/new"' in me.text
+        assert 'src="/static/app.js' in me.text
+        assert new_page.status_code == 200
+        assert "<script" not in new_page.text
+        assert script.status_code == 200
+        assert "showModal" in script.text
     finally:
         await runtime.close()

@@ -102,8 +102,12 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
 
     @server.custom_route("/me/tokens/new", methods=["GET"])
     async def new_token_page(request: Request) -> Response:
-        # 兼容旧书签；正常入口是 /me#token-create 的 CSS 弹窗。
-        return RedirectResponse("/me#token-create", status_code=303)
+        profile = await _current_profile()
+        if profile is None:
+            return RedirectResponse("/login", status_code=303)
+        response = render.render("token_new.html", request=request, error=None)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @server.custom_route("/me/tokens", methods=["POST"])
     async def create_token(request: Request) -> Response:
@@ -149,10 +153,17 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
 
     @server.custom_route("/me/tokens/{token_id:int}/delete", methods=["GET"])
     async def delete_token_page(request: Request) -> Response:
-        # 正常入口是 /me#delete-token-{id} 的 CSS 弹窗；旧链接跳回同一页面。
-        return RedirectResponse(
-            f"/me#delete-token-{request.path_params['token_id']}", status_code=303
+        profile = await _current_profile()
+        if profile is None:
+            return RedirectResponse("/login", status_code=303)
+        token = await auth.get_mcp_token(
+            runtime.session_factory, profile.user.id, request.path_params["token_id"]
         )
+        if token is None:
+            return await _render_me_with_tokens(request, profile, error="Token 不存在", status_code=404)
+        response = render.render("token_delete.html", request=request, token=token)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
     @server.custom_route("/me/tokens/{token_id:int}/delete", methods=["POST"])
     async def delete_token(request: Request) -> Response:

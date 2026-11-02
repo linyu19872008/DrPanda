@@ -404,6 +404,7 @@ uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111
 - [x] M7.5 远程访问显式开关 + HTTPS public URL；非 loopback 未安装仍拒绝。
 - [x] M7.6 真实 MySQL/PostgreSQL 安装联调通过；远程 TLS 反向代理实机验收待做。
 - [x] M7.7 `/me` 账号页、修改密码、多 MCP Token 创建/物理删除/分页。
+- [x] M7.8 前端约束调整为服务端优先 + 局部渐进增强；原生 dialog 与复制脚本落地。
 - [ ] M7.7 文档最终收口与三客户端带 Authorization header 手测。
 
 **交付物**：认证中间件、审计 actor 改造、回归记录、文档更新。

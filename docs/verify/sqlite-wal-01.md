@@ -23,7 +23,7 @@ SQLite 配置库使用 WAL 模式。主文件在未 checkpoint 时可能只有 4
 - 新增 `tests/test_sqlite_wal.py`：
   - 启动后只复制主文件（不带 WAL）也能看到 `targets/audit/settings/alembic_version`；
   - 写入审计后正常关闭，只复制主文件也能读到该审计。
-- 全量 `pytest`：**434 passed**；`ruff` 通过。
+- 全量 `pytest`：**435 passed**；`ruff` 通过。
 
 ## 外部查看器使用说明
 

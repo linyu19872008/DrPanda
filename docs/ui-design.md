@@ -1,6 +1,6 @@
 # 配置台视觉与交互设计
 
-本文件是配置台网页的设计系统与页面规格，配合 `src/dr_panda_mcp/web/static/app.css` 使用。技术约束见 [planning.md](planning.md) 4.4：服务端渲染、手写 CSS、无外部字体/CDN；除 Token 结果页复制按钮的渐进增强脚本外保持零 JS。
+本文件是配置台网页的设计系统与页面规格，配合 `src/dr_panda_mcp/web/static/app.css` 使用。技术约束见 [planning.md](planning.md) 4.4：服务端渲染、手写 CSS、无外部字体/CDN；采用服务端优先 + 局部 JS 渐进增强。
 
 ## 1. 设计原则
 
@@ -86,8 +86,8 @@
 
 - `/setup`：两步卡片式向导，第 1 步管理员密码，第 2 步配置库选择/连接测试；不显示主导航，保留品牌与语言切换。
 - 数据库类型用链接切换 SQLite / MySQL / PostgreSQL，零 JS；测试成功后才启用“完成安装”。
-- 安装完成页显示 MCP URL 与 Token；完整 Token 不在后续页面回显。Token 结果弹窗提供复制按钮（静态脚本，JS 失败时隐藏按钮并显示手动复制提示）。
-- “我的”页面用 CSS `:target` 弹窗创建和删除 Token，不跳转独立页面；创建成功后弹窗显示一次 Token，删除需同页二次确认；列表按 20 条/页分页。
+- 安装完成页显示 MCP URL 与 Token；完整 Token 不在后续页面回显。Token 结果弹窗提供复制按钮（自托管 `copy-token.js`，JS 失败时隐藏按钮并显示手动复制提示）。
+- “我的”页面用原生 `<dialog>` + 自托管 `app.js` 创建/删除 Token，JS 可用时不跳页；无 JS 回退到独立表单/确认页；创建成功弹窗显示一次 Token。
 - `/login`：单列登录卡片，用户名/密码 + CSRF；不显示管理导航的可操作入口。
 - 安装/登录页均已接入 `t()` 中英文文案。
 
@@ -154,6 +154,6 @@ POST /theme mode=system   → 清除 Cookie，回到跟随系统
 
 - 浅/深两套、1440/1024/390 三宽度：无横向滚动、无文字截断、无重叠（用 DevTools 协议检查 `scrollWidth == innerWidth`）。
 - 主题：默认跟随系统；手选后刷新保持；清除后回到系统；无闪烁；无 JS 可用。
-- 键盘走查全部页面；对比度自动测试通过；`pytest` 全绿；CSS < 30KB；零外部请求。
+- 键盘走查全部页面；对比度自动测试通过；`pytest` 全绿；CSS < 42KB；除自托管渐进增强脚本外无外部请求。
 
 视觉基线截图在 `docs/verify/assets/ui/`，验证记录见 `docs/verify/M3.5.md`。

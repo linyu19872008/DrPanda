@@ -2327,7 +2327,11 @@ ul {
   position: absolute;
   top: 10px;
   right: 14px;
+  border: 0;
+  padding: 2px 6px;
+  background: transparent;
   color: var(--text-muted);
+  font: inherit;
   font-size: 24px;
   line-height: 1;
   text-decoration: none;
@@ -2363,4 +2367,24 @@ ul {
   align-items: center;
   gap: 10px;
   min-height: 32px;
+}
+
+dialog.modal {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: none;
+  max-height: none;
+}
+
+dialog.modal[open] {
+  display: block;
+}
+
+dialog.modal::backdrop {
+  background: rgb(15 23 42 / 55%);
+}
+
+dialog.modal .modal__panel {
+  margin: 0 auto;
 }
