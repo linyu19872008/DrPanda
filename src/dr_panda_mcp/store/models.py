@@ -14,6 +14,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -110,10 +111,7 @@ class SettingRow(Base):
 
 class UserRow(Base):
     __tablename__ = "users"
-    __table_args__ = (
-        UniqueConstraint("username", name="uq_users_username"),
-        Index("ix_users_mcp_token_hash", "mcp_token_hash", unique=True),
-    )
+    __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
 
     id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -121,13 +119,27 @@ class UserRow(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="admin")
     is_enabled: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
     auth_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1)
-    mcp_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    mcp_token_prefix: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    mcp_token_created_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    mcp_token_last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
+class McpTokenRow(Base):
+    __tablename__ = "mcp_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_mcp_tokens_token_hash"),
+        Index("ix_mcp_tokens_user_id", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        _pk_type(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    token_prefix: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
 
 
 class SettingsHistoryRow(Base):

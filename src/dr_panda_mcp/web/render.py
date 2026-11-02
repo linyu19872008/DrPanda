@@ -62,7 +62,13 @@ def render(
             "language_options": i18n.language_options(),
             "csrf_token": csrf_token,
             "current_user": auth.current_user(),
-            "nav_active": "settings" if path.startswith("/settings") else "targets",
+            "nav_active": (
+                "me"
+                if path.startswith("/me")
+                else "settings"
+                if path.startswith("/settings")
+                else "targets"
+            ),
             "app_version": _app_version(),
             "asset_version": assets.asset_version(),
             "flash": flash,

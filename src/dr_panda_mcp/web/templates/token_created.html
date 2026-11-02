@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ t('Token 已生成') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<div class="page-header"><div><span class="badge badge--success">{{ t('Token 已生成') }}</span><h1>{{ t('请立即保存') }}</h1><p class="page-subtitle">{{ t('完整 Token 只显示一次，关闭页面后无法再次查看。') }}</p></div></div>
+<div class="card profile-card profile-card--form">
+  <p class="field__label">{{ t('名称') }}</p>
+  <p>{{ name or '—' }}</p>
+  <p class="field__label">{{ t('MCP Token') }}</p>
+  <pre class="mono setup-secret">{{ token }}</pre>
+  <div class="alert alert--warning"><div class="alert__body"><strong>{{ t('只显示一次') }}</strong><span class="alert__detail">{{ t('请把它配置到对应客户端；丢失后只能删除并重新生成。') }}</span></div></div>
+  <a class="btn btn--primary" href="/me">{{ t('返回我的') }}</a>
+</div>
+{% endblock %}

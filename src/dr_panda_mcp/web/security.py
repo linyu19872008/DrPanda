@@ -77,16 +77,18 @@ class AuthMiddleware:
         scheme, _, token = header.partition(" ")
         if scheme.lower() != "bearer" or not token.strip():
             return None
-        user = await auth.get_user_by_token_hash(
+        principal = await auth.authenticate_mcp_token(
             self.runtime.session_factory, auth.hash_token(token.strip())
         )
-        if user is None or not user.is_enabled or user.role != "admin":
+        if principal is None:
             return None
         try:
-            await auth.touch_mcp_token_used(self.runtime.session_factory, user.id)
+            await auth.touch_mcp_token_used(
+                self.runtime.session_factory, principal.token_id
+            )
         except Exception:  # 元数据更新失败不影响已认证的工具调用
             logger.warning("更新 MCP Token 最近使用时间失败", exc_info=True)
-        return user
+        return principal.user
 
     async def _session_user(self, request: Request):
         raw = request.cookies.get(auth.SESSION_COOKIE)

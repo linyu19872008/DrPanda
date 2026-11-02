@@ -29,7 +29,7 @@
 - pending 时产生备份；
 - 无 pending 时不产生备份；
 - 配置值 3 时 pending 备份只保留 3 个；
-- 全量 `pytest`：**431 passed**；`ruff` 通过。
+- 全量 `pytest`：**432 passed**；`ruff` 通过。
 
 ## 边界
 

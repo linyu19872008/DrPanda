@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.29 |
+| 版本 | v0.30 |
 | 更新 | 2026-11-02 |
 | 状态 | M0–M7 基础认证与首次安装已实现；MySQL/PostgreSQL 安装已验证；远程 TLS 待实机 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -47,6 +47,7 @@
 | v0.27 | 2026-11-02 | SQLite 备份仅在 pending migration 时执行，保留上限 20 且系统配置可调 |
 | v0.28 | 2026-11-02 | M7：users、首次安装向导、登录 Session/CSRF、MCP Bearer、Session 有效期配置、远程开关 |
 | v0.29 | 2026-11-02 | M7：/me 账号页、Token 轮换、修改密码、Token 元数据 |
+| v0.30 | 2026-11-02 | M7：多 Token 表、创建/物理删除、20 条分页、顶部“我的”导航 |
 
 ## 1. 目标
 
@@ -193,9 +194,12 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | POST | `/settings/reset` | 确认恢复全部系统配置默认值 | 303 → `/settings` | 500 |
 | POST | `/theme` | 主题三态（system / light / dark），写 Cookie | 303 → 站内 next | — |
 | POST | `/language` | 语言切换（en / zh-Hans），写 Cookie | 303 → 站内 next | — |
-| GET | `/me` | 账号、MCP Token 元数据、修改密码 | 200 | 未登录 303 |
+| GET | `/me` | 账号、MCP Token 列表（20/页）、修改密码 | 200 | 未登录 303 |
 | POST | `/me/password` | 修改管理员密码并失效旧 Session | 303 → `/login` | 400 校验失败 |
-| POST | `/me/mcp-token/rotate` | 重新生成 MCP Token，旧 Token 失效 | 200 显示一次新 Token | 400 密码错误 |
+| GET | `/me/tokens/new` | 新建 Token 表单 | 200 | 未登录 303 |
+| POST | `/me/tokens` | 创建 Token，显示一次 | 200 | 400 名称过长 |
+| GET | `/me/tokens/{id}/delete` | 删除确认 | 200 | 404 |
+| POST | `/me/tokens/{id}/delete` | 物理删除 Token | 303 → `/me` | 404 |
 | GET | `/static/app.css` | 手写样式表（ETag、短缓存） | 200 / 304 | 404 |
 | GET | `/healthz` | 健康检查（9.2） | 200 JSON | 503 |
 
@@ -421,12 +425,20 @@ class Settings:                  # 解析并校验后的运行时策略
 | `role` | String(32) | NOT NULL | M7 固定 `admin` |
 | `is_enabled` | Boolean | NOT NULL | 停用后不能登录/调用 |
 | `auth_version` | Integer | NOT NULL | 改密后递增，使旧 Session 失效 |
-| `mcp_token_hash` | String(64) | UNIQUE, NULL | `/mcp` Bearer Token 的 SHA-256 |
-| `mcp_token_prefix` | String(16) | NULL | Token 前缀，供页面识别 |
-| `mcp_token_created_at` | DateTime(timezone=True) | NULL | Token 创建时间 |
-| `mcp_token_last_used_at` | DateTime(timezone=True) | NULL | 最近一次 MCP 认证时间 |
 | `last_login_at` | DateTime(timezone=True) | NULL | 最近登录 |
 | `created_at` / `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
+
+`mcp_tokens`
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | BigInteger | 主键自增 | |
+| `user_id` | BigInteger | NOT NULL, FK users.id | 归属管理员 |
+| `name` | String(64) | NULL | 可选名称；旧 Token 不迁移 |
+| `token_hash` | String(64) | NOT NULL, UNIQUE | Bearer Token 的 SHA-256 |
+| `token_prefix` | String(16) | NULL | 页面识别前缀 |
+| `created_at` | DateTime(timezone=True) | NOT NULL | UTC |
+| `last_used_at` | DateTime(timezone=True) | NULL | 最近认证时间 |
 
 `targets`
 

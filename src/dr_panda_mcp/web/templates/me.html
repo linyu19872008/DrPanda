@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <h1>{{ t('我的') }}</h1>
-    <p class="page-subtitle">{{ t('管理账号密码和 MCP 客户端凭证。') }}</p>
+    <p class="page-subtitle">{{ t('管理账号密码和 MCP 客户端访问凭证。') }}</p>
   </div>
 </div>
 
@@ -13,74 +13,87 @@
 {% endif %}
 
 <div class="profile-grid">
-  <section class="card profile-card">
-    <h2>{{ t('账号') }}</h2>
-    <dl class="summary">
-      <div><dt>{{ t('用户名') }}</dt><dd class="mono">{{ profile.user.username }}</dd></div>
-      <div><dt>{{ t('角色') }}</dt><dd>{{ t('管理员') }}</dd></div>
-      <div><dt>{{ t('最近登录') }}</dt><dd>{{ last_login or t('未记录') }}</dd></div>
-    </dl>
-  </section>
+  <aside class="profile-side">
+    <section class="card profile-card">
+      <h2>{{ t('账号') }}</h2>
+      <dl class="summary">
+        <div><dt>{{ t('用户名') }}</dt><dd class="mono">{{ profile.user.username }}</dd></div>
+        <div><dt>{{ t('角色') }}</dt><dd>{{ t('管理员') }}</dd></div>
+        <div><dt>{{ t('最近登录') }}</dt><dd>{{ last_login or t('未记录') }}</dd></div>
+      </dl>
+    </section>
 
-  <section class="card profile-card profile-card--wide">
-    <h2>{{ t('MCP 接入') }}</h2>
-    {% if new_token %}
-    <div class="alert alert--warning" role="status">
-      <div class="alert__body">
-        <strong>{{ t('新 Token 只显示一次，请立即保存') }}</strong>
-        <span class="alert__detail">{{ t('旧 Token 已立即失效，请更新 Cursor / Codex / DeepSeek Harness 配置。') }}</span>
+    <section class="card profile-card">
+      <h2>{{ t('修改密码') }}</h2>
+      {% if password_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(password_error) }}</strong></div></div>{% endif %}
+      <form method="post" action="/me/password" class="profile-form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <div class="field">
+          <label class="field__label" for="current-password">{{ t('当前密码') }}</label>
+          <input class="input" id="current-password" name="current_password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="field">
+          <label class="field__label" for="new-password">{{ t('新密码') }}</label>
+          <input class="input" id="new-password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+          <p class="field__hint">{{ t('至少 8 位。修改成功后需要重新登录。') }}</p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="confirm-password">{{ t('确认新密码') }}</label>
+          <input class="input" id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <button class="btn btn--primary" type="submit">{{ t('保存新密码') }}</button>
+      </form>
+    </section>
+  </aside>
+
+  <section class="profile-main">
+    <div class="card profile-card">
+      <div class="profile-card__head">
+        <div>
+          <h2>{{ t('MCP 访问') }}</h2>
+          <p class="field__hint">{{ t('每个 Token 独立有效，删除后立即失效。') }}</p>
+        </div>
+        <a class="btn btn--primary btn--sm" href="/me/tokens/new">{{ t('+ 生成新 Token') }}</a>
       </div>
+      <p class="field__label">{{ t('MCP 地址') }}</p>
+      <pre class="mono profile-endpoint">{{ mcp_url }}</pre>
+
+      {% if tokens %}
+      <div class="table-card profile-token-table">
+        <table class="table table--responsive">
+          <thead><tr>
+            <th>{{ t('名称') }}</th><th>{{ t('Token 前缀') }}</th><th>{{ t('创建时间') }}</th><th>{{ t('最近使用') }}</th><th class="cell-actions">{{ t('操作') }}</th>
+          </tr></thead>
+          <tbody>
+          {% for token in tokens %}
+            <tr>
+              <td data-label="{{ t('名称') }}">{{ token.name or '—' }}</td>
+              <td data-label="{{ t('Token 前缀') }}" class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</td>
+              <td data-label="{{ t('创建时间') }}" class="muted small">{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+              <td data-label="{{ t('最近使用') }}" class="muted small">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M UTC') if token.last_used_at else t('从未使用') }}</td>
+              <td data-label="{{ t('操作') }}" class="cell-actions">
+                <a class="btn btn--danger-ghost btn--sm" href="/me/tokens/{{ token.id }}/delete">{{ t('删除') }}</a>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if pages > 1 %}
+      <nav class="pagination" aria-label="{{ t('分页') }}">
+        {% if page > 1 %}<a class="btn btn--secondary btn--sm" href="/me?page={{ page - 1 }}">{{ t('上一页') }}</a>{% endif %}
+        <span class="pagination__info">{{ t('第 {page} / {pages} 页', page=page, pages=pages) }} · {{ t('共 {total} 个', total=total) }}</span>
+        {% if page < pages %}<a class="btn btn--secondary btn--sm" href="/me?page={{ page + 1 }}">{{ t('下一页') }}</a>{% endif %}
+      </nav>
+      {% endif %}
+      {% else %}
+      <div class="empty empty--sm">
+        <h2>{{ t('还没有 MCP Token') }}</h2>
+        <p>{{ t('生成一个 Token 给 Cursor、Codex 或 DeepSeek Harness 使用。') }}</p>
+        <a class="btn btn--primary" href="/me/tokens/new">{{ t('+ 生成第一个 Token') }}</a>
+      </div>
+      {% endif %}
     </div>
-    <p class="field__label">{{ t('新的 MCP Token') }}</p>
-    <pre class="mono setup-secret">{{ new_token }}</pre>
-    {% endif %}
-
-    <p class="field__label">{{ t('MCP 地址') }}</p>
-    <pre class="mono profile-endpoint">{{ mcp_url }}</pre>
-
-    <dl class="summary">
-      <div><dt>{{ t('Token 状态') }}</dt><dd>
-        {% if profile.has_mcp_token %}
-          {% if token_prefix %}{{ t('已生成') }} · <span class="mono">{{ token_prefix }}…</span>{% else %}{{ t('已生成（旧版，无法显示前缀）') }}{% endif %}
-        {% else %}{{ t('未生成') }}{% endif %}
-      </dd></div>
-      <div><dt>{{ t('创建时间') }}</dt><dd>{{ token_created or t('未知') }}</dd></div>
-      <div><dt>{{ t('最近使用') }}</dt><dd>{{ token_last_used or t('从未使用') }}</dd></div>
-    </dl>
-
-    <p class="field__hint">{{ t('完整 Token 不会再次显示。如果丢失，请重新生成；重新生成后旧 Token 会立即失效。') }}</p>
-
-    {% if token_error %}<p class="field__error" role="alert">{{ t(token_error) }}</p>{% endif %}
-    <form method="post" action="/me/mcp-token/rotate" class="profile-form">
-      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <div class="field">
-        <label class="field__label" for="rotate-password">{{ t('当前密码（重新生成前确认）') }}</label>
-        <input class="input" id="rotate-password" name="current_password" type="password" autocomplete="current-password" required>
-      </div>
-      <button class="btn btn--danger" type="submit">{{ t('重新生成 MCP Token') }}</button>
-    </form>
-  </section>
-
-  <section class="card profile-card profile-card--wide">
-    <h2>{{ t('修改密码') }}</h2>
-    {% if password_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(password_error) }}</strong></div></div>{% endif %}
-    <form method="post" action="/me/password" class="profile-form">
-      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <div class="field">
-        <label class="field__label" for="current-password">{{ t('当前密码') }}</label>
-        <input class="input" id="current-password" name="current_password" type="password" autocomplete="current-password" required>
-      </div>
-      <div class="field">
-        <label class="field__label" for="new-password">{{ t('新密码') }}</label>
-        <input class="input" id="new-password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
-        <p class="field__hint">{{ t('至少 8 位。修改成功后需要重新登录。') }}</p>
-      </div>
-      <div class="field">
-        <label class="field__label" for="confirm-password">{{ t('确认新密码') }}</label>
-        <input class="input" id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
-      </div>
-      <button class="btn btn--primary" type="submit">{{ t('保存新密码') }}</button>
-    </form>
   </section>
 </div>
 {% endblock %}

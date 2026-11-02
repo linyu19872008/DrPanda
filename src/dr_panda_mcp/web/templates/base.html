@@ -24,6 +24,8 @@
            {% if nav_active == 'targets' %}aria-current="page"{% endif %}>{{ t('排查目标') }}</a>
         <a class="tab{% if nav_active == 'settings' %} is-active{% endif %}" href="/settings"
            {% if nav_active == 'settings' %}aria-current="page"{% endif %}>{{ t('系统配置') }}</a>
+        <a class="tab{% if nav_active == 'me' %} is-active{% endif %}" href="/me"
+           {% if nav_active == 'me' %}aria-current="page"{% endif %}>{{ t('我的') }}</a>
       </nav>
 
       <div class="topbar__side">

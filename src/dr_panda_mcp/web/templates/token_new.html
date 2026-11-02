@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ t('生成新 Token') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/me">{{ t('我的') }}</a><span aria-hidden="true">/</span><span>{{ t('生成新 Token') }}</span></nav>
+<div class="page-header"><div><h1>{{ t('生成新 Token') }}</h1><p class="page-subtitle">{{ t('名称可选，用于区分 Cursor、Codex 等客户端。') }}</p></div></div>
+<div class="card profile-card profile-card--form">
+  {% if error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>{% endif %}
+  <form method="post" action="/me/tokens" class="profile-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div class="field">
+      <label class="field__label" for="token-name">{{ t('Token 名称（可选）') }}</label>
+      <input class="input" id="token-name" name="name" maxlength="64" placeholder="{{ t('例如 Cursor') }}">
+    </div>
+    <div class="form-actions form-actions--inline">
+      <a class="btn btn--secondary" href="/me">{{ t('取消') }}</a>
+      <button class="btn btn--primary" type="submit">{{ t('生成 Token') }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

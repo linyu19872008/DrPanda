@@ -12,7 +12,7 @@
 - 八类组件都有只读闸门与最小只读探测（测试连接）；管理/变更命令由白名单拦截，高开销操作由危险清单拦截，二者都在建立连接之前判定。
 - 浏览器打开 `http://127.0.0.1:8111/` 可登记/编辑/停用/删除目标、测试连接、修改系统配置。
 - 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现、零 JS），列表带统计/搜索/类型筛选，窄屏自动转卡片。
-- 首次启动进入安装向导：设置 admin 密码、选择 SQLite/MySQL/PostgreSQL 配置库并测试连接；安装完成后网页登录，`/mcp` 使用安装完成页显示的 Bearer Token；Token 丢失可在“我的”页面输入当前密码重新生成。
+- 首次启动进入安装向导：设置 admin 密码、选择 SQLite/MySQL/PostgreSQL 配置库并测试连接；安装完成后网页登录，`/mcp` 使用安装完成页显示的 Bearer Token；Token 丢失可在“我的”页面重新创建；支持多个 Token 和删除。
 - 默认只监听 `127.0.0.1` / `::1` / `localhost`；远程访问需 `DR_PANDA_ALLOW_REMOTE=1` + HTTPS `DR_PANDA_PUBLIC_URL`，且必须先在本机完成安装。
 - 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
 - 已用 Docker 真实联调 MySQL / MongoDB / Elasticsearch / Redis / RabbitMQ：19 个工具冒烟 + 69 条参数/边界/失败矩阵全部通过；MySQL TLS（含 target 级 CA 与 mTLS）、ES 多 host failover/TLS/mTLS、Mongo 无认证/密码/URI/TLS/mTLS、X.509、replica set 均已通过。Kafka 镜像不可用、CLS/GitLab 缺凭证，尚未真实联调。

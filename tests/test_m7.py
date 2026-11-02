@@ -100,11 +100,16 @@ async def _auth_runtime(tmp_path: Path) -> tuple[Runtime, Config, bytes, str]:
     cfg = _config(tmp_path)
     runtime = await create_runtime(cfg, key_file=tmp_path / "secret.key")
     token = auth.generate_token()
-    await auth.create_admin(
+    user = await auth.create_admin(
         runtime.session_factory,
         password_hash=auth.hash_password("abcdefgh"),
-        mcp_token_hash=auth.hash_token(token),
-        mcp_token_prefix=token[:12],
+    )
+    await auth.create_mcp_token(
+        runtime.session_factory,
+        user.id,
+        name="默认 Token",
+        token_hash=auth.hash_token(token),
+        token_prefix=token[:12],
     )
     key = auth.load_or_create_session_key(cfg.session_key_file)
     return runtime, cfg, key, token
@@ -193,9 +198,13 @@ async def test_session_ttl_setting_controls_login_cookie(tmp_path: Path) -> None
 async def test_mcp_token_lookup(tmp_path: Path) -> None:
     runtime, _cfg, _key, token = await _auth_runtime(tmp_path)
     try:
-        user = await auth.get_user_by_token_hash(runtime.session_factory, auth.hash_token(token))
-        assert user is not None and user.username == "admin"
-        assert await auth.get_user_by_token_hash(runtime.session_factory, "nope") is None
+        principal = await auth.authenticate_mcp_token(
+            runtime.session_factory, auth.hash_token(token)
+        )
+        assert principal is not None and principal.user.username == "admin"
+        assert (
+            await auth.authenticate_mcp_token(runtime.session_factory, "nope") is None
+        )
     finally:
         await runtime.close()
 
@@ -323,7 +332,7 @@ async def test_setup_existing_database_keeps_targets(tmp_path: Path) -> None:
     await app.close()
 
 
-async def test_my_page_token_rotation_and_password_change(tmp_path: Path) -> None:
+async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
     runtime, cfg, key, old_token = await _auth_runtime(tmp_path)
     app = create_app(cfg, runtime, auth_required=True, session_key=key)
     try:
@@ -342,34 +351,54 @@ async def test_my_page_token_rotation_and_password_change(tmp_path: Path) -> Non
             assert old_token[:12] in me.text
             assert old_token not in me.text
 
+            # 创建第二个 Token；名称可选
             csrf = client.cookies.get(auth.CSRF_COOKIE)
-            wrong = await client.post(
-                "/me/mcp-token/rotate",
-                data={"_csrf": csrf, "current_password": "wrong"},
+            created = await client.post(
+                "/me/tokens",
+                data={"_csrf": csrf, "name": "Cursor"},
             )
-            assert wrong.status_code == 400
-
-            csrf = client.cookies.get(auth.CSRF_COOKIE)
-            rotated = await client.post(
-                "/me/mcp-token/rotate",
-                data={"_csrf": csrf, "current_password": "abcdefgh"},
-            )
-            assert rotated.status_code == 200
+            assert created.status_code == 200
             import re
-
-            match = re.search(r'<pre class="mono setup-secret">([^<]+)</pre>', rotated.text)
+            match = re.search(r'<pre class="mono setup-secret">([^<]+)</pre>', created.text)
             assert match is not None
             new_token = match.group(1).strip()
             assert new_token != old_token
 
+            # 旧 Token 仍在；新 Token 可用
             assert (
-                await auth.get_user_by_token_hash(
+                await auth.authenticate_mcp_token(
+                    runtime.session_factory, auth.hash_token(old_token)
+                )
+                is not None
+            )
+            assert (
+                await auth.authenticate_mcp_token(
+                    runtime.session_factory, auth.hash_token(new_token)
+                )
+                is not None
+            )
+
+            # 物理删除旧 Token；删除不要求当前密码
+            old_tokens = await auth.list_mcp_tokens(
+                runtime.session_factory, 1, offset=0, limit=20
+            )
+            old_row = next((item for item in old_tokens if item.token_prefix == old_token[:12]), None)
+            assert old_row is not None
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            deleted = await client.post(
+                f"/me/tokens/{old_row.id}/delete",
+                data={"_csrf": csrf},
+                follow_redirects=False,
+            )
+            assert deleted.status_code == 303
+            assert (
+                await auth.authenticate_mcp_token(
                     runtime.session_factory, auth.hash_token(old_token)
                 )
                 is None
             )
             assert (
-                await auth.get_user_by_token_hash(
+                await auth.authenticate_mcp_token(
                     runtime.session_factory, auth.hash_token(new_token)
                 )
                 is not None
@@ -418,5 +447,41 @@ async def test_my_page_token_rotation_and_password_change(tmp_path: Path) -> Non
                 follow_redirects=False,
             )
             assert new_login.status_code == 303
+    finally:
+        await runtime.close()
+
+
+async def test_token_list_pagination(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    try:
+        user = await auth.get_user_by_username(runtime.session_factory, "admin")
+        assert user is not None
+        for index in range(25):
+            token = auth.generate_token()
+            await auth.create_mcp_token(
+                runtime.session_factory,
+                user.id,
+                name=f"token-{index}",
+                token_hash=auth.hash_token(token),
+                token_prefix=token[:12],
+            )
+        app = create_app(cfg, runtime, auth_required=True, session_key=key)
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url=BASE,
+            cookies={"drpanda_lang": "zh-Hans"},
+        ) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            first = await client.get("/me")
+            second = await client.get("/me?page=2")
+        assert "第 1 / 2 页" in first.text
+        assert "第 2 / 2 页" in second.text
+        assert "共 26 个" in first.text
     finally:
         await runtime.close()

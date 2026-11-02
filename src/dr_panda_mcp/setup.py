@@ -179,12 +179,17 @@ class SetupApp:
                 return self._render_database(
                     request, error="该配置库已有管理员，请使用已有安装登录", status=400
                 )
-            token = auth.generate_token()
-            await auth.create_admin(
+            user = await auth.create_admin(
                 runtime.session_factory,
                 password_hash=self.state.password_hash,
-                mcp_token_hash=auth.hash_token(token),
-                mcp_token_prefix=token[:12],
+            )
+            token = auth.generate_token()
+            await auth.create_mcp_token(
+                runtime.session_factory,
+                user.id,
+                name=None,
+                token_hash=auth.hash_token(token),
+                token_prefix=token[:12],
             )
             save_install_state(cfg.install_file, cfg.install_key_file, url)
         except Exception:

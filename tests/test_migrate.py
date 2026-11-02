@@ -208,6 +208,7 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
             )
             for _ in range(5):
                 backup_sqlite_database(url, keep=20)
+            connection.execute("DROP TABLE mcp_tokens")
             connection.execute("DROP TABLE users")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0003_backup_keep'"

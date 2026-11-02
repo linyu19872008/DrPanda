@@ -24,11 +24,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dr_panda_mcp.errors import StartupError
-from dr_panda_mcp.store.models import UserRow
+from dr_panda_mcp.store.models import McpTokenRow, UserRow
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,21 @@ class User:
 class UserProfile:
     user: User
     last_login_at: datetime | None
-    mcp_token_prefix: str | None
-    mcp_token_created_at: datetime | None
-    mcp_token_last_used_at: datetime | None
-    has_mcp_token: bool
+
+
+@dataclass(frozen=True)
+class McpToken:
+    id: int
+    name: str | None
+    token_prefix: str | None
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+@dataclass(frozen=True)
+class TokenPrincipal:
+    user: User
+    token_id: int
 
 
 def current_actor() -> str:
@@ -250,22 +261,29 @@ async def get_user_by_id(
         return user_from_row(row) if row is not None else None
 
 
-async def get_user_by_token_hash(
+async def authenticate_mcp_token(
     session_factory: async_sessionmaker[AsyncSession], token_hash: str
-) -> User | None:
+) -> TokenPrincipal | None:
     async with session_factory() as session:
-        row = await session.scalar(
-            select(UserRow).where(UserRow.mcp_token_hash == token_hash)
+        result = await session.execute(
+            select(McpTokenRow, UserRow)
+            .join(UserRow, McpTokenRow.user_id == UserRow.id)
+            .where(McpTokenRow.token_hash == token_hash)
         )
-        return user_from_row(row) if row is not None else None
+        row = result.first()
+        if row is None:
+            return None
+        token_row, user_row = row
+        user = user_from_row(user_row)
+        if not user.is_enabled or user.role != "admin":
+            return None
+        return TokenPrincipal(user=user, token_id=token_row.id)
 
 
 async def create_admin(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     password_hash: str,
-    mcp_token_hash: str | None = None,
-    mcp_token_prefix: str | None = None,
 ) -> User:
     now = datetime.now(UTC)
     async with session_factory() as session, session.begin():
@@ -275,10 +293,6 @@ async def create_admin(
             role="admin",
             is_enabled=True,
             auth_version=1,
-            mcp_token_hash=mcp_token_hash,
-            mcp_token_prefix=mcp_token_prefix,
-            mcp_token_created_at=now if mcp_token_hash else None,
-            mcp_token_last_used_at=None,
             last_login_at=None,
             created_at=now,
             updated_at=now,
@@ -306,33 +320,118 @@ async def get_profile(
         row = await session.get(UserRow, user_id)
         if row is None:
             return None
-        return UserProfile(
-            user=user_from_row(row),
-            last_login_at=row.last_login_at,
-            mcp_token_prefix=row.mcp_token_prefix,
-            mcp_token_created_at=row.mcp_token_created_at,
-            mcp_token_last_used_at=row.mcp_token_last_used_at,
-            has_mcp_token=row.mcp_token_hash is not None,
+        return UserProfile(user=user_from_row(row), last_login_at=row.last_login_at)
+
+
+def _token_from_row(row: McpTokenRow) -> McpToken:
+    return McpToken(
+        id=row.id,
+        name=row.name,
+        token_prefix=row.token_prefix,
+        created_at=row.created_at,
+        last_used_at=row.last_used_at,
+    )
+
+
+async def create_mcp_token(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: int,
+    *,
+    name: str | None,
+    token_hash: str,
+    token_prefix: str | None,
+) -> McpToken:
+    now = datetime.now(UTC)
+    async with session_factory() as session, session.begin():
+        row = McpTokenRow(
+            user_id=user_id,
+            name=name,
+            token_hash=token_hash,
+            token_prefix=token_prefix,
+            created_at=now,
+            last_used_at=None,
+        )
+        session.add(row)
+        await session.flush()
+        return _token_from_row(row)
+
+
+async def list_mcp_tokens(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: int,
+    *,
+    offset: int,
+    limit: int,
+) -> list[McpToken]:
+    async with session_factory() as session:
+        rows = (
+            await session.scalars(
+                select(McpTokenRow)
+                .where(McpTokenRow.user_id == user_id)
+                .order_by(McpTokenRow.created_at.desc(), McpTokenRow.id.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).all()
+        return [_token_from_row(row) for row in rows]
+
+
+async def count_mcp_tokens(
+    session_factory: async_sessionmaker[AsyncSession], user_id: int
+) -> int:
+    async with session_factory() as session:
+        return int(
+            await session.scalar(
+                select(func.count(McpTokenRow.id)).where(McpTokenRow.user_id == user_id)
+            )
+            or 0
         )
 
 
+async def get_mcp_token(
+    session_factory: async_sessionmaker[AsyncSession], user_id: int, token_id: int
+) -> McpToken | None:
+    async with session_factory() as session:
+        row = await session.scalar(
+            select(McpTokenRow).where(
+                McpTokenRow.id == token_id, McpTokenRow.user_id == user_id
+            )
+        )
+        return _token_from_row(row) if row is not None else None
+
+
+async def delete_mcp_token(
+    session_factory: async_sessionmaker[AsyncSession], user_id: int, token_id: int
+) -> bool:
+    async with session_factory() as session, session.begin():
+        row = await session.scalar(
+            select(McpTokenRow).where(
+                McpTokenRow.id == token_id, McpTokenRow.user_id == user_id
+            )
+        )
+        if row is None:
+            return False
+        await session.delete(row)
+        return True
+
+
 async def touch_mcp_token_used(
-    session_factory: async_sessionmaker[AsyncSession], user_id: int
+    session_factory: async_sessionmaker[AsyncSession], token_id: int
 ) -> None:
     """节流更新 Token 最近使用时间，避免每次 MCP 请求都写库。"""
     now = datetime.now(UTC)
     threshold = datetime.fromtimestamp(now.timestamp() - 60, tz=UTC)
     async with session_factory() as session, session.begin():
         await session.execute(
-            update(UserRow)
+            update(McpTokenRow)
             .where(
-                UserRow.id == user_id,
+                McpTokenRow.id == token_id,
                 or_(
-                    UserRow.mcp_token_last_used_at.is_(None),
-                    UserRow.mcp_token_last_used_at < threshold,
+                    McpTokenRow.last_used_at.is_(None),
+                    McpTokenRow.last_used_at < threshold,
                 ),
             )
-            .values(mcp_token_last_used_at=now)
+            .values(last_used_at=now)
         )
 
 
@@ -351,23 +450,6 @@ async def set_password(
         row.updated_at = now
 
 
-async def rotate_mcp_token(
-    session_factory: async_sessionmaker[AsyncSession],
-    user_id: int,
-    *,
-    token_hash: str,
-    token_prefix: str,
-) -> None:
-    now = datetime.now(UTC)
-    async with session_factory() as session, session.begin():
-        row = await session.get(UserRow, user_id)
-        if row is None:
-            raise ValueError("user not found")
-        row.mcp_token_hash = token_hash
-        row.mcp_token_prefix = token_prefix
-        row.mcp_token_created_at = now
-        row.mcp_token_last_used_at = None
-        row.updated_at = now
 
 
 async def set_last_login(

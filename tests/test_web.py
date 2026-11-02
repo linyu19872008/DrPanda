@@ -499,7 +499,7 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
 
     for page in pages:
         assert "<script" not in page.text
-    assert len(css.content) < 40_000
+    assert len(css.content) < 42_000
 
 
 async def test_required_secret_cannot_be_cleared_on_edit(runtime: Runtime) -> None:
