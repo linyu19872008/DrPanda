@@ -832,3 +832,15 @@ async def test_settings_section_switching_and_save(runtime: Runtime) -> None:
     assert 'value="64"' in advanced_after.text
     assert invalid.status_code == 200
     assert "默认超时" in invalid.text
+
+
+async def test_settings_runtime_uses_field_rows_and_subgroups(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        page = await client.get("/settings?section=runtime")
+
+    assert "并发控制" in page.text
+    assert "审计维护" in page.text
+    assert "settings-field-row" in page.text
+    assert "恢复本项默认" in page.text
+    assert "settings-field__reset" in page.text
+    assert "立即生效" in page.text

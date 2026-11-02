@@ -485,10 +485,17 @@ def _settings_page(
                     "unit": spec.unit,
                     "effect": spec.effect,
                     "help": spec.help,
+                    "subgroup": spec.subgroup,
                     "error": errors.get(spec.key),
                 }
             )
-        groups.append({**group, "rows": rows})
+        subgroups: list[dict[str, object]] = []
+        for row in rows:
+            title = str(row["subgroup"] or "")
+            if not subgroups or subgroups[-1]["title"] != title:
+                subgroups.append({"title": title, "rows": []})
+            subgroups[-1]["rows"].append(row)  # type: ignore[union-attr]
+        groups.append({**group, "rows": rows, "subgroups": subgroups})
     sections: list[dict[str, str]] = [
         {
             "key": str(group["key"]),

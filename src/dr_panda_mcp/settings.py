@@ -26,6 +26,7 @@ class SettingSpec:
     high: int
     effect: str
     help: str
+    subgroup: str = ""
 
 
 SETTING_SPECS: tuple[SettingSpec, ...] = (
@@ -72,6 +73,7 @@ SETTING_SPECS: tuple[SettingSpec, ...] = (
         50,
         "立即生效",
         "同一个目标同时进行的工具调用上限，超出会排队。",
+        "并发控制",
     ),
     SettingSpec(
         "audit_retention_days",
@@ -83,6 +85,7 @@ SETTING_SPECS: tuple[SettingSpec, ...] = (
         3650,
         "下一轮清理",
         "超过该天数的审计记录会被定时清理；清理只记日志。",
+        "审计维护",
     ),
     SettingSpec(
         "catalog_max_clients",
@@ -105,6 +108,7 @@ SETTING_SPECS: tuple[SettingSpec, ...] = (
         1440,
         "下一轮清理",
         "每轮清理后按该间隔休眠；修改后下一轮开始使用新值。",
+        "审计维护",
     ),
 )
 

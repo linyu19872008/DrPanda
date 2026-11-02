@@ -1973,3 +1973,107 @@ ul {
     padding: var(--space-4);
   }
 }
+
+/* Settings field rows */
+.settings-subtitle {
+  margin: var(--space-5) 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.settings-subtitle:first-of-type {
+  margin-top: 0;
+}
+
+.settings-rows {
+  display: grid;
+  gap: 0;
+}
+
+.settings-field-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-5);
+  align-items: start;
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border);
+}
+
+.settings-field-row:first-child {
+  border-top: 0;
+}
+
+.settings-field-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.settings-field-title .field__label {
+  margin: 0;
+}
+
+.settings-effect {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.settings-effect::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  vertical-align: 2px;
+}
+
+.settings-field-copy .field__hint {
+  margin: 0;
+  max-width: 54ch;
+}
+
+.settings-field-control {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.settings-field-control .input-group {
+  width: 100%;
+  max-width: 320px;
+  margin: 0;
+}
+
+.settings-field-control .settings-field__reset {
+  margin: 0;
+  text-align: right;
+}
+
+.settings-field-row .field__error {
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .settings-field-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .settings-field-control {
+    justify-items: stretch;
+  }
+
+  .settings-field-control .input-group {
+    max-width: none;
+  }
+
+  .settings-field-control .settings-field__reset {
+    text-align: left;
+  }
+}

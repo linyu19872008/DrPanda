@@ -54,36 +54,40 @@
           <h2 class="settings-panel-title">{{ active_group.title }}</h2>
           <p class="settings-panel-desc">{{ active_group.description }}</p>
         </div>
-        <span class="badge badge--muted">可编辑</span>
       </div>
 
-      <div class="settings-grid">
-        {% for row in active_group.rows %}
-        <div class="settings-field">
-          <div class="settings-field__head">
-            <label class="field__label" for="setting-{{ row.key }}">{{ row.label }}</label>
-            <span class="settings-field__tools">
-              <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">恢复默认</a>
-              <span class="badge badge--quiet">{{ row.effect }}</span>
-            </span>
+      {% for subgroup in active_group.subgroups %}
+      {% if subgroup.title %}<h3 class="settings-subtitle">{{ subgroup.title }}</h3>{% endif %}
+      <div class="settings-rows">
+        {% for row in subgroup.rows %}
+        <div class="settings-field-row">
+          <div class="settings-field-copy">
+            <div class="settings-field-title">
+              <label class="field__label" for="setting-{{ row.key }}">{{ row.label }}</label>
+              <span class="settings-effect">{{ row.effect }}</span>
+            </div>
+            <p class="field__hint" id="hint-setting-{{ row.key }}">
+              默认 {{ row.default }}，范围 {{ row.low }}–{{ row.high }}。{{ row.help }}
+            </p>
+            {% if row.error %}
+            <p class="field__error" id="err-setting-{{ row.key }}" role="alert">{{ row.error }}</p>
+            {% endif %}
           </div>
-          <div class="input-group input-group--narrow">
-            <input class="input" type="number" inputmode="numeric"
-                   id="setting-{{ row.key }}" name="{{ row.key }}"
-                   value="{{ row.value }}"
-                   aria-describedby="hint-setting-{{ row.key }}{% if row.error %} err-setting-{{ row.key }}{% endif %}"
-                   {% if row.error %}aria-invalid="true"{% endif %}>
-            <span class="input-group__suffix">{{ row.unit }}</span>
+          <div class="settings-field-control">
+            <div class="input-group input-group--narrow">
+              <input class="input" type="number" inputmode="numeric"
+                     id="setting-{{ row.key }}" name="{{ row.key }}"
+                     value="{{ row.value }}"
+                     aria-describedby="hint-setting-{{ row.key }}{% if row.error %} err-setting-{{ row.key }}{% endif %}"
+                     {% if row.error %}aria-invalid="true"{% endif %}>
+              <span class="input-group__suffix">{{ row.unit }}</span>
+            </div>
+            <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">恢复本项默认</a>
           </div>
-          <p class="field__hint" id="hint-setting-{{ row.key }}">
-            默认 {{ row.default }}，范围 {{ row.low }}–{{ row.high }}。{{ row.help }}
-          </p>
-          {% if row.error %}
-          <p class="field__error" id="err-setting-{{ row.key }}" role="alert">{{ row.error }}</p>
-          {% endif %}
         </div>
         {% endfor %}
       </div>
+      {% endfor %}
 
       <div class="settings-actions">
         <span class="settings-actions__hint">保存本组会写入审计；切换分组前请先保存。</span>
