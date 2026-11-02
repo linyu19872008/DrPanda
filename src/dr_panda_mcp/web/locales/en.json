@@ -408,5 +408,22 @@
   "测试中…": "Testing…",
   "生成中…": "Generating…",
   "Token 名称已存在，请换一个": "Token name already exists; choose another",
-  "安装中…": "Installing…"
+  "安装中…": "Installing…",
+  "切换类型": "Change type",
+  "高级设置": "Advanced settings",
+  "TLS、证书、运行限制": "TLS, certificates, run limits",
+  "填写说明": "Filling guide",
+  "测试通过": "Connection OK",
+  "测试失败": "Connection failed",
+  "连接测试通过": "Connection test passed",
+  "连接测试失败": "Connection test failed",
+  "新建时必填；保存后只存密文，不回显。": "Required for a new target; stored encrypted and never displayed.",
+  "先填写连接信息；保存前建议先测试连接。": "Fill in the connection details; test before saving.",
+  "安全连接": "Secure connection",
+  "密钥与证书": "Secrets and certificates",
+  "完整字段与只读规则见": "Full field and read-only rules:",
+  "必填": "Required",
+  "可选": "Optional",
+  "新建时必填项不能为空；编辑时留空沿用、勾选清除或填新值替换，三者互斥。保存后加密落盘，不回显。": "Required for a new target. When editing, leave blank to keep, check clear, or enter a new value. Stored encrypted and never displayed.",
+  "连接可用，可以保存目标。": "Connection works; you can save the target."
 }

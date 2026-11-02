@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 from fastmcp import FastMCP
@@ -17,7 +18,9 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from dr_panda_mcp import auth
 from dr_panda_mcp import errors as app_errors
 from dr_panda_mcp import settings as settings_module
+from dr_panda_mcp.connectors import base as connector_base
 from dr_panda_mcp.connectors import get_connector
+from dr_panda_mcp.guards.protocol import require
 from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import ConfigStore, Target
@@ -105,6 +108,18 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 status=400,
                 common_defaults=defaults,
             )
+        if str(form.get("action", "")) == "test":
+            test_result = await _test_draft_target(draft, None)
+            return _form_page(
+                request,
+                spec,
+                values=values,
+                errors={},
+                mode="create",
+                existing=None,
+                common_defaults=defaults,
+                test_result=test_result,
+            )
         try:
             await store.create(draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
@@ -142,6 +157,15 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         )
         if draft is None:
             return _edit_page(request, target, values=values, errors=errors, status=400)
+        if str(form.get("action", "")) == "test":
+            test_result = await _test_draft_target(draft, target)
+            return _edit_page(
+                request,
+                target,
+                values=values,
+                errors={},
+                test_result=test_result,
+            )
         try:
             await store.update(target.id, draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
@@ -405,6 +429,7 @@ def _form_page(
     existing: Target | None,
     status: int = 200,
     common_defaults: dict[str, int] | None = None,
+    test_result: dict[str, object] | None = None,
 ) -> HTMLResponse:
     return render.render(
         "form.html",
@@ -419,6 +444,7 @@ def _form_page(
         common_rows=forms.common_rows(
             values, errors, defaults=common_defaults
         ),
+        test_result=test_result,
         status_code=status,
     )
 
@@ -430,6 +456,7 @@ def _edit_page(
     values: dict[str, str],
     errors: dict[str, str],
     status: int = 200,
+    test_result: dict[str, object] | None = None,
 ) -> HTMLResponse:
     spec = _spec(target)
     return _form_page(
@@ -440,6 +467,7 @@ def _edit_page(
         mode="edit",
         existing=target,
         status=status,
+        test_result=test_result,
     )
 
 
@@ -549,6 +577,54 @@ def _settings_page(
         flash=flash,
         status_code=status,
     )
+
+
+def _draft_target(draft, existing: Target | None) -> Target:
+    now = datetime.now(UTC)
+    secret = dict(existing.secret) if existing else {}
+    secret.update(draft.secret_patch.set)
+    for key in draft.secret_patch.clear:
+        secret.pop(key, None)
+    return Target(
+        id=existing.id if existing else 0,
+        type=draft.type,
+        name=draft.name,
+        enabled=draft.enabled,
+        options=dict(draft.options),
+        secret=secret,
+        secret_fields=frozenset(secret),
+        secret_ok=True,
+        created_at=existing.created_at if existing else now,
+        updated_at=now,
+        last_test_at=existing.last_test_at if existing else None,
+        last_test_ok=existing.last_test_ok if existing else None,
+        last_test_error=existing.last_test_error if existing else None,
+    )
+
+
+async def _test_draft_target(
+    draft, existing: Target | None
+) -> dict[str, object]:
+    target = _draft_target(draft, existing)
+    connector = get_connector(draft.type)
+    require(connector.probe_guard())
+    client = connector.create_client(target)
+    try:
+        await connector_base.run_with_timeout(
+            connector.probe(client, target),
+            connector_base.timeout_seconds(target),
+        )
+    except app_errors.DrPandaError as exc:
+        return {"ok": False, "message": redact(str(exc), target.secret.values())}
+    except Exception as exc:
+        logger.warning("草稿目标测试连接失败：%s", target.type, exc_info=True)
+        return {"ok": False, "message": redact(f"未预期错误：{exc}", target.secret.values())}
+    finally:
+        try:
+            await connector.close_client(client)
+        except Exception:
+            logger.warning("关闭草稿测试连接失败", exc_info=True)
+    return {"ok": True, "message": "连接可用，可以保存目标。"}
 
 
 def _error(

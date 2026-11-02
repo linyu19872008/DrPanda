@@ -502,7 +502,7 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
         assert page.text.count("<script") == 1
         assert 'src="/static/app.js' in page.text
         assert "<script>" not in page.text
-    assert len(css.content) < 42_000
+    assert len(css.content) < 44_000
 
 
 async def test_required_secret_cannot_be_cleared_on_edit(runtime: Runtime) -> None:
@@ -938,3 +938,37 @@ async def test_destructive_confirm_dialogs_markup(runtime: Runtime) -> None:
     assert 'data-dialog-open="reset-all-settings"' in settings.text
     assert '<dialog id="reset-all-settings"' in settings.text
     assert 'data-dialog-open="reset-setting-audit_retention_days"' in settings.text
+
+
+async def test_form_advanced_layout_and_copy(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        form = await client.get("/targets/new?type=mysql")
+
+    assert form.status_code == 200
+    assert "Default ; range —" not in form.text
+    assert 'name="action" value="test"' in form.text
+    assert 'data-submit-loading' in form.text
+    assert '<details class="card form-section form-advanced"' in form.text
+    assert "高级设置" in form.text
+    assert 'class="field field--full"' in form.text
+    assert "TLS、证书、运行限制" in form.text
+
+
+async def test_test_connection_action_does_not_save(
+    runtime: Runtime, monkeypatch
+) -> None:
+    from dr_panda_mcp.web import routes as routes_module
+
+    async def fake_test(draft, existing):
+        return {"ok": True, "message": "连接可用，可以保存目标。"}
+
+    monkeypatch.setattr(routes_module, "_test_draft_target", fake_test)
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/targets", data={**PAYLOADS["mysql"], "action": "test"}
+        )
+        target = await runtime.store.get("mysql-target")
+
+    assert response.status_code == 200
+    assert "连接测试通过" in response.text
+    assert target is None

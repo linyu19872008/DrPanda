@@ -609,6 +609,22 @@ def _as_text(field: Field, value: Any) -> str:
     return str(value)
 
 
+ADVANCED_OPTION_KEYS = frozenset(
+    {
+        "ssl",
+        "tls",
+        "verify_tls",
+        "ca_pem",
+        "allow_processlist",
+        "default_window_minutes",
+        "max_window_minutes",
+    }
+)
+ADVANCED_SECRET_KEYS = frozenset({"client_cert", "client_key"})
+CONNECTION_LIST_KEYS = frozenset({"hosts", "bootstrap_servers"})
+SCOPE_KEYS = frozenset({"key_prefix"})
+
+
 def option_rows(
     spec: TypeSpec,
     values: Mapping[str, str],
@@ -626,6 +642,15 @@ def option_rows(
                 "choices": field.choices,
                 "required": field.required,
                 "help": field.help,
+                "section": (
+                    "advanced"
+                    if field.key in ADVANCED_OPTION_KEYS
+                    else "connection"
+                    if field.kind == "list" and field.key in CONNECTION_LIST_KEYS
+                    else "scope"
+                    if field.kind == "list" or field.key in SCOPE_KEYS
+                    else "connection"
+                ),
             }
         )
     return rows
@@ -648,6 +673,9 @@ def secret_rows(
                 "pem": secret.pem,
                 "error": errors.get(f"secret_{secret.key}"),
                 "help": secret.help,
+                "section": (
+                    "advanced" if secret.key in ADVANCED_SECRET_KEYS else "connection"
+                ),
             }
         )
     return rows

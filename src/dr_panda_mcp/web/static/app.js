@@ -59,3 +59,36 @@
     });
   });
 })();
+
+// 错误页/表单回到浏览器时，把焦点放到第一个错误字段。
+(() => {
+  const invalid = document.querySelector('[aria-invalid="true"]');
+  if (invalid instanceof HTMLElement) invalid.focus();
+})();
+
+// TLS 条件显示：仅在启用 TLS 时展示 CA/mTLS 字段。
+// 无 JS 时高级区仍显示全部字段，由服务端做最终校验。
+(() => {
+  const checkbox = document.querySelector('input[name="ssl"], input[name="tls"]');
+  const protocol = document.querySelector('select[name="security_protocol"]');
+  if (!checkbox && !protocol) return;
+  const names = ["ca_pem", "secret_client_cert", "secret_client_key"];
+  const fields = names
+    .map((name) => document.querySelector(`[name="${name}"]`)?.closest(".field"))
+    .filter(Boolean);
+  if (!fields.length) return;
+  const enabled = () => {
+    if (checkbox) return checkbox.checked;
+    return protocol?.value === "SSL" || protocol?.value === "SASL_SSL";
+  };
+  const apply = () => {
+    const on = enabled();
+    fields.forEach((field) => {
+      if (field.querySelector(".field--invalid")) return;
+      field.hidden = !on;
+    });
+  };
+  checkbox?.addEventListener("change", apply);
+  protocol?.addEventListener("change", apply);
+  apply();
+})();

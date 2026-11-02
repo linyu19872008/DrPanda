@@ -36,7 +36,7 @@ M0–M7 已落地并通过测试：
 | M7 | 首次安装、登录、多 Token、审计到人 | 完成 |
 
 - 工具总数：**28**
-- 当前测试：**442 passed**，`ruff check .` 通过
+- 当前测试：**444 passed**，`ruff check .` 通过
 - 默认监听：`127.0.0.1:8111`
 - 首次安装支持 SQLite / MySQL / PostgreSQL 配置库
 - 前端采用服务端渲染；核心流程无 JS 可用，局部 JS 仅做渐进增强
@@ -381,5 +381,6 @@ scripts/              冒烟与 Docker 联调脚本
 - [docs/verify/m7-01.md](docs/verify/m7-01.md)：M7 安装、登录、多 Token
 - [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 渐进增强约束
 - [docs/verify/ux-audit-01.md](docs/verify/ux-audit-01.md)：全站交互审计与修复
+- [docs/verify/form-ux-01.md](docs/verify/form-ux-01.md)：目标表单重组与保存前测试连接
 - [docs/verify/settings-03.md](docs/verify/settings-03.md)：系统配置结构化
 - [docs/verify/](docs/verify/)：全部里程碑、集成与硬化验证记录
