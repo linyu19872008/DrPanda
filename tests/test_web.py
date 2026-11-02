@@ -96,7 +96,7 @@ PAYLOADS: dict[str, dict[str, str]] = {
 def _client(runtime: Runtime, locale: str | None = "zh-Hans") -> httpx.AsyncClient:
     kwargs = {"cookies": {"drpanda_lang": locale}} if locale else {}
     return httpx.AsyncClient(
-        transport=ASGITransport(app=create_app(runtime.config, runtime)),
+        transport=ASGITransport(app=create_app(runtime.config, runtime, auth_required=False)),
         base_url=BASE_URL,
         **kwargs,
     )
@@ -292,7 +292,7 @@ async def test_settings_page_and_update(runtime: Runtime) -> None:
     stored = await runtime.store.get_settings()
     assert stored["audit_retention_days"] == "30"
     assert stored["target_max_concurrency"] == "5"
-    assert len(stored) == 8
+    assert len(stored) == 9
     assert invalid.status_code == 400
 
 

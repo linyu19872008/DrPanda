@@ -11,6 +11,7 @@ import pytest
 
 from dr_panda_mcp import main
 from dr_panda_mcp.config import Config
+from dr_panda_mcp.install import save_install_state
 from dr_panda_mcp.runtime import create_runtime
 from dr_panda_mcp.store.protocol import SecretPatch, TargetDraft
 
@@ -86,6 +87,13 @@ async def _prepare_database(tmp_path: Path) -> tuple[Path, Path]:
         )
     finally:
         await runtime.close()
+    # M7 起进程启动先进入首次安装；这两个用例验证已安装后的密钥校验，
+    # 因此写入临时 install 状态让 main 直接进入运行时。
+    save_install_state(
+        tmp_path / "data" / "install.json",
+        tmp_path / "data" / "install.key",
+        f"sqlite+aiosqlite:///{db_path}",
+    )
     return db_path, key_file
 
 

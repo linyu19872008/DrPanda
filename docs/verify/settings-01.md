@@ -2,7 +2,7 @@
 
 ## 变更
 
-本轮新增 4 个系统配置键；后续 `0003_backup_keep` 又增加 `backup_keep_count`；`settings` 表随后在 `0002_settings_metadata` 中扩展为自描述元数据表：
+本轮新增 4 个系统配置键；后续 `0003_backup_keep` 增加 `backup_keep_count`，`0004_users` 增加 `session_ttl_minutes`；`settings` 表随后在 `0002_settings_metadata` 中扩展为自描述元数据表：
 
 | 分组 | 键 | 默认 | 范围 | 生效 |
 |---|---|---:|---|---|
@@ -12,12 +12,13 @@
 | 并发与审计 | `audit_cleanup_interval_minutes` | 60 | 5–1440 | 下一轮清理 |
 | 高级资源 | `catalog_max_clients` | 32 | 4–128 | 下一次工具调用 |
 | 高级资源 | `backup_keep_count` | 20 | 1–20 | 下一次启动迁移（仅 pending） |
+| 认证与会话 | `session_ttl_minutes` | 720 | 5–10080 | 立即生效 |
 
 现有 `target_max_concurrency`、`audit_retention_days` 保留。
 
 页面：
 
-- 左侧子菜单切换分组：可编辑的“新建目标默认值”“并发与审计”“高级资源”，以及只读的“安全边界”“启动配置”“最近变更”；
+- 左侧子菜单切换分组：可编辑的“新建目标默认值”“并发与审计”“认证与会话”“高级资源”，以及只读的“安全边界”“启动配置”“最近变更”；
 - 每次只渲染当前分组；字段采用单列行式布局，状态在字段名旁，恢复默认在字段底部；并发与审计组内再分“并发控制 / 审计维护”；保存只提交当前分组，URL 使用 `?section=<key>`；
 - 启动配置展示 host/port/DB 类型/日志级别/密钥来源，不显示密钥；
 - 每项显示默认值、范围、生效标签；
@@ -31,7 +32,7 @@
 
 ## 验证
 
-- `pytest`：**422 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
+- `pytest`：**431 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
 - `ruff check .`：通过
 - 未启动真实浏览器截图；分组与可访问性由模板/测试断言覆盖
 

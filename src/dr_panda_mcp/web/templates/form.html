@@ -41,6 +41,7 @@
 <div class="form-layout">
   <form class="form-main" method="post"
         action="{{ '/targets' if mode == 'create' else '/targets/' ~ existing.id }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     {% if mode == "create" %}<input type="hidden" name="type" value="{{ spec.type }}">{% endif %}
 
     <section class="card form-section">

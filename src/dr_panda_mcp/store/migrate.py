@@ -16,7 +16,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import text
+from sqlalchemy import String, column, select, table
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from dr_panda_mcp.store.url import database_path
@@ -98,8 +98,15 @@ async def _configured_backup_keep(engine: AsyncEngine) -> int:
 
     def read(sync_connection) -> int:
         try:
+            settings_table = table(
+                "settings",
+                column("key", String),
+                column("value", String),
+            )
             row = sync_connection.execute(
-                text("SELECT value FROM settings WHERE key = 'backup_keep_count'")
+                select(settings_table.c.value).where(
+                    settings_table.c.key == "backup_keep_count"
+                )
             ).first()
             if row is None:
                 return BACKUP_KEEP

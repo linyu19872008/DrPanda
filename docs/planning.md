@@ -1,6 +1,6 @@
 # Dr Panda MCP 规划
 
-> 线上排查用的 MCP 服务。Cursor、Codex、DeepSeek Harness 通过 Streamable HTTP 调用它，查日志、代码、数据库和消息堆积。连接信息在网页上配置，登录鉴权以后再做。
+> 线上排查用的 MCP 服务。Cursor、Codex、DeepSeek Harness 通过 Streamable HTTP 调用它，查日志、代码、数据库和消息堆积。连接信息在网页上配置，首次启动完成安装后登录使用。
 >
 > 本文只定方案与实现契约，不包含业务代码。文中的接口签名、表结构、JSON 示例是约束，不是实现。
 
@@ -8,9 +8,9 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.26 |
+| 版本 | v0.29 |
 | 更新 | 2026-11-02 |
-| 状态 | M0–M6 已实现；M7 登录待定 |
+| 状态 | M0–M7 基础认证与首次安装已实现；MySQL/PostgreSQL 安装已验证；远程 TLS 待实机 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
 | 契约地位 | 第 5、6、8 章是实现契约，代码偏离前先改本文 |
 
@@ -45,6 +45,8 @@
 | v0.25 | 2026-11-02 | 设置页单列字段行、状态/操作分层、并发与审计子分组 |
 | v0.26 | 2026-11-02 | Web 多语言：默认英文，支持 zh-Hans；Cookie 切换与页面文案迁移 |
 | v0.27 | 2026-11-02 | SQLite 备份仅在 pending migration 时执行，保留上限 20 且系统配置可调 |
+| v0.28 | 2026-11-02 | M7：users、首次安装向导、登录 Session/CSRF、MCP Bearer、Session 有效期配置、远程开关 |
+| v0.29 | 2026-11-02 | M7：/me 账号页、Token 轮换、修改密码、Token 元数据 |
 
 ## 1. 目标
 
@@ -98,7 +100,7 @@ FastMCP 4.1.4 的 `custom_route` 就是用来挂这类协议之外的 HTTP 端�
 
 已于 FastMCP 4.1.4 核对（仓库未用该结论写代码）：`custom_route` 注册的路由会并入 `http_app` 返回的 Starlette 应用，因此网页与 `/mcp` 可由同一个 uvicorn 进程提供。
 
-默认监听 `127.0.0.1:8111`。端口用 `DR_PANDA_PORT` 修改，监听网卡用 `DR_PANDA_HOST` 修改。需要给别的机器用时，再把主机改成内网地址。当前没有登录，网络可达就等于能查线上数据，也能改已保存的凭证。现阶段的访问控制就是：只在本机或受控内网监听，不要暴露到公网。
+默认监听 `127.0.0.1:8111`。端口用 `DR_PANDA_PORT` 修改，监听网卡用 `DR_PANDA_HOST` 修改。首次安装必须在 loopback 完成；安装后远程访问需 `DR_PANDA_ALLOW_REMOTE=1` + HTTPS `DR_PANDA_PUBLIC_URL`。不要直接暴露未完成安装的实例。
 
 stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式使用时客户端只配置 URL，例如 `http://127.0.0.1:8111/mcp`。端口改过时，客户端 URL 使用同一个端口。DeepSeek Harness 的 `serverName` 用短名 `drpanda`，模型看到的工具名会是 `mcp__drpanda__mysql_query` 这种形式，所以工具名保持短且稳定。
 
@@ -108,7 +110,7 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 
 1. 读取并校验环境变量（3.3）。数据库 URL 补上异步驱动；URL 指向某种库但驱动未安装时，提示要安装哪一组依赖。
 2. 创建配置库引擎；SQLite 打开 WAL、外键约束和 `busy_timeout`。
-3. 检查是否有 pending migration；仅 SQLite 且存在 pending 时先做文件备份，再执行 Alembic 迁移到最新版本（5.5）。
+3. 读取 `data/install.json`：未安装 → 首次安装向导；已安装 → 连接配置库并检查 pending migration，仅 SQLite 且存在 pending 时先备份，再迁移（5.5）。
 4. 加载密钥（5.8）：`DR_PANDA_SECRET_KEY` 优先，否则读 `data/secret.key`。文件不存在且配置库里还没有密文时生成新密钥（权限 0600）；库里有密文但当前密钥解不开时启动失败，提示恢复密钥备份或重新录入目标。
 5. 创建 FastMCP 实例，注册服务器说明、工具、`investigate_error` prompt 与网页路由。
 6. 构建 `http_app(path="/mcp")`，挂 Host/Origin 校验，用 uvicorn 监听 `DR_PANDA_HOST:DR_PANDA_PORT`。
@@ -123,6 +125,8 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库；支持 sqlite/mysql/postgresql |
 | `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥，用于加密 `secret_json`；未设置时用 `data/secret.key` |
 | `DR_PANDA_LOG_LEVEL` | `INFO` | 进程日志级别 |
+| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听；必须已完成安装 |
+| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
 
 除此之外不引入其他环境变量。目标的主机、账号、密钥、范围全部来自配置库，不读环境变量；加密密钥是例外，它不描述任何目标，只用于本地解密。
 
@@ -140,33 +144,30 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 }
 ```
 
-- Cursor：写入其 MCP 配置文件，字段名以该客户端版本为准，值固定为上例。
-- Codex：`[mcp_servers.drpanda]` 下配置 `url`，值同上。
+- Cursor：写入其 MCP 配置文件，字段名以该客户端版本为准；同时配置 `Authorization: Bearer <token>`。
+- Codex：`[mcp_servers.drpanda]` 下配置 `url` 与 Authorization header。
 - DeepSeek Harness：`serverName` 用 `drpanda`，模型侧工具名前缀为 `mcp__drpanda__`。
 
 具体配置文件路径与字段名随客户端版本变化，本文只固定两件事：URL 是 `http://<DR_PANDA_HOST>:<DR_PANDA_PORT>/mcp`，serverName 是 `drpanda`。
 
 ### 3.5 安全基线
 
-- 默认只监听回环地址；需要内网访问时由使用者显式改 `DR_PANDA_HOST`，并接受"网络可达即可读线上数据、可改已保存凭证"的后果。
-- 网页与 `/mcp` 共用 `host_origin_protection=True`：Host 头不在允许列表返回 421（防 DNS rebinding），Origin 不同源返回 403（防恶意网页跨站提交表单）。不额外引入 CSRF token。
+- 默认只监听回环地址；远程访问需 `DR_PANDA_ALLOW_REMOTE=1`、HTTPS `DR_PANDA_PUBLIC_URL`，并先完成本机安装。
+- 网页与 `/mcp` 共用 `host_origin_protection=True`：Host 头不在允许列表返回 421（防 DNS rebinding），Origin 不同源返回 403。
+- 网页 POST 使用双提交 Cookie CSRF（`drpanda_csrf` + `_csrf`），失败 403；`/mcp` 使用 Bearer，不使用 CSRF。
 - 工具返回值、网页、日志、审计里都不出现密钥与连接串；错误信息同样处理。
 - 加密密钥（5.8）不写日志、不写审计、不回显；密钥文件权限 0600，丢失后已登记的密钥不可恢复，只能重新录入。
 - 第一版不做限流；由单进程 + 每目标并发上限（9.3）约束对线上系统的压力。
 
-### 3.6 没有登录时的边界
+### 3.6 认证边界
 
-登录推迟，不等于把写操作放开。下面这些在第一版就生效，和"谁在调用"无关：
+安装前只开放 `/setup`、`/healthz`、`/static`；`/mcp` 返回 503。安装完成后：
 
-- 模型只能使用已登记且启用的 target
-- 八个组件的调用先过"绝对只读"闸门，再受该目标的库、索引、topic、项目范围约束
-- 超时、行数、字节数上限
-- 审计日志，且不记录密钥
-- 工具返回值里不包含连接串和密码
-- 默认只监听本机
-- 系统配置只调整运行策略（审计保留期/清理间隔、每 target 并发、新建目标默认限制），不能放宽只读、危险命令、密钥与目标范围约束
-
-以后加登录时，同一套检查包住 `/` 和 `/mcp`。审计里的 `anonymous` 换成具体的人。工具实现和表结构保持不动。在那之前，谁能访问这个端口，谁就能查询已登记的线上系统，也能在网页里改凭证。
+- 网页未认证 303 → `/login`；`/mcp` 未认证 401；
+- 网页使用管理员密码 + 签名 Session Cookie；`/mcp` 使用独立 Bearer Token；
+- 审计 actor 记录管理员身份；
+- 工具、只读规则、危险清单、目标范围与系统配置语义不变；
+- 认证失败与配置库故障区分：前者 401/303，后者 503/启动失败。
 
 ## 4. 配置网页
 
@@ -192,6 +193,9 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | POST | `/settings/reset` | 确认恢复全部系统配置默认值 | 303 → `/settings` | 500 |
 | POST | `/theme` | 主题三态（system / light / dark），写 Cookie | 303 → 站内 next | — |
 | POST | `/language` | 语言切换（en / zh-Hans），写 Cookie | 303 → 站内 next | — |
+| GET | `/me` | 账号、MCP Token 元数据、修改密码 | 200 | 未登录 303 |
+| POST | `/me/password` | 修改管理员密码并失效旧 Session | 303 → `/login` | 400 校验失败 |
+| POST | `/me/mcp-token/rotate` | 重新生成 MCP Token，旧 Token 失效 | 200 显示一次新 Token | 400 密码错误 |
 | GET | `/static/app.css` | 手写样式表（ETag、短缓存） | 200 / 304 | 404 |
 | GET | `/healthz` | 健康检查（9.2） | 200 JSON | 503 |
 
@@ -266,10 +270,11 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | 并发与审计 | `audit_retention_days` | 审计保留天数 | 90 | 1–3650 | 下一轮清理任务 |
 | 并发与审计 | `audit_cleanup_interval_minutes` | 审计清理间隔 | 60 | 5–1440 | 下一轮清理周期 |
 | 高级资源 | `catalog_max_clients` | 进程内连接器客户端缓存上限 | 32 | 4–128 | 下一次工具调用 |
+| 认证与会话 | `session_ttl_minutes` | Web Session 有效期 | 720 | 5–10080 | 立即生效 |
 | 高级资源 | `backup_keep_count` | SQLite 备份保留数量 | 20 | 1–20 | 下一次启动迁移 |
 
 - 新建目标默认值只作用于新建表单；既有 target 已保存的 `timeout_s` / `max_rows` / `max_bytes` 不因系统配置改变。
-- 页面使用左侧子菜单切换分组：可编辑的“新建目标默认值 / 并发与审计 / 高级资源”，只读的“安全边界 / 启动配置 / 最近变更”；每次只渲染当前分组，保存只提交当前分组并保留 `section`。
+- 页面使用左侧子菜单切换分组：可编辑的“新建目标默认值 / 并发与审计 / 认证与会话 / 高级资源”，只读的“安全边界 / 启动配置 / 最近变更”；每次只渲染当前分组，保存只提交当前分组并保留 `section`。
 - “恢复默认值”走独立确认页，支持全局或单项恢复，并写审计。
 - 字段级错误、`aria-invalid`/`aria-describedby`、顶部错误摘要锚点；保存失败保留输入。
 
@@ -406,6 +411,23 @@ class Settings:                  # 解析并校验后的运行时策略
 
 ### 5.3 表
 
+`users`
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | BigInteger | 主键自增 | |
+| `username` | String(64) | NOT NULL, UNIQUE | 安装时固定 `admin` |
+| `password_hash` | String(255) | NOT NULL | scrypt 哈希，不存明文 |
+| `role` | String(32) | NOT NULL | M7 固定 `admin` |
+| `is_enabled` | Boolean | NOT NULL | 停用后不能登录/调用 |
+| `auth_version` | Integer | NOT NULL | 改密后递增，使旧 Session 失效 |
+| `mcp_token_hash` | String(64) | UNIQUE, NULL | `/mcp` Bearer Token 的 SHA-256 |
+| `mcp_token_prefix` | String(16) | NULL | Token 前缀，供页面识别 |
+| `mcp_token_created_at` | DateTime(timezone=True) | NULL | Token 创建时间 |
+| `mcp_token_last_used_at` | DateTime(timezone=True) | NULL | 最近一次 MCP 认证时间 |
+| `last_login_at` | DateTime(timezone=True) | NULL | 最近登录 |
+| `created_at` / `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
+
 `targets`
 
 | 列 | 类型 | 约束 | 说明 |
@@ -456,7 +478,7 @@ class Settings:                  # 解析并校验后的运行时策略
 | `requires_restart` | Boolean | NOT NULL | 是否需要重启 |
 | `sort_order` | BigInteger | NOT NULL | 页面顺序 |
 | `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
-| `updated_by` | String(64) | NOT NULL | 修改人；M7 前 anonymous/system |
+| `updated_by` | String(64) | NOT NULL | 修改人；M7 后为登录管理员 |
 
 `settings_history`
 
@@ -532,7 +554,7 @@ class Settings:                  # 解析并校验后的运行时策略
 - 密钥缺失：用错误的密钥读取，抛 `SecretUnavailable`，不返回明文也不返回空值。
 - 清除：`clear` 后该字段的密文键消失，页面显示"未设置"。
 - 解密失败标记：换错密钥读取时 `secret_ok=False`、`secret={}`，`secret_fields` 仍保留；不抛异常、不拖垮列表。
-- 系统配置默认值：全新库迁移后有 8 个配置行，含新建目标默认值、并发、审计、高级资源与备份保留数量；读取 `get_settings` 返回全部当前值。
+- 系统配置默认值：全新库迁移后有 9 个配置行，含新建目标默认值、并发、审计、认证 Session、高级资源与备份保留数量；读取 `get_settings` 返回全部当前值。
 - 系统配置校验：`audit_retention_days=0`、`3651`、`abc` 与非整数被拒；`target_max_concurrency=0`、`51` 被拒；合法值写入后读出一致。
 - 系统配置同事务：更新值、写 `settings_history`（old/new）与 `settings.update` 审计一起提交。
 - 系统配置白名单：未知键（例如 `target_max_concurrency_x`、`readonly=false`）直接拒绝，仓储不写入未知键。
@@ -1260,8 +1282,8 @@ scripts/smoke.py       冒烟：启动进程并探活
 4. **消息面。** RabbitMQ 队列，Kafka lag、位点、有限抽取，以及各自的闸门、危险清单和拒绝测试。
    验收：拒绝用例通过；`kafka_peek` 不加入消费组、不提交 offset 有测试兜住。
 
-5. **登录。** 给网页和 `/mcp` 加上同一套身份验证，审计改为记到人。在此之前不插入半套 Token。
-   验收：网页与 `/mcp` 未认证返回 401；审计 actor 为真实身份；工具与表结构未改。
+5. **首次安装与登录。** users 表、安装向导、网页 Session/CSRF、`/mcp` Bearer；审计记到 admin。
+   验收：安装向导完成；网页未认证跳登录；`/mcp` 未认证 401；审计 actor=admin；工具名/包络不变。
 
 ### 13.2 第一期拆解顺序
 
@@ -1286,7 +1308,7 @@ scripts/smoke.py       冒烟：启动进程并探活
 
 ## 15. 这一版明确不做
 
-- 登录、Token、OAuth，以及按人限制可用 target
+- 多用户、角色管理、OAuth/OIDC，以及按人限制可用 target
 - 写库、清队列、改消费位点、发消息、重启服务
 - 按目标或全局关闭只读，以及把"执行任意命令"暴露给模型
 - 模型可填写的主机、DSN、密码参数

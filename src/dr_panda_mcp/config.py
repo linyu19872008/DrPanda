@@ -10,6 +10,7 @@ import binascii
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from dr_panda_mcp.errors import ConfigError
 from dr_panda_mcp.store.url import ensure_driver, normalize_database_url
@@ -35,6 +36,11 @@ class Config:
     database_url: str
     secret_key_b64: str | None
     log_level: str
+    install_file: Path = Path("data/install.json")
+    install_key_file: Path = Path("data/install.key")
+    session_key_file: Path = Path("data/session.key")
+    allow_remote: bool = False
+    public_url: str | None = None
 
 
 def load_config(environ: Mapping[str, str] | None = None) -> Config:
@@ -54,6 +60,14 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
 
     secret_key_b64 = _parse_secret_key(env.get("DR_PANDA_SECRET_KEY"))
 
+    allow_remote = env.get("DR_PANDA_ALLOW_REMOTE", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    public_url = env.get("DR_PANDA_PUBLIC_URL", "").strip() or None
+
     log_level = env.get("DR_PANDA_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
     if log_level not in LOG_LEVELS:
         raise ConfigError(
@@ -66,6 +80,8 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         database_url=database_url,
         secret_key_b64=secret_key_b64,
         log_level=log_level,
+        allow_remote=allow_remote,
+        public_url=public_url,
     )
 
 

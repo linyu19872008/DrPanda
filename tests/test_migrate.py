@@ -47,6 +47,7 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
         "audit_cleanup_interval_minutes": "60",
         "catalog_max_clients": "32",
         "backup_keep_count": "20",
+        "session_ttl_minutes": "720",
     }
 
 
@@ -128,6 +129,7 @@ async def test_settings_metadata_is_seeded(tmp_path: Path) -> None:
         "target_max_concurrency",
         "audit_retention_days",
         "audit_cleanup_interval_minutes",
+        "session_ttl_minutes",
         "catalog_max_clients",
         "backup_keep_count",
     ]
@@ -175,7 +177,7 @@ async def test_settings_migration_preserves_existing_values(tmp_path: Path) -> N
         count = connection.execute("SELECT COUNT(*) FROM settings").fetchone()[0]
 
     assert row == ("30", "runtime", "审计保留天数")
-    assert count == 8
+    assert count == 9
 
 
 async def test_no_backup_when_no_pending_migration(tmp_path: Path) -> None:
@@ -206,8 +208,9 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
             )
             for _ in range(5):
                 backup_sqlite_database(url, keep=20)
+            connection.execute("DROP TABLE users")
             connection.execute(
-                "UPDATE alembic_version SET version_num = '0002_settings_metadata'"
+                "UPDATE alembic_version SET version_num = '0003_backup_keep'"
             )
 
         created = await migrate(engine)

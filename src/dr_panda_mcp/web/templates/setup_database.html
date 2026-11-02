@@ -1,0 +1,41 @@
+{% extends "setup_base.html" %}
+{% block title %}{{ t('安装向导') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<div class="setup-head">
+  <span class="badge badge--type">{{ t('第 2 / 2 步') }}</span>
+  <h1>{{ t('选择配置库') }}</h1>
+  <p class="page-subtitle">{{ t('配置库保存管理员、排查目标、系统配置与审计。默认 SQLite；选择 MySQL/PostgreSQL 需填写连接信息并先测试通路。') }}</p>
+</div>
+<div class="card setup-card">
+  <div class="setup-tabs">
+    {% for value, label in [('sqlite', 'SQLite'), ('mysql', 'MySQL'), ('postgresql', 'PostgreSQL')] %}
+      <a class="chip-link{% if state.db_type == value %} is-active{% endif %}" href="/setup/database?db={{ value }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>{% endif %}
+  {% if state.test_detail %}<div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(state.test_detail) }}</strong></div></div>{% endif %}
+  <form method="post" action="/setup/database" class="login-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="db_type" value="{{ state.db_type }}">
+    {% if state.db_type == 'sqlite' %}
+    <div class="field">
+      <label class="field__label" for="sqlite-path">{{ t('SQLite 文件路径') }}</label>
+      <input class="input mono" id="sqlite-path" name="sqlite_path" value="{{ state.sqlite_path }}" required>
+      <p class="field__hint">{{ t('默认 data/dr-panda.sqlite；已有旧库时请保留此路径以保留数据。') }}</p>
+    </div>
+    {% else %}
+    <div class="field"><label class="field__label" for="db-host">{{ t('主机') }}</label><input class="input" id="db-host" name="host" value="{{ state.host }}" required></div>
+    <div class="field"><label class="field__label" for="db-port">{{ t('端口') }}</label><input class="input" id="db-port" name="port" value="{{ state.port }}" inputmode="numeric" required></div>
+    <div class="field"><label class="field__label" for="db-name">{{ t('数据库名') }}</label><input class="input" id="db-name" name="database" value="{{ state.database }}" required></div>
+    <div class="field"><label class="field__label" for="db-user">{{ t('用户名') }}</label><input class="input" id="db-user" name="username" value="{{ state.username }}" required></div>
+    <div class="field"><label class="field__label" for="db-password">{{ t('密码') }}</label><input class="input" id="db-password" name="password" type="password" autocomplete="new-password"></div>
+    <p class="field__hint">{{ t('该账号需要能创建/迁移配置库表；测试只验证连通性，完成时会执行真实迁移。') }}</p>
+    {% endif %}
+    <div class="form-actions form-actions--inline">
+      <button class="btn btn--secondary" type="submit" name="action" value="test">{{ t('测试连接') }}</button>
+      <button class="btn btn--primary" type="submit" name="action" value="finish"{% if state.tested_url is none %} disabled{% endif %}>{{ t('完成安装') }}</button>
+    </div>
+    <p class="field__hint">{{ t('修改连接信息后需要重新测试。') }}</p>
+  </form>
+</div>
+{% endblock %}

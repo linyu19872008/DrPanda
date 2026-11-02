@@ -48,6 +48,7 @@
   <section class="settings-main">
     {% if active_group %}
     <form class="card settings-form" method="post" action="/settings">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <input type="hidden" name="section" value="{{ active_section }}">
       <div class="settings-panel-head">
         <div>

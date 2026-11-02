@@ -11,7 +11,7 @@ from typing import Any
 
 from fastmcp.exceptions import ToolError
 
-from dr_panda_mcp import errors
+from dr_panda_mcp import auth, errors
 from dr_panda_mcp.connectors import base as connectors_base
 from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
@@ -98,7 +98,7 @@ async def run_tool(
         try:
             await runtime.store.append_audit(
                 AuditEntry(
-                    actor="anonymous",
+                    actor=auth.current_actor(),
                     action="tool.call",
                     target_name=name,
                     summary=summary[:1024],

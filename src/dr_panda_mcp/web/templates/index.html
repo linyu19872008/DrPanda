@@ -27,6 +27,7 @@
 
 {% if has_targets %}
 <form class="toolbar" method="get" action="/" role="search">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="toolbar__search">
     <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
     {% if active_type %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
@@ -86,6 +87,7 @@
         <td data-label="{{ t('授权范围') }}"><span class="muted">{{ t(target.scope_source, **target.scope_params) }}</span></td>
         <td data-label="{{ t('状态') }}">
           <form method="post" action="/targets/{{ target.id }}/toggle" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
             <button class="switch{% if target.enabled %} is-on{% endif %}" type="submit"
                     aria-pressed="{{ 'true' if target.enabled else 'false' }}"
                     title="{{ t('点击停用') if target.enabled else t('点击启用') }}">
@@ -110,6 +112,7 @@
         <td data-label="{{ t('操作') }}" class="cell-actions">
           <div class="row-actions">
             <form method="post" action="/targets/{{ target.id }}/test" class="inline-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
               <button class="btn btn--secondary btn--sm" type="submit">{{ t('测试') }}</button>
             </form>
             <a class="btn btn--ghost btn--sm" href="/targets/{{ target.id }}/edit">{{ t('编辑') }}</a>

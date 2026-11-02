@@ -1,0 +1,25 @@
+{% extends "setup_base.html" %}
+{% block title %}{{ t('安装向导') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<div class="setup-head">
+  <span class="badge badge--type">{{ t('第 1 / 2 步') }}</span>
+  <h1>{{ t('设置管理员密码') }}</h1>
+  <p class="page-subtitle">{{ t('系统默认只有一个管理员账号 admin。密码至少 8 位，保存后请妥善保管。') }}</p>
+</div>
+<div class="card setup-card">
+  {% if error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>{% endif %}
+  <form method="post" action="/setup/admin" class="login-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div class="field">
+      <label class="field__label" for="setup-password">{{ t('管理员密码') }}</label>
+      <input class="input" id="setup-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="field__hint">{{ t('至少 8 位。密码只保存 scrypt 哈希。') }}</p>
+    </div>
+    <div class="field">
+      <label class="field__label" for="setup-confirm">{{ t('确认密码') }}</label>
+      <input class="input" id="setup-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <button class="btn btn--primary btn--block" type="submit">{{ t('下一步：选择配置库') }}</button>
+  </form>
+</div>
+{% endblock %}

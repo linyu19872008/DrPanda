@@ -1,0 +1,17 @@
+{% extends "setup_base.html" %}
+{% block title %}{{ t('安装完成') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<div class="setup-head">
+  <span class="badge badge--success">{{ t('安装完成') }}</span>
+  <h1>{{ t('管理员已创建') }}</h1>
+  <p class="page-subtitle">{{ t('请立即保存下面的 MCP Token；之后可在“我的”页面重新生成。') }}</p>
+</div>
+<div class="card setup-card">
+  <div class="alert alert--warning"><div class="alert__body"><strong>{{ t('MCP Token 已生成') }}</strong><span class="alert__detail">{{ t('客户端通过 Authorization: Bearer <token> 访问 /mcp；丢失后可在登录后的“我的”页面重新生成。') }}</span></div></div>
+  <p class="field__label">{{ t('MCP 地址') }}</p>
+  <pre class="mono setup-secret">{{ mcp_url }}</pre>
+  <p class="field__label">{{ t('MCP Token') }}</p>
+  <pre class="mono setup-secret">{{ mcp_token }}</pre>
+  <a class="btn btn--primary btn--block" href="/">{{ t('进入首页') }}</a>
+</div>
+{% endblock %}

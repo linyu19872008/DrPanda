@@ -88,6 +88,7 @@ class Settings:
     audit_cleanup_interval_minutes: int = 60
     catalog_max_clients: int = 32
     backup_keep_count: int = 20
+    session_ttl_minutes: int = 720
 
 
 @runtime_checkable

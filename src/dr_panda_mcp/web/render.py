@@ -13,6 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
+from dr_panda_mcp import auth
 from dr_panda_mcp.web import assets, i18n, theme
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -47,6 +48,9 @@ def render(
     query = request.url.query if request is not None else ""
     current_url = path + (f"?{query}" if query else "")
     locale = i18n.locale_from_request(request)
+    csrf_token = request.cookies.get(auth.CSRF_COOKIE) if request is not None else None
+    if not csrf_token:
+        csrf_token = auth.new_csrf_token()
     context.update(
         {
             "theme_mode": mode,
@@ -56,6 +60,8 @@ def render(
             "locale": locale,
             "html_lang": locale,
             "language_options": i18n.language_options(),
+            "csrf_token": csrf_token,
+            "current_user": auth.current_user(),
             "nav_active": "settings" if path.startswith("/settings") else "targets",
             "app_version": _app_version(),
             "asset_version": assets.asset_version(),
@@ -67,4 +73,14 @@ def render(
     response = HTMLResponse(body, status_code=status_code)
     response.headers["Content-Language"] = locale
     response.headers["Vary"] = "Cookie"
+    if request is not None and auth.CSRF_COOKIE not in request.cookies:
+        response.set_cookie(
+            auth.CSRF_COOKIE,
+            csrf_token,
+            max_age=12 * 3600,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=request.url.scheme == "https",
+        )
     return response

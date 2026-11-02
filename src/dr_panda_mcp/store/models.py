@@ -108,6 +108,28 @@ class SettingRow(Base):
     updated_by: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class UserRow(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("username", name="uq_users_username"),
+        Index("ix_users_mcp_token_hash", "mcp_token_hash", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="admin")
+    is_enabled: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
+    auth_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1)
+    mcp_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mcp_token_prefix: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    mcp_token_created_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    mcp_token_last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class SettingsHistoryRow(Base):
     __tablename__ = "settings_history"
     __table_args__ = (

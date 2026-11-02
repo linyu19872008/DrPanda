@@ -16,10 +16,14 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from dr_panda_mcp import auth
 from dr_panda_mcp.errors import StartupError
 from dr_panda_mcp.prompts import register_prompts
 from dr_panda_mcp.tools import register_tools
+from dr_panda_mcp.web.auth_routes import register_auth_routes
+from dr_panda_mcp.web.profile import register_profile_routes
 from dr_panda_mcp.web.routes import register_web_routes
+from dr_panda_mcp.web.security import AuthMiddleware, CSRFMiddleware
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
@@ -74,13 +78,52 @@ def create_server(config: Config, runtime: Runtime) -> FastMCP:
     return server
 
 
-def create_app(config: Config, runtime: Runtime) -> Starlette:
-    """返回同时提供 ``/``（后续里程碑）与 ``/mcp`` 的 Starlette 应用。"""
+def create_app(
+    config: Config,
+    runtime: Runtime,
+    *,
+    auth_required: bool = True,
+    session_key: bytes | None = None,
+) -> Starlette:
+    """返回同时提供配置网页与 ``/mcp`` 的 Starlette 应用。
+
+    ``auth_required=False`` 只用于既有单元测试的隔离装配；生产入口始终启用认证。
+    """
     server = create_server(config, runtime)
-    return server.http_app(
+    if auth_required:
+        key = session_key or auth.load_or_create_session_key(config.session_key_file)
+        register_auth_routes(
+            server,
+            runtime,
+            key,
+            secure_cookies=bool(config.public_url and config.public_url.startswith("https://")),
+        )
+        register_profile_routes(server, runtime, config)
+    allowed_hosts = None
+    allowed_origins = None
+    if config.public_url:
+        from urllib.parse import urlsplit
+
+        parsed = urlsplit(config.public_url)
+        if parsed.netloc:
+            allowed_hosts = [parsed.netloc]
+            allowed_origins = [f"{parsed.scheme}://{parsed.netloc}"]
+    app = server.http_app(
         path="/mcp",
         transport="http",
         host_origin_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=allowed_origins,
+    )
+    if not auth_required:
+        return app
+    return CSRFMiddleware(
+        AuthMiddleware(
+            app,
+            runtime=runtime,
+            session_key=key or b"",
+            auth_required=True,
+        )
     )
 
 

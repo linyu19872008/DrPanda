@@ -31,6 +31,7 @@
   <div class="form-actions form-actions--inline">
     <a class="btn btn--secondary" href="/settings">{{ t('取消') }}</a>
     <form method="post" action="/settings/reset">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <input type="hidden" name="key" value="{{ key }}">
       <button class="btn btn--danger" type="submit">{% if key %}{{ t('确认恢复该项默认值') }}{% else %}{{ t('确认恢复默认值') }}{% endif %}</button>
     </form>

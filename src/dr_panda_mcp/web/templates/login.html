@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ t('管理员登录') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<section class="login-card card">
+  <h1>{{ t('管理员登录') }}</h1>
+  <p class="page-subtitle">{{ t('登录以管理排查目标与系统配置。') }}</p>
+  {% if notice %}
+  <div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(notice) }}</strong></div></div>
+  {% endif %}
+  {% if error %}
+  <div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>
+  {% endif %}
+  <form method="post" action="/login" class="login-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next_path }}">
+    <div class="field">
+      <label class="field__label" for="login-username">{{ t('用户名') }}</label>
+      <input class="input" id="login-username" name="username" value="admin" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label class="field__label" for="login-password">{{ t('密码') }}</label>
+      <input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn--primary btn--block" type="submit">{{ t('登录') }}</button>
+  </form>
+</section>
+{% endblock %}

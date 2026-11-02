@@ -4,22 +4,23 @@
 
 ## 当前进度
 
-已完成 **M0–M6**（工程地基、配置台、日志到代码、数据面、消息面）；**M7 登录待做**：
+已完成 **M0–M7 基础**（工程地基、配置台、日志到代码、数据面、消息面、首次安装与登录认证）：
 
 - 进程可启动，提供 `/healthz`（含配置库连通性）与 `/mcp` 端点，Host/Origin 校验与端口检查就位。
-- 配置库三张表（`targets` / `audit` / `settings`）通过 Alembic 迁移创建；目标读写、密钥加密、系统配置校验、配置变更审计可用。
+- 配置库包含 `users` / `targets` / `audit` / `settings` / `settings_history`，通过 Alembic 迁移创建；目标读写、密钥加密、系统配置校验、配置变更审计可用。
 - 新密钥首次启动自动生成；库中有密文但密钥缺失或不匹配时拒绝启动。
 - 八类组件都有只读闸门与最小只读探测（测试连接）；管理/变更命令由白名单拦截，高开销操作由危险清单拦截，二者都在建立连接之前判定。
 - 浏览器打开 `http://127.0.0.1:8111/` 可登记/编辑/停用/删除目标、测试连接、修改系统配置。
 - 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现、零 JS），列表带统计/搜索/类型筛选，窄屏自动转卡片。
-- M7 前只允许监听 `127.0.0.1` / `::1` / `localhost`；请勿把当前无认证服务直接暴露到内网。
+- 首次启动进入安装向导：设置 admin 密码、选择 SQLite/MySQL/PostgreSQL 配置库并测试连接；安装完成后网页登录，`/mcp` 使用安装完成页显示的 Bearer Token；Token 丢失可在“我的”页面输入当前密码重新生成。
+- 默认只监听 `127.0.0.1` / `::1` / `localhost`；远程访问需 `DR_PANDA_ALLOW_REMOTE=1` + HTTPS `DR_PANDA_PUBLIC_URL`，且必须先在本机完成安装。
 - 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
 - 已用 Docker 真实联调 MySQL / MongoDB / Elasticsearch / Redis / RabbitMQ：19 个工具冒烟 + 69 条参数/边界/失败矩阵全部通过；MySQL TLS（含 target 级 CA 与 mTLS）、ES 多 host failover/TLS/mTLS、Mongo 无认证/密码/URI/TLS/mTLS、X.509、replica set 均已通过。Kafka 镜像不可用、CLS/GitLab 缺凭证，尚未真实联调。
 - `/mcp` 已提供 28 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个；RabbitMQ 2 个；Kafka 3 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
 
 ![配置台](docs/verify/assets/ui/light-index.png)
 
-M7 登录（网页 + `/mcp` 同一套身份）按 [docs/milestones.md](docs/milestones.md) 推进；真实上游连通性需要安装对应组件 extras 与只读凭证。
+M7 首次安装、网页登录、`/me` 账号页和 `/mcp` Bearer 已实现；SQLite/MySQL/PostgreSQL 配置库安装均已真实联调，见 [m7-01.md](docs/verify/m7-01.md)；排查组件真实上游连通性需要对应 extras 与只读凭证。
 
 ## 启动
 
@@ -27,11 +28,11 @@ M7 登录（网页 + `/mcp` 同一套身份）按 [docs/milestones.md](docs/mile
 uv sync                      # 安装依赖（默认 SQLite，开箱可用）
 uv run dr-panda-mcp          # 默认监听 127.0.0.1:8111
 curl -fsS http://127.0.0.1:8111/healthz
-# 浏览器打开 http://127.0.0.1:8111/ 进入配置台
+# 浏览器打开 http://127.0.0.1:8111/：首次进入安装向导，完成后登录
 # {"ok": true, "version": "0.1.0", "db": "ok"}
 ```
 
-首次启动会创建 `data/dr-panda.sqlite` 与 `data/secret.key`（权限 0600）。
+首次启动不会预置管理员：先进入安装向导，设置 admin 密码并选择配置库；完成后创建 `data/install.json`、`data/install.key`、`data/session.key` 与配置库加密密钥（权限 0600）。旧配置库可继续选择原 SQLite 路径以保留数据。
 
 MySQL / PostgreSQL 作为配置库时需要额外 extras：
 
@@ -47,29 +48,35 @@ uv sync --extra postgres     # asyncpg
 |---|---|---|
 | `DR_PANDA_HOST` | `127.0.0.1` | 监听网卡；只在本机或受控内网使用，不要暴露到公网 |
 | `DR_PANDA_PORT` | `8111` | 网页与 `/mcp` 共用 |
-| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库；支持 sqlite / mysql / postgresql，进程启动时自动补异步驱动 |
+| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库 URL；首次安装后以 `data/install.json` 中选择的库为准 |
 | `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥，用于加密目标密钥；未设置时使用 `data/secret.key` |
 | `DR_PANDA_LOG_LEVEL` | `INFO` | 日志级别 |
+| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听；须先完成安装 |
+| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
 
-**密钥备份**：`data/secret.key`（或 `DR_PANDA_SECRET_KEY`）与配置库同等重要，丢失后已登记的密钥不可恢复，只能重新录入。SQLite 仅在存在 pending migration 时备份到 `data/backup/`，保留数量由系统配置 `backup_keep_count` 控制（默认 20，范围 1–20）。
+**备份**：`data/secret.key`（或 `DR_PANDA_SECRET_KEY`）、`data/install.json`、`data/install.key`、`data/session.key` 与配置库同等重要。丢失加密密钥后已登记的密钥不可恢复；丢失 install 状态需恢复备份。SQLite 仅在存在 pending migration 时备份到 `data/backup/`，保留数量由系统配置 `backup_keep_count` 控制（默认 20，范围 1–20）。
 
 ## 客户端接入
 
-三个客户端都只配置 URL，不配置命令（stdio 仅用于本机调试）：
+三个客户端都配置 URL + Authorization header（stdio 仅用于本机调试）：
 
 ```json
 {
   "mcpServers": {
     "drpanda": {
-      "url": "http://127.0.0.1:8111/mcp"
+      "url": "http://127.0.0.1:8111/mcp",
+      "headers": {
+        "Authorization": "Bearer <安装完成页显示的 MCP Token>"
+      }
     }
   }
 }
 ```
 
 - Cursor：写入其 MCP 配置文件，字段名以客户端版本为准。
-- Codex：`[mcp_servers.drpanda]` 下配置 `url`。
+- Codex：`[mcp_servers.drpanda]` 下配置 `url` 与 header（字段名以客户端版本为准）。
 - DeepSeek Harness：`serverName` 用 `drpanda`，模型侧工具名形如 `mcp__drpanda__mysql_query`。
+- `/mcp` 未认证返回 401；网页登录 Session 不能代替 Bearer Token。
 
 端口改过时，客户端 URL 使用同一个端口。
 

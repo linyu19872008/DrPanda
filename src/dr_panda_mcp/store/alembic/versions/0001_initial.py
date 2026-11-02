@@ -59,7 +59,6 @@ def upgrade() -> None:
 
 def _seed_default_settings() -> None:
     connection = op.get_bind()
-    existing = {row[0] for row in connection.execute(sa.text("SELECT key FROM settings"))}
     now = datetime.now(UTC)
     settings = sa.table(
         "settings",
@@ -67,6 +66,7 @@ def _seed_default_settings() -> None:
         sa.column("value", sa.String(64)),
         sa.column("updated_at", sa.DateTime(timezone=True)),
     )
+    existing = {row[0] for row in connection.execute(sa.select(settings.c.key))}
     rows = [
         {"key": key, "value": value, "updated_at": now}
         for key, value in DEFAULT_SETTINGS.items()

@@ -11,7 +11,7 @@ from dr_panda_mcp.server import create_app
 async def _get(
     runtime: Runtime, path: str = "/healthz", headers: dict[str, str] | None = None
 ) -> httpx.Response:
-    app = create_app(runtime.config, runtime)
+    app = create_app(runtime.config, runtime, auth_required=False)
     transport = ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
         return await client.get(path, headers=headers)
@@ -61,6 +61,6 @@ async def test_healthz_allows_same_origin(runtime: Runtime) -> None:
 
 
 def test_mcp_route_mounted(runtime: Runtime) -> None:
-    app = create_app(runtime.config, runtime)
+    app = create_app(runtime.config, runtime, auth_required=False)
     paths = {getattr(route, "path", None) for route in app.routes}
     assert "/mcp" in paths

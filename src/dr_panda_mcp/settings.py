@@ -99,6 +99,17 @@ SETTING_SPECS: tuple[SettingSpec, ...] = (
         "进程内缓存的连接器客户端数量；修改后在下一次取客户端时按新上限淘汰。",
     ),
     SettingSpec(
+        "session_ttl_minutes",
+        "auth",
+        "Session 有效期",
+        "分钟",
+        720,
+        5,
+        10080,
+        "立即生效",
+        "Web 登录会话的最长有效期；修改后现有会话也按新值校验。",
+    ),
+    SettingSpec(
         "backup_keep_count",
         "advanced",
         "SQLite 备份保留数量",
@@ -133,6 +144,11 @@ SETTING_GROUPS: tuple[dict[str, str], ...] = (
         "key": "runtime",
         "title": "并发与审计",
         "description": "并发上限立即生效；审计留存与清理间隔在下一轮清理周期生效。",
+    },
+    {
+        "key": "auth",
+        "title": "认证与会话",
+        "description": "Web 登录会话有效期；修改后立即生效。",
     },
     {
         "key": "advanced",
@@ -219,6 +235,7 @@ async def load(store: ConfigStore) -> Settings:
         audit_cleanup_interval_minutes=values["audit_cleanup_interval_minutes"],
         catalog_max_clients=values["catalog_max_clients"],
         backup_keep_count=values["backup_keep_count"],
+        session_ttl_minutes=values["session_ttl_minutes"],
     )
 
 

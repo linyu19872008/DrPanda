@@ -146,7 +146,8 @@ def upgrade() -> None:
         batch.add_column(sa.Column("group_key", sa.String(64), nullable=False, server_default="runtime"))
         batch.add_column(sa.Column("group_title", sa.String(128), nullable=False, server_default=""))
         batch.add_column(sa.Column("label", sa.String(128), nullable=False, server_default=""))
-        batch.add_column(sa.Column("description", sa.Text(), nullable=False, server_default=""))
+        # MySQL 不允许 TEXT 列带默认值；先加可空列，回填后再收紧。
+        batch.add_column(sa.Column("description", sa.Text(), nullable=True))
         batch.add_column(sa.Column("default_value", sa.String(64), nullable=False, server_default=""))
         batch.add_column(sa.Column("min_value", sa.BigInteger(), nullable=True))
         batch.add_column(sa.Column("max_value", sa.BigInteger(), nullable=True))
@@ -192,7 +193,10 @@ def upgrade() -> None:
         sa.column("updated_by", sa.String),
     )
     existing = {
-        row[0] for row in connection.execute(sa.text("SELECT key FROM settings"))
+        row[0]
+        for row in connection.execute(
+            sa.select(sa.table("settings", sa.column("key", sa.String)).c.key)
+        )
     }
     for spec in SETTINGS:
         if spec["key"] in existing:
@@ -205,6 +209,11 @@ def upgrade() -> None:
             connection.execute(
                 table.insert().values(**spec, updated_at=now, updated_by="system")
             )
+    connection.execute(
+        table.update().where(table.c.description.is_(None)).values(description="")
+    )
+    with op.batch_alter_table("settings") as batch:
+        batch.alter_column("description", existing_type=sa.Text(), nullable=False)
 
 
 def downgrade() -> None:

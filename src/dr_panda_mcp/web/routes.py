@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
+from dr_panda_mcp import auth
 from dr_panda_mcp import errors as app_errors
 from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.connectors import get_connector
@@ -23,8 +24,6 @@ from dr_panda_mcp.store.protocol import ConfigStore, Target
 from dr_panda_mcp.web import assets, forms, i18n, render, theme, views
 
 logger = logging.getLogger(__name__)
-
-ACTOR = "anonymous"
 
 _FLASH_MESSAGES = {
     "created": ("success", "目标已创建"),
@@ -107,7 +106,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 common_defaults=defaults,
             )
         try:
-            await store.create(draft, ACTOR)
+            await store.create(draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
             return _form_page(
@@ -144,7 +143,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         if draft is None:
             return _edit_page(request, target, values=values, errors=errors, status=400)
         try:
-            await store.update(target.id, draft, ACTOR)
+            await store.update(target.id, draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
             return _edit_page(request, target, values=values, errors=errors, status=400)
@@ -155,7 +154,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
             return _error(request, "目标不存在或已被删除", 404, "找不到目标")
-        await store.set_enabled(target.id, not target.enabled, ACTOR)
+        await store.set_enabled(target.id, not target.enabled, auth.current_actor())
         return _redirect("/", flash="toggled")
 
     @server.custom_route("/targets/{target_id:int}/delete", methods=["GET"])
@@ -172,7 +171,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
             return _error(request, "目标不存在或已被删除", 404, "找不到目标")
-        await store.delete(target.id, ACTOR)
+        await store.delete(target.id, auth.current_actor())
         return _redirect("/", flash="deleted")
 
     @server.custom_route("/targets/{target_id:int}/test", methods=["POST"])
@@ -191,7 +190,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             ok = False
             message = redact(f"未预期错误：{exc}", target.secret.values())
             logger.warning("测试连接失败：%s", target.name, exc_info=True)
-        await store.record_test(target.id, ok, message, ACTOR)
+        await store.record_test(target.id, ok, message, auth.current_actor())
         return _redirect(
             "/", flash="tested", result="ok" if ok else "fail", name=target.name
         )
@@ -234,7 +233,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 patch.update(normalized)
         if not errors:
             try:
-                await settings_module.update(store, patch, ACTOR)
+                await settings_module.update(store, patch, auth.current_actor())
             except app_errors.InvalidSettings as exc:
                 errors["_form"] = str(exc)
         if errors:
@@ -285,7 +284,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             if key
             else dict(settings_module.DEFAULTS)
         )
-        await settings_module.update(store, patch, ACTOR)
+        await settings_module.update(store, patch, auth.current_actor())
         if section:
             return _redirect("/settings", section=section, flash="reset")
         return _redirect("/settings", flash="reset")

@@ -82,6 +82,14 @@
 | 详情折叠 | `.details` | `<details>` 展示失败原因等长文本 |
 | 危险区 | `.card--danger` | danger-soft 底 + danger 边；确认页使用 |
 
+## 3.5 首次安装与登录
+
+- `/setup`：两步卡片式向导，第 1 步管理员密码，第 2 步配置库选择/连接测试；不显示主导航，保留品牌与语言切换。
+- 数据库类型用链接切换 SQLite / MySQL / PostgreSQL，零 JS；测试成功后才启用“完成安装”。
+- 安装完成页显示 MCP URL 与 Token；完整 Token 不在后续页面回显，可在“我的”页面重新生成。
+- `/login`：单列登录卡片，用户名/密码 + CSRF；不显示管理导航的可操作入口。
+- 安装/登录页均已接入 `t()` 中英文文案。
+
 ## 4. 语言与主题机制
 
 - 语言：默认英文，Cookie `drpanda_lang` 持久化；`en` / `zh-Hans`；顶部 POST `/language` 切换，保留当前路径与设置页 section；零 JS。

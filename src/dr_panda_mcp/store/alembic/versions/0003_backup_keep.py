@@ -59,11 +59,12 @@ def upgrade() -> None:
         sa.column("updated_by", sa.String),
     )
     exists = connection.execute(
-        sa.text("SELECT 1 FROM settings WHERE key = :key"), {"key": SETTING["key"]}
+        sa.select(table.c.key).where(table.c.key == SETTING["key"])
     ).first()
     if exists is None:
         connection.execute(table.insert().values(**SETTING, updated_at=now, updated_by="system"))
 
 
 def downgrade() -> None:
-    op.execute(sa.text("DELETE FROM settings WHERE key = 'backup_keep_count'"))
+    table = sa.table("settings", sa.column("key", sa.String))
+    op.execute(table.delete().where(table.c.key == "backup_keep_count"))

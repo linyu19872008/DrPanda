@@ -30,6 +30,7 @@
         <span class="chip" title="{{ t('当前版本') }}">v{{ app_version }}</span>
         <form class="lang-switch" method="post" action="/language" aria-label="{{ t('语言') }}">
           <input type="hidden" name="next" value="{{ current_url }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           {% for lang in language_options %}
           <button class="lang-switch__btn{% if lang.code == locale %} is-active{% endif %}"
                   type="submit" name="lang" value="{{ lang.code }}"
@@ -39,6 +40,7 @@
         </form>
         <form class="theme-switch" method="post" action="/theme" aria-label="{{ t('主题') }}">
           <input type="hidden" name="next" value="{{ current_url }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <button class="theme-switch__btn{% if theme_mode == 'system' %} is-active{% endif %}"
                   type="submit" name="mode" value="system"
                   aria-pressed="{{ 'true' if theme_mode == 'system' else 'false' }}" title="{{ t('跟随系统') }}">
@@ -58,6 +60,13 @@
             <span class="sr-only">{{ t('深色') }}</span>
           </button>
         </form>
+        {% if current_user %}
+        <form class="logout-form" method="post" action="/logout">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <a class="topbar__user" href="/me">{{ current_user.username }}</a>
+          <button class="btn btn--ghost btn--sm" type="submit">{{ t('退出') }}</button>
+        </form>
+        {% endif %}
       </div>
     </div>
   </header>
