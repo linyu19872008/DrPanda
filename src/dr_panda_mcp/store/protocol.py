@@ -87,6 +87,7 @@ class Settings:
     default_target_max_bytes: int = 102_400
     audit_cleanup_interval_minutes: int = 60
     catalog_max_clients: int = 32
+    backup_keep_count: int = 20
 
 
 @runtime_checkable

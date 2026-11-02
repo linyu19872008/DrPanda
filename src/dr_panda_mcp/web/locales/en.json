@@ -283,5 +283,9 @@
   "超出范围": "Out of range",
   "timeout_s": "Timeout",
   "max_rows": "Max rows",
-  "max_bytes": "Max bytes"
+  "max_bytes": "Max bytes",
+  "SQLite 备份保留数量": "SQLite backup retention",
+  "下一次启动迁移": "Next startup migration",
+  "仅 SQLite 且存在 pending migration 时生效；新迁移前保留最近 N 个备份。": "Only applies to SQLite when a pending migration exists; keep the latest N backups before a new migration.",
+  "影响进程内缓存与 SQLite 备份保留；修改后下一次工具调用或下一次启动迁移生效。": "Affects in-process cache and SQLite backup retention; applies on the next tool call or next startup migration."
 }

@@ -99,6 +99,17 @@ SETTING_SPECS: tuple[SettingSpec, ...] = (
         "进程内缓存的连接器客户端数量；修改后在下一次取客户端时按新上限淘汰。",
     ),
     SettingSpec(
+        "backup_keep_count",
+        "advanced",
+        "SQLite 备份保留数量",
+        "个",
+        20,
+        1,
+        20,
+        "下一次启动迁移",
+        "仅 SQLite 且存在 pending migration 时生效；新迁移前保留最近 N 个备份。",
+    ),
+    SettingSpec(
         "audit_cleanup_interval_minutes",
         "runtime",
         "审计清理间隔",
@@ -207,6 +218,7 @@ async def load(store: ConfigStore) -> Settings:
         default_target_max_bytes=values["default_target_max_bytes"],
         audit_cleanup_interval_minutes=values["audit_cleanup_interval_minutes"],
         catalog_max_clients=values["catalog_max_clients"],
+        backup_keep_count=values["backup_keep_count"],
     )
 
 

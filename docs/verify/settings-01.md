@@ -2,7 +2,7 @@
 
 ## 变更
 
-新增 4 个系统配置键；`settings` 表随后在 `0002_settings_metadata` 中扩展为自描述元数据表：
+本轮新增 4 个系统配置键；后续 `0003_backup_keep` 又增加 `backup_keep_count`；`settings` 表随后在 `0002_settings_metadata` 中扩展为自描述元数据表：
 
 | 分组 | 键 | 默认 | 范围 | 生效 |
 |---|---|---:|---|---|
@@ -11,6 +11,7 @@
 | 新建目标默认值 | `default_target_max_bytes` | 102400 | 4096–1048576 | 新建目标表单 |
 | 并发与审计 | `audit_cleanup_interval_minutes` | 60 | 5–1440 | 下一轮清理 |
 | 高级资源 | `catalog_max_clients` | 32 | 4–128 | 下一次工具调用 |
+| 高级资源 | `backup_keep_count` | 20 | 1–20 | 下一次启动迁移（仅 pending） |
 
 现有 `target_max_concurrency`、`audit_retention_days` 保留。
 
@@ -30,7 +31,7 @@
 
 ## 验证
 
-- `pytest`：**420 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
+- `pytest`：**422 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
 - `ruff check .`：通过
 - 未启动真实浏览器截图；分组与可访问性由模板/测试断言覆盖
 

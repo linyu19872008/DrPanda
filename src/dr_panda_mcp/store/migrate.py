@@ -14,6 +14,9 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from dr_panda_mcp.store.url import database_path
@@ -21,7 +24,7 @@ from dr_panda_mcp.store.url import database_path
 logger = logging.getLogger(__name__)
 
 BACKUP_DIR_NAME = "backup"
-BACKUP_KEEP = 5
+BACKUP_KEEP = 20
 ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 
 
@@ -75,9 +78,46 @@ def upgrade_to_head(sync_connection) -> None:
     command.upgrade(config, "head")
 
 
+async def _has_pending_migrations(engine: AsyncEngine) -> bool:
+    async with engine.connect() as connection:
+        return await connection.run_sync(_has_pending_sync)
+
+
+def _has_pending_sync(sync_connection) -> bool:
+    config = _alembic_config()
+    config.attributes["connection"] = sync_connection
+    current = set(MigrationContext.configure(sync_connection).get_current_heads())
+    heads = set(ScriptDirectory.from_config(config).get_heads())
+    return current != heads
+
+
+async def _configured_backup_keep(engine: AsyncEngine) -> int:
+    """读取 backup_keep_count；旧库/首次启动/非法值时回退默认值。"""
+    if database_path(str(engine.url)) is None:
+        return BACKUP_KEEP
+
+    def read(sync_connection) -> int:
+        try:
+            row = sync_connection.execute(
+                text("SELECT value FROM settings WHERE key = 'backup_keep_count'")
+            ).first()
+            if row is None:
+                return BACKUP_KEEP
+            value = int(str(row[0]))
+        except Exception:  # noqa: BLE001 - 表不存在或值损坏时使用默认值
+            return BACKUP_KEEP
+        return min(max(value, 1), 20)
+
+    async with engine.connect() as connection:
+        return await connection.run_sync(read)
+
+
 async def migrate(engine: AsyncEngine) -> Path | None:
-    """备份（仅 SQLite）后迁移到最新版本，返回备份文件路径。"""
-    backup = backup_sqlite_database(str(engine.url))
+    """仅在存在 pending migration 时备份（SQLite）并升级。"""
+    if not await _has_pending_migrations(engine):
+        return None
+    keep = await _configured_backup_keep(engine)
+    backup = backup_sqlite_database(str(engine.url), keep=keep)
     if backup is not None:
         logger.info("迁移前已备份 SQLite：%s", backup)
     async with engine.begin() as connection:

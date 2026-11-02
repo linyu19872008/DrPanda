@@ -51,7 +51,7 @@ uv sync --extra postgres     # asyncpg
 | `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥，用于加密目标密钥；未设置时使用 `data/secret.key` |
 | `DR_PANDA_LOG_LEVEL` | `INFO` | 日志级别 |
 
-**密钥备份**：`data/secret.key`（或 `DR_PANDA_SECRET_KEY`）与配置库同等重要，丢失后已登记的密钥不可恢复，只能重新录入。SQLite 迁移前会自动备份到 `data/backup/`（保留最近 5 份）。
+**密钥备份**：`data/secret.key`（或 `DR_PANDA_SECRET_KEY`）与配置库同等重要，丢失后已登记的密钥不可恢复，只能重新录入。SQLite 仅在存在 pending migration 时备份到 `data/backup/`，保留数量由系统配置 `backup_keep_count` 控制（默认 20，范围 1–20）。
 
 ## 客户端接入
 

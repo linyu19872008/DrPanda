@@ -292,7 +292,7 @@ async def test_settings_page_and_update(runtime: Runtime) -> None:
     stored = await runtime.store.get_settings()
     assert stored["audit_retention_days"] == "30"
     assert stored["target_max_concurrency"] == "5"
-    assert len(stored) == 7
+    assert len(stored) == 8
     assert invalid.status_code == 400
 
 

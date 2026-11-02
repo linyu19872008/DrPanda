@@ -248,6 +248,7 @@ async def test_settings_defaults(runtime: Runtime) -> None:
         "default_target_max_bytes": "102400",
         "audit_cleanup_interval_minutes": "60",
         "catalog_max_clients": "32",
+        "backup_keep_count": "20",
     }
     assert await settings.load(runtime.store) == Settings(
         audit_retention_days=90, target_max_concurrency=10
@@ -293,6 +294,7 @@ async def test_settings_invalid_rejected_without_side_effects(
         "default_target_max_bytes": "102400",
         "audit_cleanup_interval_minutes": "60",
         "catalog_max_clients": "32",
+        "backup_keep_count": "20",
     }
     assert _raw(runtime, "SELECT COUNT(*) FROM audit")[0][0] == audit_before
 

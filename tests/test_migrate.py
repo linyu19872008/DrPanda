@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -45,6 +46,7 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
         "default_target_max_bytes": "102400",
         "audit_cleanup_interval_minutes": "60",
         "catalog_max_clients": "32",
+        "backup_keep_count": "20",
     }
 
 
@@ -127,17 +129,18 @@ async def test_settings_metadata_is_seeded(tmp_path: Path) -> None:
         "audit_retention_days",
         "audit_cleanup_interval_minutes",
         "catalog_max_clients",
+        "backup_keep_count",
     ]
-    catalog = next(row for row in rows if row[0] == "catalog_max_clients")
+    catalog = next(row for row in rows if row[0] == "backup_keep_count")
     assert catalog[2:] == (
         "advanced",
         "高级资源",
-        "连接器缓存上限",
-        "32",
-        4,
-        128,
+        "SQLite 备份保留数量",
+        "20",
+        1,
+        20,
         "个",
-        "下一次工具调用",
+        "下一次启动迁移",
         1,
         0,
         "system",
@@ -172,4 +175,45 @@ async def test_settings_migration_preserves_existing_values(tmp_path: Path) -> N
         count = connection.execute("SELECT COUNT(*) FROM settings").fetchone()[0]
 
     assert row == ("30", "runtime", "审计保留天数")
-    assert count == 7
+    assert count == 8
+
+
+async def test_no_backup_when_no_pending_migration(tmp_path: Path) -> None:
+    url = _url(tmp_path)
+    engine = create_engine(url)
+    try:
+        # 首次升级本身是 pending，允许产生迁移前备份；这里只验证升级后再次启动不再新增。
+        await migrate(engine)
+        backup_dir = tmp_path / "backup"
+        if backup_dir.exists():
+            shutil.rmtree(backup_dir)
+        await migrate(engine)
+        second = list(backup_dir.glob("*.sqlite")) if backup_dir.exists() else []
+    finally:
+        await engine.dispose()
+
+    assert second == []
+
+
+async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> None:
+    url = _url(tmp_path)
+    engine = create_engine(url)
+    try:
+        await migrate(engine)
+        with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
+            connection.execute(
+                "UPDATE settings SET value = '3' WHERE key = 'backup_keep_count'"
+            )
+            for _ in range(5):
+                backup_sqlite_database(url, keep=20)
+            connection.execute(
+                "UPDATE alembic_version SET version_num = '0002_settings_metadata'"
+            )
+
+        created = await migrate(engine)
+    finally:
+        await engine.dispose()
+
+    backups = sorted((tmp_path / "backup").glob("*.sqlite"))
+    assert created is not None
+    assert len(backups) == 3

@@ -14,6 +14,11 @@
   `editable`、`requires_restart`、`sort_order`、`updated_by`。
 - 回填已有 2 行元数据，**不覆盖已有值**。
 - 插入缺失的 5 行，共 7 个配置。
+
+`0003_backup_keep`：
+
+- 新增 `backup_keep_count`（默认 20，范围 1–20，高级资源分组）。
+- 迁移后共 8 行。
 - 新增 `settings_history`：
   `key`、`old_value`、`new_value`、`actor`、`changed_at`。
 - 索引：`key`、`changed_at`。
@@ -30,14 +35,14 @@
 ## 验证
 
 - 迁移后真实库：
-  - 7 行配置全部存在；
+  - 8 行配置全部存在；
   - `group_key/label/default/range/unit/effect` 完整；
   - `settings_history` 表存在。
 - 新增测试：
   - 元数据 seed 完整；
   - 更新后历史保留 old/new；
   - 原有值迁移后不被默认值覆盖。
-- 全量 `pytest`：**420 passed**；`ruff` 通过。
+- 全量 `pytest`：**422 passed**；`ruff` 通过。
 
 ## 后续
 

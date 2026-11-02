@@ -44,6 +44,7 @@
 | v0.24 | 2026-11-02 | settings 自描述元数据 + 7 行完整 seed + settings_history 结构化历史 |
 | v0.25 | 2026-11-02 | 设置页单列字段行、状态/操作分层、并发与审计子分组 |
 | v0.26 | 2026-11-02 | Web 多语言：默认英文，支持 zh-Hans；Cookie 切换与页面文案迁移 |
+| v0.27 | 2026-11-02 | SQLite 备份仅在 pending migration 时执行，保留上限 20 且系统配置可调 |
 
 ## 1. 目标
 
@@ -107,7 +108,7 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 
 1. 读取并校验环境变量（3.3）。数据库 URL 补上异步驱动；URL 指向某种库但驱动未安装时，提示要安装哪一组依赖。
 2. 创建配置库引擎；SQLite 打开 WAL、外键约束和 `busy_timeout`。
-3. 执行 Alembic 迁移到最新版本；SQLite 先做文件备份（5.5）。
+3. 检查是否有 pending migration；仅 SQLite 且存在 pending 时先做文件备份，再执行 Alembic 迁移到最新版本（5.5）。
 4. 加载密钥（5.8）：`DR_PANDA_SECRET_KEY` 优先，否则读 `data/secret.key`。文件不存在且配置库里还没有密文时生成新密钥（权限 0600）；库里有密文但当前密钥解不开时启动失败，提示恢复密钥备份或重新录入目标。
 5. 创建 FastMCP 实例，注册服务器说明、工具、`investigate_error` prompt 与网页路由。
 6. 构建 `http_app(path="/mcp")`，挂 Host/Origin 校验，用 uvicorn 监听 `DR_PANDA_HOST:DR_PANDA_PORT`。
@@ -265,6 +266,7 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | 并发与审计 | `audit_retention_days` | 审计保留天数 | 90 | 1–3650 | 下一轮清理任务 |
 | 并发与审计 | `audit_cleanup_interval_minutes` | 审计清理间隔 | 60 | 5–1440 | 下一轮清理周期 |
 | 高级资源 | `catalog_max_clients` | 进程内连接器客户端缓存上限 | 32 | 4–128 | 下一次工具调用 |
+| 高级资源 | `backup_keep_count` | SQLite 备份保留数量 | 20 | 1–20 | 下一次启动迁移 |
 
 - 新建目标默认值只作用于新建表单；既有 target 已保存的 `timeout_s` / `max_rows` / `max_bytes` 不因系统配置改变。
 - 页面使用左侧子菜单切换分组：可编辑的“新建目标默认值 / 并发与审计 / 高级资源”，只读的“安全边界 / 启动配置 / 最近变更”；每次只渲染当前分组，保存只提交当前分组并保留 `section`。
@@ -504,7 +506,7 @@ class Settings:                  # 解析并校验后的运行时策略
 
 - Alembic 单版本链，适用全部方言；进程启动时 `upgrade head`，重复启动幂等。
 - 迁移同时初始化 `settings` 的两个默认行：键不存在才写入，已存在不覆盖，重复启动不会把用户改过的值重置。
-- SQLite：迁移前把数据库文件复制到与数据库同目录的 `backup/<时间戳>.sqlite`，保留最近 5 份（默认库即 `data/backup/`）。
+- SQLite：仅在存在 pending migration 时，把数据库文件复制到与数据库同目录的 `backup/<时间戳>.sqlite`；保留数量由 `backup_keep_count` 控制（默认 20，范围 1–20，系统配置可调）。无 pending 的普通启动不产生新备份。
 - MySQL / PostgreSQL：不自动备份；迁移失败则退出，提示先用数据库侧备份恢复。
 - 不提供 downgrade 流程。回滚方式是按备份恢复或重建配置库后重新登记。
 - 第一版按单进程使用；多进程共用同一 MySQL/PostgreSQL 时再给迁移加锁。
@@ -530,7 +532,7 @@ class Settings:                  # 解析并校验后的运行时策略
 - 密钥缺失：用错误的密钥读取，抛 `SecretUnavailable`，不返回明文也不返回空值。
 - 清除：`clear` 后该字段的密文键消失，页面显示"未设置"。
 - 解密失败标记：换错密钥读取时 `secret_ok=False`、`secret={}`，`secret_fields` 仍保留；不抛异常、不拖垮列表。
-- 系统配置默认值：全新库迁移后有 7 个配置行，含新建目标默认值、并发、审计与高级资源；读取 `get_settings` 返回全部当前值。
+- 系统配置默认值：全新库迁移后有 8 个配置行，含新建目标默认值、并发、审计、高级资源与备份保留数量；读取 `get_settings` 返回全部当前值。
 - 系统配置校验：`audit_retention_days=0`、`3651`、`abc` 与非整数被拒；`target_max_concurrency=0`、`51` 被拒；合法值写入后读出一致。
 - 系统配置同事务：更新值、写 `settings_history`（old/new）与 `settings.update` 审计一起提交。
 - 系统配置白名单：未知键（例如 `target_max_concurrency_x`、`readonly=false`）直接拒绝，仓储不写入未知键。
