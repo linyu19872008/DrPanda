@@ -318,6 +318,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         return assets.app_js_response(request)
 
 
+
 async def _target(store: ConfigStore, target_id: int) -> Target | None:
     return await store.get_by_id(target_id)
 

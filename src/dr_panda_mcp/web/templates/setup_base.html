@@ -31,5 +31,7 @@
   <main id="main" class="container setup-container">
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/app.js?v={{ app_script_version }}" defer></script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

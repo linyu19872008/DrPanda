@@ -356,6 +356,19 @@ async def create_mcp_token(
         return _token_from_row(row)
 
 
+async def mcp_token_name_exists(
+    session_factory: async_sessionmaker[AsyncSession], user_id: int, name: str
+) -> bool:
+    async with session_factory() as session:
+        return (
+            await session.scalar(
+                select(McpTokenRow.id).where(
+                    McpTokenRow.user_id == user_id, McpTokenRow.name == name
+                )
+            )
+        ) is not None
+
+
 async def list_mcp_tokens(
     session_factory: async_sessionmaker[AsyncSession],
     user_id: int,

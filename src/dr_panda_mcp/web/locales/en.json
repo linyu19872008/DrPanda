@@ -403,5 +403,10 @@
   "已复制": "Copied",
   "已选中，请按 ⌘C / Ctrl+C 复制": "Selected. Press Ctrl/Cmd+C to copy.",
   "无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。": "Without JS, click the token to select it, then press Ctrl/Cmd+C.",
-  "Token 已删除": "Token deleted"
+  "Token 已删除": "Token deleted",
+  "保存中…": "Saving…",
+  "测试中…": "Testing…",
+  "生成中…": "Generating…",
+  "Token 名称已存在，请换一个": "Token name already exists; choose another",
+  "安装中…": "Installing…"
 }

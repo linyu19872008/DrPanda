@@ -27,7 +27,6 @@
 
 {% if has_targets %}
 <form class="toolbar" method="get" action="/" role="search">
-      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
   <div class="toolbar__search">
     <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
     {% if active_type %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
@@ -111,12 +110,12 @@
         </td>
         <td data-label="{{ t('操作') }}" class="cell-actions">
           <div class="row-actions">
-            <form method="post" action="/targets/{{ target.id }}/test" class="inline-form">
+            <form method="post" action="/targets/{{ target.id }}/test" class="inline-form" data-submit-loading>
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-              <button class="btn btn--secondary btn--sm" type="submit">{{ t('测试') }}</button>
+              <button class="btn btn--secondary btn--sm" type="submit" data-loading-label="{{ t('测试中…') }}">{{ t('测试') }}</button>
             </form>
             <a class="btn btn--ghost btn--sm" href="/targets/{{ target.id }}/edit">{{ t('编辑') }}</a>
-            <a class="btn btn--danger-ghost btn--sm" href="/targets/{{ target.id }}/delete">{{ t('删除') }}</a>
+            <a class="btn btn--danger-ghost btn--sm" href="/targets/{{ target.id }}/delete" data-dialog-open="delete-target-{{ target.id }}">{{ t('删除') }}</a>
           </div>
         </td>
       </tr>
@@ -124,5 +123,27 @@
     </tbody>
   </table>
 </div>
+
+{% for target in rows %}
+<dialog id="delete-target-{{ target.id }}" class="modal" aria-labelledby="delete-target-title-{{ target.id }}">
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
+    <h2 id="delete-target-title-{{ target.id }}">{{ t('删除目标') }}</h2>
+    <p class="field__hint">{{ t('删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。') }}</p>
+    <dl class="summary">
+      <div><dt>{{ t('名称') }}</dt><dd class="mono">{{ target.name }}</dd></div>
+      <div><dt>{{ t('类型') }}</dt><dd>{{ t(target.type_label) }}</dd></div>
+      <div><dt>{{ t('端点') }}</dt><dd class="mono">{{ target.endpoint }}</dd></div>
+      <div><dt>{{ t('授权范围') }}</dt><dd>{{ t(target.scope_source, **target.scope_params) }}</dd></div>
+    </dl>
+    <form method="post" action="/targets/{{ target.id }}/delete" class="form-actions form-actions--inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+      <button class="btn btn--danger" type="submit">{{ t('确认删除') }}</button>
+    </form>
+  </div>
+</dialog>
+{% endfor %}
 {% endif %}
 {% endblock %}

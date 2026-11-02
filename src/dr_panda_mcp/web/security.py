@@ -7,17 +7,41 @@ import logging
 import time
 from urllib.parse import parse_qs
 
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
 from dr_panda_mcp import auth
 from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.runtime import Runtime
+from dr_panda_mcp.web import render
 
 logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
 PUBLIC_PREFIXES = ("/static/",)
+
+
+class NotFoundMiddleware(BaseHTTPMiddleware):
+    """把 FastMCP/Starlette 的未知 GET 路由替换为站内 404 页面。"""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if (
+            response.status_code == 404
+            and request.method == "GET"
+            and not path.startswith(("/mcp", "/static"))
+        ):
+            return render.render(
+                "error.html",
+                request=request,
+                title="页面不存在",
+                message="页面不存在",
+                code=404,
+                status_code=404,
+            )
+        return response
 
 
 class AuthMiddleware:
@@ -142,7 +166,14 @@ class CSRFMiddleware:
         form = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
         token = (form.get("_csrf") or [""])[0]
         if not cookie or not token or not hmac.compare_digest(cookie, token):
-            response = JSONResponse({"error": "csrf_failed"}, status_code=403)
+            response = render.render(
+                "error.html",
+                request=request,
+                title="请求已过期",
+                message="页面已过期，请刷新后重试",
+                code=403,
+                status_code=403,
+            )
             await response(scope, receive, send)
             return
         await self.app(scope, replay, send)

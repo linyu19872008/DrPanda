@@ -14,7 +14,7 @@
   </div>
   {% if error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>{% endif %}
   {% if state.test_detail %}<div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(state.test_detail) }}</strong></div></div>{% endif %}
-  <form method="post" action="/setup/database" class="login-form">
+  <form method="post" action="/setup/database" class="login-form" data-submit-loading>
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <input type="hidden" name="db_type" value="{{ state.db_type }}">
     {% if state.db_type == 'sqlite' %}
@@ -32,8 +32,8 @@
     <p class="field__hint">{{ t('该账号需要能创建/迁移配置库表；测试只验证连通性，完成时会执行真实迁移。') }}</p>
     {% endif %}
     <div class="form-actions form-actions--inline">
-      <button class="btn btn--secondary" type="submit" name="action" value="test">{{ t('测试连接') }}</button>
-      <button class="btn btn--primary" type="submit" name="action" value="finish"{% if state.tested_url is none %} disabled{% endif %}>{{ t('完成安装') }}</button>
+      <button class="btn btn--secondary" type="submit" name="action" value="test" data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
+      <button class="btn btn--primary" type="submit" name="action" value="finish"{% if state.tested_url is none %} disabled{% endif %} data-loading-label="{{ t('安装中…') }}">{{ t('完成安装') }}</button>
     </div>
     <p class="field__hint">{{ t('修改连接信息后需要重新测试。') }}</p>
   </form>

@@ -41,13 +41,13 @@
       {% endfor %}
     </nav>
     <div class="settings-nav__footer">
-      <a class="btn btn--secondary btn--block" href="/settings/reset">{{ t('恢复全部默认值') }}</a>
+      <a class="btn btn--secondary btn--block" href="/settings/reset" data-dialog-open="reset-all-settings">{{ t('恢复全部默认值') }}</a>
     </div>
   </aside>
 
   <section class="settings-main">
     {% if active_group %}
-    <form class="card settings-form" method="post" action="/settings">
+    <form class="card settings-form" method="post" action="/settings" data-submit-loading>
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <input type="hidden" name="section" value="{{ active_section }}">
       <div class="settings-panel-head">
@@ -83,7 +83,7 @@
                      {% if row.error %}aria-invalid="true"{% endif %}>
               <span class="input-group__suffix">{{ t(row.unit) }}</span>
             </div>
-            <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">{{ t('恢复本项默认') }}</a>
+            <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}" data-dialog-open="reset-setting-{{ row.key }}">{{ t('恢复本项默认') }}</a>
           </div>
         </div>
         {% endfor %}
@@ -93,7 +93,7 @@
       <div class="settings-actions">
         <span class="settings-actions__hint">{{ t('保存本组会写入审计；切换分组前请先保存。') }}</span>
         <span class="settings-actions__buttons">
-          <button class="btn btn--primary" type="submit">{{ t('保存本组配置') }}</button>
+          <button class="btn btn--primary" type="submit" data-loading-label="{{ t('保存中…') }}">{{ t('保存本组配置') }}</button>
         </span>
       </div>
     </form>
@@ -156,4 +156,41 @@
     {% endif %}
   </section>
 </div>
+
+<dialog id="reset-all-settings" class="modal" aria-labelledby="reset-all-settings-title">
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
+    <h2 id="reset-all-settings-title">{{ t('恢复默认配置') }}</h2>
+    <p class="field__hint">{{ t('这会把所有系统配置恢复为代码默认值，并写入审计。') }}</p>
+    <form method="post" action="/settings/reset" class="form-actions form-actions--inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="key" value="">
+      <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+      <button class="btn btn--danger" type="submit">{{ t('确认恢复默认值') }}</button>
+    </form>
+  </div>
+</dialog>
+{% if active_group %}
+{% for row in active_group.rows %}
+<dialog id="reset-setting-{{ row.key }}" class="modal" aria-labelledby="reset-setting-title-{{ row.key }}">
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
+    <h2 id="reset-setting-title-{{ row.key }}">{{ t('恢复单项默认值') }}</h2>
+    <p class="field__hint">{{ t('这会把该项恢复为代码默认值，并写入审计。') }}</p>
+    <dl class="summary">
+      <div><dt>{{ t('当前') }}</dt><dd>{{ row.value }}</dd></div>
+      <div><dt>{{ t('默认') }}</dt><dd>{{ row.default }}</dd></div>
+    </dl>
+    <form method="post" action="/settings/reset" class="form-actions form-actions--inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="key" value="{{ row.key }}">
+      <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+      <button class="btn btn--danger" type="submit">{{ t('确认恢复该项默认值') }}</button>
+    </form>
+  </div>
+</dialog>
+{% endfor %}
+{% endif %}
 {% endblock %}

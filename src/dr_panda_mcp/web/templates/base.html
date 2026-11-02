@@ -19,6 +19,7 @@
         <span class="brand__sub">{{ t('MCP 配置台') }}</span>
       </a>
 
+      {% if show_nav %}
       <nav class="tabs" aria-label="{{ t('主导航') }}">
         <a class="tab{% if nav_active == 'targets' %} is-active{% endif %}" href="/"
            {% if nav_active == 'targets' %}aria-current="page"{% endif %}>{{ t('排查目标') }}</a>
@@ -27,6 +28,7 @@
         <a class="tab{% if nav_active == 'me' %} is-active{% endif %}" href="/me"
            {% if nav_active == 'me' %}aria-current="page"{% endif %}>{{ t('我的') }}</a>
       </nav>
+      {% endif %}
 
       <div class="topbar__side">
         <span class="chip" title="{{ t('当前版本') }}">v{{ app_version }}</span>
@@ -91,6 +93,7 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  <script src="/static/app.js?v={{ app_script_version }}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

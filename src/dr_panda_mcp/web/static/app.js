@@ -18,9 +18,17 @@
 
   document.querySelectorAll("[data-dialog-close]").forEach((control) => {
     control.addEventListener("click", (event) => {
-      event.preventDefault();
       const dialog = control.closest("dialog");
-      if (dialog) dialog.close();
+      // 弹窗已经关闭时不要拦截链接，否则“返回列表”会变成死按钮。
+      if (!dialog || !dialog.open) return;
+      event.preventDefault();
+      dialog.close();
+      if (
+        control.dataset.dialogClose === "navigate" &&
+        control instanceof HTMLAnchorElement
+      ) {
+        window.location.assign(control.href);
+      }
     });
   });
 
@@ -37,6 +45,17 @@
   document.querySelectorAll("dialog.modal").forEach((dialog) => {
     dialog.addEventListener("click", (event) => {
       if (event.target === dialog) dialog.close();
+    });
+  });
+
+  // 渐进增强：提交期间禁用提交按钮，避免重复提交；无 JS 时仍是普通表单。
+  document.querySelectorAll("form[data-submit-loading]").forEach((form) => {
+    form.addEventListener("submit", () => {
+      form.setAttribute("aria-busy", "true");
+      form.querySelectorAll('button[type="submit"]').forEach((button) => {
+        button.disabled = true;
+        if (button.dataset.loadingLabel) button.textContent = button.dataset.loadingLabel;
+      });
     });
   });
 })();

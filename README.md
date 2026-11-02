@@ -20,7 +20,7 @@
 
 ![配置台](docs/verify/assets/ui/light-index.png)
 
-M7 首次安装、网页登录、`/me` 账号页和 `/mcp` Bearer 已实现；SQLite/MySQL/PostgreSQL 配置库安装均已真实联调，见 [m7-01.md](docs/verify/m7-01.md)、[frontend-js-policy.md](docs/verify/frontend-js-policy.md)；排查组件真实上游连通性需要对应 extras 与只读凭证。
+M7 首次安装、网页登录、`/me` 账号页和 `/mcp` Bearer 已实现；忘记管理员密码可运行 `uv run dr-panda-mcp-admin reset-password`；SQLite/MySQL/PostgreSQL 配置库安装均已真实联调，见 [m7-01.md](docs/verify/m7-01.md)、[frontend-js-policy.md](docs/verify/frontend-js-policy.md)；排查组件真实上游连通性需要对应 extras 与只读凭证。
 
 ## 启动
 

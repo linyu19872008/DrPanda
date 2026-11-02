@@ -124,7 +124,7 @@
 
 <dialog id="token-create" class="modal{% if modal_open %} is-open{% endif %}" aria-labelledby="token-create-title"{% if modal_open %} open data-open-on-load="true"{% endif %}>
   <div class="modal__panel">
-    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    {% if modal_open %}<a class="modal__close" href="/me" data-dialog-close="navigate" aria-label="{{ t('关闭') }}">×</a>{% else %}<button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>{% endif %}
     {% if new_token %}
     <span class="badge badge--success">{{ t('Token 已生成') }}</span>
     <h2 id="token-create-title">{{ t('请立即保存') }}</h2>
@@ -141,20 +141,19 @@
       <p class="field__hint">{{ t('无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。') }}</p>
     </div>
     <div class="alert alert--warning"><div class="alert__body"><strong>{{ t('只显示一次') }}</strong><span class="alert__detail">{{ t('请把它配置到对应客户端；丢失后只能删除并重新生成。') }}</span></div></div>
-    <a class="btn btn--primary" href="/me" data-dialog-close>{{ t('返回 Token 列表') }}</a>
     {% else %}
     <h2 id="token-create-title">{{ t('生成新 Token') }}</h2>
     <p class="field__hint">{{ t('名称可选，用于区分 Cursor、Codex 等客户端。') }}</p>
     {% if modal_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(modal_error) }}</strong></div></div>{% endif %}
-    <form method="post" action="/me/tokens" class="profile-form">
+    <form method="post" action="/me/tokens" class="profile-form" data-submit-loading>
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <div class="field">
         <label class="field__label" for="token-name">{{ t('Token 名称（可选）') }}</label>
         <input class="input" id="token-name" name="name" maxlength="64" value="{{ token_name }}" placeholder="{{ t('例如 Cursor') }}">
       </div>
       <div class="form-actions form-actions--inline">
-        <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
-        <button class="btn btn--primary" type="submit">{{ t('生成 Token') }}</button>
+        {% if modal_open %}<a class="btn btn--secondary" href="/me" data-dialog-close="navigate">{{ t('取消') }}</a>{% else %}<button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>{% endif %}
+        <button class="btn btn--primary" type="submit" data-loading-label="{{ t('生成中…') }}">{{ t('生成 Token') }}</button>
       </div>
     </form>
     {% endif %}
@@ -162,6 +161,5 @@
 </dialog>
 {% endblock %}
 {% block scripts %}
-<script src="/static/app.js?v={{ app_script_version }}" defer></script>
 {% if new_token %}<script src="/static/copy-token.js?v={{ script_version }}" defer></script>{% endif %}
 {% endblock %}

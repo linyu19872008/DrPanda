@@ -83,6 +83,9 @@ async def test_setup_wizard_creates_admin_and_install_state(tmp_path: Path) -> N
         )
         assert finished.status_code == 200
         assert "MCP token" in finished.text
+        assert 'id="copy-mcp-token"' in finished.text
+        assert 'src="/static/copy-token.js' in finished.text
+        assert "无 JS 时可点击 Token 全选" in finished.text or "Without JS, click the token" in finished.text
         home = await client.get("/")
         assert home.status_code == 200
         assert "Targets" in home.text
@@ -226,7 +229,7 @@ async def test_install_state_is_encrypted(tmp_path: Path) -> None:
 async def test_mcp_bearer_initializes_with_auth(tmp_path: Path) -> None:
     runtime, cfg, key, token = await _auth_runtime(tmp_path)
     app = create_app(cfg, runtime, auth_required=True, session_key=key)
-    inner = app.app.app  # CSRF -> Auth -> FastMCP
+    inner = app.app.app.app  # NotFound -> CSRF -> Auth -> FastMCP
     try:
         async with (
             inner.router.lifespan_context(inner),
@@ -362,6 +365,7 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
             assert 'src="/static/copy-token.js' in created.text
             assert 'id="token-create"' in created.text
             assert 'data-open-on-load="true"' in created.text
+            assert '<a class="modal__close" href="/me"' in created.text
             assert "无 JS 时可点击 Token 全选" in created.text or "Without JS, click the token" in created.text
             import re
             match = re.search(r'<pre id="mcp-token-value" class="mono setup-secret">([^<]+)</pre>', created.text)
@@ -558,8 +562,121 @@ async def test_me_uses_dialog_with_no_js_fallbacks(tmp_path: Path) -> None:
         assert 'href="/me/tokens/new"' in me.text
         assert 'src="/static/app.js' in me.text
         assert new_page.status_code == 200
-        assert "<script" not in new_page.text
+        assert 'src="/static/app.js' in new_page.text
+        assert new_page.text.count("<script") == 1
         assert script.status_code == 200
         assert "showModal" in script.text
+    finally:
+        await runtime.close()
+
+
+async def test_login_hides_primary_navigation(tmp_path: Path) -> None:
+    runtime, cfg, _key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            login = await client.get("/login")
+        assert login.status_code == 200
+        assert 'class="tabs"' not in login.text
+        assert "Targets" not in login.text
+    finally:
+        await runtime.close()
+
+
+async def test_unknown_get_uses_html_404(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            response = await client.get("/does-not-exist")
+        assert response.status_code == 404
+        assert "页面不存在" in response.text or "Page not found" in response.text
+        assert "error-page" in response.text
+    finally:
+        await runtime.close()
+
+
+async def test_csrf_failure_returns_html_error(tmp_path: Path) -> None:
+    runtime, cfg, _key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            response = await client.post("/settings", data={"audit_retention_days": "30"})
+        assert response.status_code == 403
+        assert "error-page" in response.text
+        assert "页面已过期" in response.text or "Request expired" in response.text
+    finally:
+        await runtime.close()
+
+
+async def test_duplicate_token_name_rejected(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            first = await client.post("/me/tokens", data={"_csrf": csrf, "name": "same-name"})
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            second = await client.post("/me/tokens", data={"_csrf": csrf, "name": "same-name"})
+        assert first.status_code == 200
+        assert second.status_code == 400
+        assert "Token name already exists" in second.text or "名称已存在" in second.text
+    finally:
+        await runtime.close()
+
+
+async def test_local_admin_password_reset_helper(tmp_path: Path) -> None:
+    from dr_panda_mcp.admin import reset_admin_password
+
+    runtime, _cfg, _key, _ = await _auth_runtime(tmp_path)
+    try:
+        await reset_admin_password(runtime, "newpass88")
+        user = await auth.get_user_by_username(runtime.session_factory, "admin")
+        assert user is not None
+        assert user.auth_version == 2
+        assert await auth.authenticate(runtime.session_factory, "admin", "newpass88")
+    finally:
+        await runtime.close()
+
+
+async def test_token_result_close_links_navigate(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            created = await client.post("/me/tokens", data={"_csrf": csrf, "name": "close-test"})
+        assert created.status_code == 200
+        assert 'data-dialog-close="navigate"' in created.text
+        assert '返回 Token 列表' not in created.text
+        assert 'Back to token list' not in created.text
     finally:
         await runtime.close()

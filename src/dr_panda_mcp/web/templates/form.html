@@ -39,7 +39,7 @@
 {% endif %}
 
 <div class="form-layout">
-  <form class="form-main" method="post"
+  <form class="form-main" method="post" data-submit-loading
         action="{{ '/targets' if mode == 'create' else '/targets/' ~ existing.id }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     {% if mode == "create" %}<input type="hidden" name="type" value="{{ spec.type }}">{% endif %}
@@ -108,7 +108,7 @@
 
     <div class="form-actions">
       <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>
-      <button class="btn btn--primary" type="submit">{{ t("创建目标") if mode == "create" else t("保存修改") }}</button>
+      <button class="btn btn--primary" type="submit" data-loading-label="{{ t('保存中…') }}">{{ t("创建目标") if mode == "create" else t("保存修改") }}</button>
     </div>
   </form>
 

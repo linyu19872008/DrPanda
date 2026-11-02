@@ -62,6 +62,7 @@ def render(
             "language_options": i18n.language_options(),
             "csrf_token": csrf_token,
             "current_user": auth.current_user(),
+            "show_nav": path != "/login",
             "nav_active": (
                 "me"
                 if path.startswith("/me")

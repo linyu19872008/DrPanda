@@ -498,7 +498,10 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
         css = await client.get("/static/app.css")
 
     for page in pages:
-        assert "<script" not in page.text
+        # 只允许全局渐进增强 app.js；不允许内联脚本或其他第三方脚本。
+        assert page.text.count("<script") == 1
+        assert 'src="/static/app.js' in page.text
+        assert "<script>" not in page.text
     assert len(css.content) < 42_000
 
 
@@ -921,3 +924,17 @@ async def test_english_validation_errors_are_translated(runtime: Runtime) -> Non
     assert "Name is required" in response.text
     assert "Port must be an integer" in response.text
     assert not [c for c in re.findall(r"[\u4e00-\u9fff][^<>]*", response.text) if c.strip().strip('"') not in {"简体中文", "中文"}]
+
+
+async def test_destructive_confirm_dialogs_markup(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mysql"])
+        index = await client.get("/")
+        settings = await client.get("/settings?section=runtime")
+
+    assert 'data-dialog-open="delete-target-' in index.text
+    assert '<dialog id="delete-target-' in index.text
+    assert 'href="/targets/1/delete"' in index.text
+    assert 'data-dialog-open="reset-all-settings"' in settings.text
+    assert '<dialog id="reset-all-settings"' in settings.text
+    assert 'data-dialog-open="reset-setting-audit_retention_days"' in settings.text

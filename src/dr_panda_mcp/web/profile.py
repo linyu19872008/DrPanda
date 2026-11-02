@@ -126,6 +126,17 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
                 token_name=raw_name,
                 status_code=400,
             )
+        if name is not None and await auth.mcp_token_name_exists(
+            runtime.session_factory, profile.user.id, name
+        ):
+            return await _render_me_with_tokens(
+                request,
+                profile,
+                modal_open=True,
+                modal_error="Token 名称已存在，请换一个",
+                token_name=name,
+                status_code=400,
+            )
         token = auth.generate_token()
         await auth.create_mcp_token(
             runtime.session_factory,
