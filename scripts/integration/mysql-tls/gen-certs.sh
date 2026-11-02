@@ -2,7 +2,6 @@
 # 仅为本地联调生成 MySQL TLS 测试证书；不要用于真实环境。
 set -euo pipefail
 DIR="${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}"
-rm -rf "$DIR"
 mkdir -p "$DIR"
 cd "$DIR"
 
@@ -39,6 +38,19 @@ EOF
 openssl x509 -req -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
   -out client-cert.pem -days 3650 -sha256 -extfile client.cnf 2>/dev/null
 
+# MongoDB TLS 服务端证书（证书与私钥合并给 mongod）
+openssl genrsa -out mongo-server-key.pem 2048 2>/dev/null
+openssl req -new -key mongo-server-key.pem -subj "/CN=drpanda-mongo" -out mongo-server.csr 2>/dev/null
+cat > mongo-san.cnf <<EOF
+subjectAltName=DNS:localhost,IP:127.0.0.1
+extendedKeyUsage=serverAuth
+EOF
+openssl x509 -req -in mongo-server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+  -out mongo-server-cert.pem -days 3650 -sha256 -extfile mongo-san.cnf 2>/dev/null
+cat mongo-server-cert.pem mongo-server-key.pem > mongo-server.pem
+cat client-cert.pem client-key.pem > client.pem
+chmod 644 mongo-server.pem client.pem
+
 chmod 644 ca.pem server-cert.pem server-key.pem es-server-cert.pem es-server-key.pem client-cert.pem
 chmod 600 client-key.pem
-echo "generated MySQL/Elasticsearch TLS + mTLS client certs in $DIR"
+echo "generated MySQL/Elasticsearch/MongoDB TLS + mTLS client certs in $DIR"

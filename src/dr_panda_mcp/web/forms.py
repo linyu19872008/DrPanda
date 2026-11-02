@@ -86,17 +86,49 @@ TYPE_SPECS: dict[str, TypeSpec] = {
         "mongo",
         "Mongo",
         (
+            Field(
+                "auth_mode",
+                "认证方式",
+                "select",
+                required=True,
+                default="none",
+                choices=("none", "password", "uri"),
+                help="none=无认证；password=用户名密码；uri=完整连接串（SRV/X.509/TLS 等高级选项）。",
+            ),
             Field("host", "主机", "text"),
             Field("port", "端口", "int", default=27017),
             Field("user", "用户", "text"),
             Field("auth_source", "认证库", "text", default="admin"),
+            Field("tls", "启用 TLS", "bool", default=False),
+            Field(
+                "ca_pem",
+                "CA 证书 PEM（可选，私有 CA 时填写）",
+                "pem",
+                help="配置后必须启用 TLS。",
+            ),
             Field("allowed_dbs", "允许的库（一行一个，必须显式列）", "list", required=True),
         ),
         (
-            SecretField("uri", "连接 URI（含凭证，留空则用主机方式）"),
-            SecretField("password", "密码"),
+            SecretField(
+                "uri",
+                "连接 URI（auth_mode=uri 时必填，含凭证）",
+                help="完整 mongodb:// 或 mongodb+srv:// URI；含凭证，加密保存。",
+            ),
+            SecretField("password", "密码（auth_mode=password 时必填）"),
+            SecretField(
+                "client_cert",
+                "客户端证书 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端证书，与私钥必须同时提供；不加密的私钥。",
+            ),
+            SecretField(
+                "client_key",
+                "客户端私钥 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。",
+            ),
         ),
-        "find 必须带过滤条件；聚合只允许读阶段且 $group / $lookup 前要有 $match。",
+        "选择认证方式；无认证实例选 none。find 必须带过滤条件，聚合只允许读阶段且 $group / $lookup 前要有 $match。",
     ),
     "elasticsearch": TypeSpec(
         "elasticsearch",
@@ -226,6 +258,9 @@ def initial_values(spec: TypeSpec, target: Target | None = None) -> dict[str, st
         "enabled": "on" if (target is None or target.enabled) else "",
     }
     options = target.options if target else {}
+    if spec.type == "mongo" and target is not None and "auth_mode" not in options:
+        options = dict(options)
+        options["auth_mode"] = _infer_mongo_auth_mode(target)
     for field in spec.options:
         current = options.get(field.key, field.default)
         values[field.key] = _as_text(field, current)
@@ -310,11 +345,9 @@ def _cross_validate(
     form: Mapping[str, Any],
 ) -> None:
     if spec.type == "mongo":
-        has_uri = bool(secrets_set.get("uri")) or bool(
-            existing and "uri" in existing.secret_fields and "uri" not in secrets_clear
+        _validate_mongo_auth(
+            options, secrets_set, secrets_clear, existing, errors
         )
-        if not has_uri and not options.get("host"):
-            errors["host"] = "Mongo 需要填写连接 URI 或主机"
     if spec.type == "elasticsearch":
         password = secrets_set.get("password") or (
             existing and "password" in existing.secret_fields and "password" not in secrets_clear
@@ -325,7 +358,7 @@ def _cross_validate(
         has_user_auth = bool(options.get("username")) and bool(password)
         if has_user_auth == bool(api_key):
             errors["_form"] = "Elasticsearch 需要「用户名 + 密码」或 API Key，二选一"
-    if spec.type in {"mysql", "elasticsearch"}:
+    if spec.type in {"mysql", "elasticsearch", "mongo"}:
         cert = _secret_present(existing, secrets_set, secrets_clear, "client_cert")
         key = _secret_present(existing, secrets_set, secrets_clear, "client_key")
         if cert != key:
@@ -335,6 +368,10 @@ def _cross_validate(
                 errors["ssl"] = "配置客户端证书时必须启用 SSL"
             if spec.type == "elasticsearch" and not options.get("verify_tls"):
                 errors["verify_tls"] = "配置客户端证书时必须保持 TLS 校验开启"
+            if spec.type == "mongo" and not options.get("tls"):
+                errors["tls"] = "配置客户端证书时必须启用 TLS"
+    if spec.type == "mongo" and options.get("ca_pem") and not options.get("tls"):
+        errors["tls"] = "配置 CA 证书时必须启用 TLS"
     if spec.type == "mysql" and options.get("ca_pem") and not options.get("ssl"):
         errors["ssl"] = "配置 CA 证书时必须启用 SSL"
     if spec.type == "elasticsearch" and options.get("ca_pem") and not options.get("verify_tls"):
@@ -351,6 +388,48 @@ def _cross_validate(
                 errors["default_window_minutes"] = "默认时间窗不能大于最大时间窗"
             if not 1 <= max_window <= 1440:
                 errors["max_window_minutes"] = "最大时间窗必须在 1–1440 分钟"
+
+
+def _infer_mongo_auth_mode(target: Target) -> str:
+    if target.secret.get("uri") or "uri" in target.secret_fields:
+        return "uri"
+    if target.options.get("user") or "password" in target.secret_fields:
+        return "password"
+    return "none"
+
+
+def _validate_mongo_auth(
+    options: Mapping[str, Any],
+    secrets_set: Mapping[str, str],
+    secrets_clear: set[str],
+    existing: Target | None,
+    errors: dict[str, str],
+) -> None:
+    mode = str(options.get("auth_mode") or "none")
+    has_uri = _secret_present(existing, secrets_set, secrets_clear, "uri")
+    has_password = _secret_present(existing, secrets_set, secrets_clear, "password")
+    user = str(options.get("user") or "").strip()
+    host = str(options.get("host") or "").strip()
+
+    if mode == "none":
+        if has_uri or user or has_password:
+            errors["_form"] = "auth_mode=none 时不能填写 URI、用户或密码"
+        if not host:
+            errors["host"] = "无认证模式需要填写主机"
+    elif mode == "password":
+        if has_uri:
+            errors["_form"] = "auth_mode=password 时不能填写连接 URI"
+        if not host:
+            errors["host"] = "密码模式需要填写主机"
+        if not user:
+            errors["user"] = "密码模式需要填写用户"
+        if not has_password:
+            errors["secret_password"] = "密码模式需要填写密码"
+    elif mode == "uri":
+        if not has_uri:
+            errors["secret_uri"] = "URI 模式需要填写连接 URI"
+        if host or user or has_password:
+            errors["_form"] = "auth_mode=uri 时 host、用户、密码必须留空"
 
 
 def _secret_present(

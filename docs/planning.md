@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.14 |
+| 版本 | v0.15 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -32,6 +32,7 @@
 | v0.12 | 2026-11-02 | 硬化：MySQL 可执行注释拒绝、工具级并发/超时、截断哨兵、必填密钥、SSL、重定向与若干连接器修复；文档与验证口径同步 |
 | v0.13 | 2026-11-02 | 目标级 CA：MySQL / Elasticsearch 增加可选 `ca_pem`，私有 CA 不再依赖进程级 `SSL_CERT_FILE` |
 | v0.14 | 2026-11-02 | mTLS：MySQL / Elasticsearch 增加可选客户端证书与私钥（加密字段），支持双向 TLS |
+| v0.15 | 2026-11-02 | Mongo 认证模式：none/password/uri，旧 target 自动推断；增加 TLS/CA/客户端证书字段 |
 
 ## 1. 目标
 
@@ -706,12 +707,17 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 | 字段 | 键 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
-| URI | `secret.uri` | 二选一 | — | 含凭证的 URI 一律视为密钥 |
-| 主机 | `options.host` | 二选一 | — | 与 URI 互斥 |
+| 认证方式 | `options.auth_mode` | 是 | none | none / password / uri；旧 target 缺失时按 uri→password→none 推断 |
+| URI | `secret.uri` | 条件 | — | auth_mode=uri 必填；含凭证，加密保存 |
+| 主机 | `options.host` | 条件 | — | none/password 模式必填；uri 模式必须留空 |
 | 端口 | `options.port` | 否 | 27017 | |
 | 用户 | `options.user` | 否 | — | 与 URI 互斥 |
-| 密码 | `secret.password` | 否 | — | 与 URI 互斥 |
-| 认证库 | `options.auth_source` | 否 | admin | |
+| 密码 | `secret.password` | 条件 | — | password 模式必填；uri 模式必须留空 |
+| 认证库 | `options.auth_source` | 否 | admin | password 模式使用 |
+| 是否 TLS | `options.tls` | 否 | false | |
+| CA 证书 | `options.ca_pem` | 否 | 空 | PEM；配置时必须启用 TLS |
+| 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥同时提供 |
+| 客户端私钥 | `secret.client_key` | 否 | 空 | PEM；加密保存，不支持带口令私钥 |
 | 允许的库 | `options.allowed_dbs` | 是 | — | 空表示拒绝全部，必须显式列 |
 
 `find` 必须带过滤条件，空条件视为扫全表并拒绝。聚合设置 `maxTimeMS`。允许的阶段和写命令的拒绝见 6.3。

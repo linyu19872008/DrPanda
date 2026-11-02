@@ -17,6 +17,7 @@ post --data-urlencode type=mysql --data-urlencode name=drpanda-mysql --data-urle
   --data-urlencode secret_password=drpanda_mysql_ro_pw \
   --data-urlencode timeout_s=10 --data-urlencode max_rows=100 --data-urlencode max_bytes=102400
 post --data-urlencode type=mongo --data-urlencode name=drpanda-mongo --data-urlencode enabled=on \
+  --data-urlencode auth_mode=password \
   --data-urlencode host=127.0.0.1 --data-urlencode port=17017 --data-urlencode user=drpanda_ro \
   --data-urlencode auth_source=drpanda --data-urlencode allowed_dbs=drpanda \
   --data-urlencode secret_password=drpanda_mongo_ro_pw \

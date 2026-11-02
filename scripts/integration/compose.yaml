@@ -45,6 +45,46 @@ services:
       timeout: 5s
       retries: 40
 
+  mongo-noauth:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo-noauth
+    restart: "no"
+    ports:
+      - "17018:27017"
+    volumes:
+      - drpanda-mongo-noauth-data:/data/db
+      - ./mongo-init-noauth.js:/docker-entrypoint-initdb.d/01-init.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  mongo-tls:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo-tls
+    restart: "no"
+    command:
+      - mongod
+      - --tlsMode
+      - requireTLS
+      - --tlsCertificateKeyFile
+      - /certs/mongo-server.pem
+      - --tlsCAFile
+      - /certs/ca.pem
+      - --tlsAllowConnectionsWithoutCertificates
+      - --bind_ip_all
+    ports:
+      - "17019:27017"
+    volumes:
+      - drpanda-mongo-tls-data:/data/db
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --tls --tlsCAFile /certs/ca.pem --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
     container_name: drpanda-elasticsearch
@@ -138,6 +178,30 @@ services:
       timeout: 5s
       retries: 50
 
+  mongo-mtls:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo-mtls
+    restart: "no"
+    command:
+      - mongod
+      - --tlsMode
+      - requireTLS
+      - --tlsCertificateKeyFile
+      - /certs/mongo-server.pem
+      - --tlsCAFile
+      - /certs/ca.pem
+      - --bind_ip_all
+    ports:
+      - "17020:27017"
+    volumes:
+      - drpanda-mongo-mtls-data:/data/db
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --tls --tlsCAFile /certs/ca.pem --tlsCertificateKeyFile /certs/client.pem --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
   redis:
     image: public.ecr.aws/docker/library/redis:7.2-alpine
     container_name: drpanda-redis
@@ -173,6 +237,9 @@ services:
 volumes:
   drpanda-mysql-data:
   drpanda-mongo-data:
+  drpanda-mongo-noauth-data:
+  drpanda-mongo-tls-data:
+  drpanda-mongo-mtls-data:
   drpanda-es-data:
   drpanda-es2-data:
   drpanda-es-tls-data:

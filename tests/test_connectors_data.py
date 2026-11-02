@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import types
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -308,7 +309,15 @@ def _mongo_target() -> Target:
 async def test_mongo_find_limit_and_aggregate_tail(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = _FakeMotor()
     client = mongo_module.connector.create_client(_mongo_target())
-    monkeypatch.setattr(client, "_client", lambda: fake)
+
+    @asynccontextmanager
+    async def fake_connected():
+        try:
+            yield fake
+        finally:
+            fake.close()
+
+    monkeypatch.setattr(client, "_connected", fake_connected)
 
     rows = await client.find(
         "app", "orders", {"status": "paid"}, {"_id": 0}, {"ts": -1}, 5
@@ -398,3 +407,57 @@ def test_es_client_uses_target_ca() -> None:
     )
     verify = _tls_verify(target)
     assert isinstance(verify, ssl_module.SSLContext)
+
+
+def test_mongo_auth_modes() -> None:
+    from dr_panda_mcp.connectors.mongo import _auth_mode, _build_uri
+
+    no_auth = make_target(
+        type_="mongo", options={"host": "mongo", "port": 27017, "auth_mode": "none"}
+    )
+    assert _auth_mode(no_auth) == "none"
+    assert _build_uri(no_auth) == "mongodb://mongo:27017/"
+
+    uri = make_target(
+        type_="mongo",
+        options={"auth_mode": "uri"},
+        secret={"uri": "mongodb+srv://cluster/?retryWrites=true"},
+    )
+    assert _auth_mode(uri) == "uri"
+    assert _build_uri(uri).startswith("mongodb+srv://")
+
+    legacy = make_target(
+        type_="mongo",
+        options={"host": "mongo", "port": 27017, "user": "ro"},
+        secret={"password": "pw"},
+    )
+    assert _auth_mode(legacy) == "password"
+    assert "ro:pw@mongo" in _build_uri(legacy)
+
+    with pytest.raises(errors.UpstreamUnavailable):
+        _build_uri(make_target(type_="mongo", options={"auth_mode": "password", "host": "mongo"}))
+
+
+def test_mongo_tls_kwargs_use_target_ca_and_client_pair() -> None:
+    from dr_panda_mcp.connectors.mongo import _MongoClient
+
+    ca = "-----BEGIN CERTIFICATE-----\nca\n-----END CERTIFICATE-----"
+    cert = "-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----"
+    key = "-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"
+    target = make_target(
+        type_="mongo",
+        options={"auth_mode": "none", "host": "mongo", "tls": True, "ca_pem": ca},
+        secret={"client_cert": cert, "client_key": key},
+    )
+    client = _MongoClient(target)
+    kwargs, paths = client._tls_kwargs()
+    try:
+        assert kwargs["tls"] is True
+        assert kwargs["tlsCAFile"].endswith(".ca.pem")
+        assert kwargs["tlsCertificateKeyFile"].endswith(".client.pem")
+        assert len(paths) == 2
+    finally:
+        from dr_panda_mcp.connectors.mongo import _unlink
+
+        for path in paths:
+            _unlink(path)

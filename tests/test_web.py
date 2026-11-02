@@ -570,3 +570,44 @@ async def test_client_cert_pair_validation(runtime: Runtime) -> None:
     assert target is not None
     assert {"client_cert", "client_key"} <= target.secret_fields
     assert target.secret["client_key"].startswith("-----BEGIN PRIVATE KEY-----")
+
+
+async def test_mongo_auth_mode_validation(runtime: Runtime) -> None:
+    base = {
+        "type": "mongo",
+        "name": "mongo-auth-target",
+        "enabled": "on",
+        "port": "27017",
+        "auth_source": "admin",
+        "allowed_dbs": "app",
+        **COMMON,
+    }
+
+    async with _client(runtime) as client:
+        none_with_user = dict(base)
+        none_with_user["user"] = "ro"
+        rejected = await client.post("/targets", data=none_with_user)
+
+        password_missing = dict(base)
+        password_missing["auth_mode"] = "password"
+        password_missing["host"] = "127.0.0.1"
+        password_missing["user"] = "ro"
+        missing = await client.post("/targets", data=password_missing)
+
+        password_ok = dict(password_missing)
+        password_ok["secret_password"] = "pw"
+        created = await client.post("/targets", data=password_ok)
+        target = await runtime.store.get("mongo-auth-target")
+
+        uri_with_host = dict(base)
+        uri_with_host["auth_mode"] = "uri"
+        uri_with_host["host"] = "127.0.0.1"
+        uri_with_host["secret_uri"] = "mongodb://127.0.0.1:27017/"
+        conflict = await client.post("/targets", data=uri_with_host)
+
+    assert rejected.status_code == 400 and "不能填写" in rejected.text
+    assert missing.status_code == 400 and "密码" in missing.text
+    assert created.status_code == 303
+    assert target is not None and target.options["auth_mode"] == "password"
+    assert target.secret_fields == frozenset({"password"})
+    assert conflict.status_code == 400 and "必须留空" in conflict.text
