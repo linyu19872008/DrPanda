@@ -1,64 +1,131 @@
 # Dr Panda MCP
 
-线上排查用的只读 MCP 服务。人在网页里登记 MySQL、Mongo、Elasticsearch、Redis、GitLab、RabbitMQ、Kafka、CLS 的地址、凭证与允许访问的范围；Cursor、Codex、DeepSeek Harness 通过 Streamable HTTP 调用 `/mcp`，按 target 名使用只读排查工具。模型不能自己传入主机、账号或密码。
+面向线上故障排查的**只读 MCP 服务**。
 
-## 当前进度
+在网页里登记 MySQL、MongoDB、Elasticsearch、Redis、GitLab、RabbitMQ、Kafka、CLS 的地址、凭证和允许访问的范围；Cursor、Codex、DeepSeek Harness 等 MCP 客户端通过 Streamable HTTP 调用 `/mcp`，模型只能按 `target` 名称使用只读工具。
 
-已完成 **M0–M7 基础**（工程地基、配置台、日志到代码、数据面、消息面、首次安装与登录认证）：
-
-- 进程可启动，提供 `/healthz`（含配置库连通性）与 `/mcp` 端点，Host/Origin 校验与端口检查就位。
-- 配置库包含 `users` / `targets` / `audit` / `settings` / `settings_history`，通过 Alembic 迁移创建；目标读写、密钥加密、系统配置校验、配置变更审计可用。
-- 新密钥首次启动自动生成；库中有密文但密钥缺失或不匹配时拒绝启动。
-- 八类组件都有只读闸门与最小只读探测（测试连接）；管理/变更命令由白名单拦截，高开销操作由危险清单拦截，二者都在建立连接之前判定。
-- 浏览器打开 `http://127.0.0.1:8111/` 可登记/编辑/停用/删除目标、测试连接、修改系统配置。
-- 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现），列表带统计/搜索/类型筛选，窄屏自动转卡片；采用服务端优先 + 局部 JS 渐进增强。
-- 首次启动进入安装向导：设置 admin 密码、选择 SQLite/MySQL/PostgreSQL 配置库并测试连接；安装完成后网页登录，`/mcp` 使用安装完成页显示的 Bearer Token；Token 丢失可在“我的”页面重新创建；支持多个 Token 和删除。
-- 默认只监听 `127.0.0.1` / `::1` / `localhost`；远程访问需 `DR_PANDA_ALLOW_REMOTE=1` + HTTPS `DR_PANDA_PUBLIC_URL`，且必须先在本机完成安装。
-- 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
-- 已用 Docker 真实联调 MySQL / MongoDB / Elasticsearch / Redis / RabbitMQ：19 个工具冒烟 + 69 条参数/边界/失败矩阵全部通过；MySQL TLS（含 target 级 CA 与 mTLS）、ES 多 host failover/TLS/mTLS、Mongo 无认证/密码/URI/TLS/mTLS、X.509、replica set 均已通过。Kafka 镜像不可用、CLS/GitLab 缺凭证，尚未真实联调。
-- `/mcp` 已提供 28 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个；RabbitMQ 2 个；Kafka 3 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
+**模型不能自行传入主机、账号或密码。**
 
 ![配置台](docs/verify/assets/ui/light-index.png)
 
-M7 首次安装、网页登录、`/me` 账号页和 `/mcp` Bearer 已实现；忘记管理员密码可运行 `uv run dr-panda-mcp-admin reset-password`；SQLite/MySQL/PostgreSQL 配置库安装均已真实联调，见 [m7-01.md](docs/verify/m7-01.md)、[frontend-js-policy.md](docs/verify/frontend-js-policy.md)；排查组件真实上游连通性需要对应 extras 与只读凭证。
+---
 
-## 启动
+## 为什么用它
 
-```bash
-uv sync                      # 安装依赖（默认 SQLite，开箱可用）
-uv run dr-panda-mcp          # 默认监听 127.0.0.1:8111
-curl -fsS http://127.0.0.1:8111/healthz
-# 浏览器打开 http://127.0.0.1:8111/：首次进入安装向导，完成后登录
-# {"ok": true, "version": "0.1.0", "db": "ok"}
-```
+线上排障时，模型经常需要同时看日志、代码、数据库、缓存和消息堆积。直接把生产凭证交给模型风险太高；只读代理、临时截图、人工代查又难以复现和审计。
 
-首次启动不会预置管理员：先进入安装向导，设置 admin 密码并选择配置库；完成后创建 `data/install.json`、`data/install.key`、`data/session.key` 与配置库加密密钥（权限 0600）。旧配置库可继续选择原 SQLite 路径以保留数据。
+Dr Panda MCP 把“能查什么”提前收敛成三类边界：
 
-MySQL / PostgreSQL 作为配置库时需要额外 extras：
+1. **连接边界**：只允许访问网页里登记过的 target；
+2. **操作边界**：只执行只读白名单，管理命令与高开销查询在连接前拒绝；
+3. **身份边界**：网页登录和 MCP Bearer Token 独立，所有调用记录到真实管理员。
 
-```bash
-uv sync --extra mysql        # asyncmy
-uv sync --extra postgres     # asyncpg
-# 排查组件按需安装：mysql / mongo / redis / kafka / cls（GitLab 用 httpx）
-```
+---
 
-## 环境变量
+## 当前状态
 
-| 变量 | 默认值 | 说明 |
+M0–M7 已落地并通过测试：
+
+| 阶段 | 内容 | 状态 |
 |---|---|---|
-| `DR_PANDA_HOST` | `127.0.0.1` | 监听网卡；只在本机或受控内网使用，不要暴露到公网 |
-| `DR_PANDA_PORT` | `8111` | 网页与 `/mcp` 共用 |
-| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库 URL；首次安装后以 `data/install.json` 中选择的库为准 |
-| `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥，用于加密目标密钥；未设置时使用 `data/secret.key` |
-| `DR_PANDA_LOG_LEVEL` | `INFO` | 日志级别 |
-| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听；须先完成安装 |
-| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
+| M0–M2 | 工程地基、配置库、密钥加密、八类只读闸门 | 完成 |
+| M3 | 配置台网页、MCP `/mcp` 接入 | 完成 |
+| M4 | CLS 日志、GitLab 代码（5 个工具） | 完成 |
+| M5 | MySQL / Mongo / ES / Redis（17 个工具） | 完成 |
+| M6 | RabbitMQ / Kafka（5 个工具） | 完成 |
+| M7 | 首次安装、登录、多 Token、审计到人 | 完成 |
 
-**备份**：`data/secret.key`（或 `DR_PANDA_SECRET_KEY`）、`data/install.json`、`data/install.key`、`data/session.key` 与配置库同等重要。丢失加密密钥后已登记的密钥不可恢复；丢失 install 状态需恢复备份。SQLite 仅在存在 pending migration 时备份到 `data/backup/`，保留数量由系统配置 `backup_keep_count` 控制（默认 20，范围 1–20）。
+- 工具总数：**28**
+- 当前测试：**442 passed**，`ruff check .` 通过
+- 默认监听：`127.0.0.1:8111`
+- 首次安装支持 SQLite / MySQL / PostgreSQL 配置库
+- 前端采用服务端渲染；核心流程无 JS 可用，局部 JS 仅做渐进增强
+
+真实联调覆盖：
+
+- MySQL / MongoDB / Elasticsearch / Redis / RabbitMQ 已用 Docker 真实上游验证；
+- MySQL TLS/mTLS、target 级 CA、ES 多 host failover、Mongo 多种认证方式已覆盖；
+- Kafka、CLS、GitLab 工具代码和单测已完成，但**尚未用真实上游做端到端验收**。
+
+---
+
+## 快速开始
+
+### 环境
+
+- Python `>= 3.11`
+- [uv](https://docs.astral.sh/uv/)
+- 首次启动默认使用 SQLite，无需额外数据库
+
+```bash
+git clone <repo-url>
+cd dr-panda-mcp
+uv sync
+uv run dr-panda-mcp
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8111/
+```
+
+首次进入安装向导：
+
+1. 设置管理员密码（至少 8 位）；
+2. 选择配置库：SQLite（推荐本地使用）/ MySQL / PostgreSQL；
+3. 测试连接；
+4. 完成安装，保存安装完成页显示的 MCP Token。
+
+健康检查：
+
+```bash
+curl -fsS http://127.0.0.1:8111/healthz
+# {"ok":true,"version":"0.1.0","db":"ok"}
+```
+
+### 配置库额外依赖
+
+```bash
+uv sync --extra mysql       # MySQL 配置库：asyncmy
+uv sync --extra postgres    # PostgreSQL 配置库：asyncpg
+uv sync --all-extras        # 同时安装排查组件可选依赖
+```
+
+排查组件 extras：
+
+```bash
+uv sync --extra mongo
+uv sync --extra redis
+uv sync --extra kafka
+uv sync --extra cls
+```
+
+GitLab 使用 `httpx`，不需要额外 extra；RabbitMQ 使用 HTTP 管理接口。
+
+---
+
+## 首次安装会生成哪些文件
+
+安装完成后会在 `data/` 下生成：
+
+| 文件 | 作用 | 丢失后果 |
+|---|---|---|
+| `install.json` | 记录配置库 URL（加密） | 需恢复备份，否则无法自动找到配置库 |
+| `install.key` | 解密 `install.json` | 无法恢复安装状态 |
+| `session.key` | 网页 Session 签名密钥 | 所有网页 Session 失效，可重新登录 |
+| `secret.key` | 加密 target 密钥 | 已登记密钥不可恢复 |
+| `dr-panda.sqlite` | 默认 SQLite 配置库 | 丢失目标、审计和配置 |
+
+- 安装状态文件权限为 `0600`；
+- **备份配置库时必须同时备份 `secret.key`、`install.json`、`install.key`、`session.key`**；
+- 不要把 `data/` 提交到 Git。
+
+---
 
 ## 客户端接入
 
-三个客户端都配置 URL + Authorization header（stdio 仅用于本机调试）：
+在所有客户端中配置 MCP URL 和 Bearer Token：
 
 ```json
 {
@@ -66,55 +133,253 @@ uv sync --extra postgres     # asyncpg
     "drpanda": {
       "url": "http://127.0.0.1:8111/mcp",
       "headers": {
-        "Authorization": "Bearer <安装完成页显示的 MCP Token>"
+        "Authorization": "Bearer <在“我的”页面创建的 MCP Token>"
       }
     }
   }
 }
 ```
 
-- Cursor：写入其 MCP 配置文件，字段名以客户端版本为准。
-- Codex：`[mcp_servers.drpanda]` 下配置 `url` 与 header（字段名以客户端版本为准）。
-- DeepSeek Harness：`serverName` 用 `drpanda`，模型侧工具名形如 `mcp__drpanda__mysql_query`。
-- `/mcp` 未认证返回 401；网页登录 Session 不能代替 Bearer Token。
+### Cursor
 
-端口改过时，客户端 URL 使用同一个端口。
+把上面的 `mcpServers` 配置写入 Cursor 的 MCP 配置文件。
 
-## 登记目标
+### Codex
 
-每类目标登记一次，工具调用时只传 `target` 名。八种类型：`mysql`、`mongo`、`elasticsearch`、`redis`、`gitlab`、`rabbitmq`、`kafka`、`cls`。每类都需要填主机或地址、凭证、允许访问的范围（库、索引、topic、项目、vhost），范围只缩小可读边界。Mongo 需要显式选择认证方式：`none`（无认证）/ `password`（用户名密码）/ `uri`（完整连接串，适合 SRV、replica set、X.509 等高级选项）。
+```toml
+[mcp_servers.drpanda]
+url = "http://127.0.0.1:8111/mcp"
 
-MySQL / Elasticsearch 可额外填 `CA 证书 PEM`（`ca_pem`）用于私有 CA，证书是公开材料，不加密、不回显在列表；配置 CA 时 MySQL 必须启用 SSL、ES 必须保持 TLS 校验。需要双向 TLS 时可再填客户端证书与私钥（加密保存，必须成对提供，当前不支持带口令私钥）。名称只允许小写字母、数字与连字符，创建后不可改；密钥只存密文，不回显。
+[mcp_servers.drpanda.headers]
+Authorization = "Bearer <token>"
+```
 
-## 绝对只读与危险命令
+### DeepSeek Harness
 
-- 八个排查组件的所有调用（含网页"测试连接"）都只读；账号即使有写权限也不会被使用。
-- 只读白名单之外还有一条绝对规则：不执行管理/变更类命令，也不执行高开销操作（全表扫描、无界遍历、脚本执行、深度分页、大聚合等）。危险判定在建立连接之前完成，拒绝码 `DANGEROUS_OPERATION`。
-- 每次调用受超时、行数、字节与每 target 并发上限约束；结果被截断会明确标记。
+`serverName` 使用 `drpanda`，模型侧工具名形如：
+
+```text
+mcp__drpanda__mysql_query
+mcp__drpanda__cls_search
+mcp__drpanda__systems_status
+```
+
+说明：
+
+- `/mcp` 未携带有效 Bearer Token 时返回 `401`；
+- 网页登录 Session **不能**代替 MCP Token；
+- Token 只存哈希，完整值只在创建时显示一次；丢失只能删除后重新生成；
+- 修改端口后，客户端 URL 要同步修改。
+
+---
+
+## 登记目标与工具
+
+网页里每个目标登记一次，工具调用时只传 `target` 名称。
+
+| 类型 | 工具 |
+|---|---|
+| `mysql` | `mysql_tables`、`mysql_describe`、`mysql_query`、`mysql_explain`、`mysql_processlist` |
+| `mongo` | `mongo_collections`、`mongo_find`、`mongo_aggregate`、`mongo_stats` |
+| `elasticsearch` | `es_mapping`、`es_search`、`es_health`、`es_index_stats` |
+| `redis` | `redis_get`、`redis_scan`、`redis_info`、`redis_slowlog` |
+| `gitlab` | `gitlab_search_code`、`gitlab_get_file`、`gitlab_blame` |
+| `cls` | `cls_search`、`cls_context` |
+| `rabbitmq` | `rabbit_queues`、`rabbit_queue` |
+| `kafka` | `kafka_lag`、`kafka_offsets`、`kafka_peek` |
+| 全局 | `systems_status` |
+
+另有 `investigate_error` prompt，用于从错误现象开始组织排查路径。
+
+目标范围只能缩小可读边界：
+
+- MySQL：库 / 表；
+- MongoDB：库 / 集合；
+- Elasticsearch：索引；
+- Redis：key 前缀 / 命令范围；
+- GitLab：项目 / 分支；
+- RabbitMQ：vhost / queue；
+- Kafka：topic / partition；
+- CLS：日志主题与时间范围。
+
+目标名称只允许小写字母、数字和连字符，创建后不可修改。密钥只存密文，列表不回显。
+
+---
+
+## 安全模型
+
+### 绝对只读
+
+- 八类组件的所有工具（包括网页“测试连接”）只读；
+- 账号即使有写权限也不会被使用；
+- 只读白名单之外还有绝对危险规则：
+  - 管理/变更类命令；
+  - 无界扫描、大聚合、深度分页、脚本执行等；
+- 危险判定在建立连接之前完成，拒绝码 `DANGEROUS_OPERATION`；
+- 每次调用受超时、行数、字节和每 target 并发上限约束，截断会明确标记。
+
+### 认证与请求保护
+
+- 网页登录：管理员密码 + HMAC 签名 Session Cookie；
+- 表单：CSRF 双提交校验；
+- `/mcp`：独立 Bearer Token，只存 SHA-256 哈希；
+- Host/Origin 校验：拒绝异常 Origin；
+- 非 loopback 监听必须显式设置 `DR_PANDA_ALLOW_REMOTE=1` 和 HTTPS `DR_PANDA_PUBLIC_URL`；
+- 配置库变更写审计，审计 actor 为真实管理员。
+
+### 前端
+
+- Jinja2 服务端渲染；
+- 核心流程无 JS 可用；
+- 仅使用自托管、无依赖的小脚本：
+  - `app.js`：原生 `<dialog>`、表单加载态；
+  - `copy-token.js`：复制 Token；
+- 不引入前端框架、Node 构建链、第三方 CDN；
+- 无 JS 时提供独立表单/确认页或手动复制提示，不显示假按钮。
+
+详见 [frontend-js-policy.md](docs/verify/frontend-js-policy.md)。
+
+---
 
 ## 系统配置
 
-两项运行策略通过网页 `/settings` 修改，存在配置库中，改动即审计：
+登录后进入 `/settings` 修改。配置存在配置库中，带范围校验，修改即写审计和 `settings_history`。
 
-| 配置键 | 默认 | 范围 |
+| 配置键 | 默认 | 范围 | 说明 |
+|---|---:|---:|---|
+| `default_target_timeout_s` | 15 秒 | 1–120 | 新建目标默认超时 |
+| `default_target_max_rows` | 100 行 | 1–1000 | 新建目标默认行数 |
+| `default_target_max_bytes` | 102400 字节 | 4096–1048576 | 新建目标默认字节上限 |
+| `target_max_concurrency` | 10 | 1–50 | 每 target 并发上限 |
+| `audit_retention_days` | 90 天 | 1–3650 | 审计保留期 |
+| `audit_cleanup_interval_minutes` | 60 | 5–1440 | 审计清理间隔 |
+| `catalog_max_clients` | 32 | 4–128 | 进程内连接器缓存上限 |
+| `session_ttl_minutes` | 720 | 5–10080 | 网页 Session 有效期 |
+| `backup_keep_count` | 20 | 1–20 | SQLite 迁移前备份保留数量 |
+
+系统配置只能调整运行策略，**不能放宽只读规则、危险规则、密钥管理或目标范围**。
+
+---
+
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| `audit_retention_days` | 90 天 | 1–3650 |
-| `target_max_concurrency` | 10 | 1–50 |
+| `DR_PANDA_HOST` | `127.0.0.1` | 监听地址 |
+| `DR_PANDA_PORT` | `8111` | 网页与 `/mcp` 共用端口 |
+| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库 URL；安装完成后以 `install.json` 为准 |
+| `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥；未设置时使用 `data/secret.key` |
+| `DR_PANDA_LOG_LEVEL` | `INFO` | 日志级别 |
+| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听 |
+| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
 
-## 开发
+远程部署建议：
+
+- 使用 HTTPS 反向代理，并设置 `DR_PANDA_PUBLIC_URL`；
+- 不要直接暴露 `8111` 到公网；
+- 先在本机完成安装，再切换远程监听；
+- 反向代理的真实 TLS 环境仍需自行验收。
+
+---
+
+## 运维
+
+### 管理员密码重置
+
+本地执行：
 
 ```bash
-uv run pytest -q                  # 单元/契约/网页/工具测试
-uv run python scripts/smoke.py    # 冒烟：启动服务并探活
-uv run ruff check .               # 静态检查
+uv run dr-panda-mcp-admin reset-password
 ```
 
-测试使用临时 SQLite 与临时密钥，不连接真实线上系统，不使用真实凭证。
+重置后会递增 `auth_version`，所有现有网页 Session 失效；MCP Token 不受影响。
+
+### SQLite 备份
+
+- 仅在存在 pending Alembic migration 时自动备份；
+- 备份写入 `data/backup/`；
+- 保留数量由 `backup_keep_count` 控制；
+- 手动备份请同时复制配置库和四个密钥/安装文件。
+
+### 审计
+
+- 每次工具调用、目标变更、配置变更都写入 `audit`；
+- 审计清理默认 90 天保留，每小时检查一轮；
+- 清理只记日志，不写审计，避免自增。
+
+---
+
+## 开发与测试
+
+```bash
+uv sync --all-extras
+uv run pytest -q
+uv run ruff check .
+uv run python scripts/smoke.py
+```
+
+- 测试使用临时 SQLite 和临时密钥，不连接真实线上系统；
+- Docker 联调脚本在 `scripts/integration/`；
+- 当前全量：**442 passed**。
+
+### 项目结构
+
+```text
+src/dr_panda_mcp/
+  __init__.py         启动入口
+  config.py           环境变量与配置
+  setup.py            首次安装向导
+  admin.py            管理员本地维护命令
+  auth.py             密码、Session、CSRF、MCP Token
+  server.py           FastMCP、/mcp 与网页装配
+  runtime.py          引擎、迁移、密钥、ConfigStore
+  settings.py         系统配置默认值/范围/分组
+  connectors/         八类上游连接器
+  guards/             只读白名单与危险命令规则
+  tools/              MCP 工具实现与审计
+  prompts.py          investigate_error
+  web/                routes/templates/static/渲染
+  store/              SQLAlchemy 模型、仓储、Alembic 迁移
+tests/                单元、契约、网页、工具与迁移测试
+docs/                 规划、里程碑、UI 规范与验证记录
+scripts/              冒烟与 Docker 联调脚本
+```
+
+---
+
+## 已验证与未验证
+
+### 已验证
+
+- SQLite / MySQL / PostgreSQL 配置库安装；
+- 多 MCP Token 创建、复制、删除、分页；
+- 登录、Session、CSRF、登出与密码修改；
+- 目标增删改、启停、测试连接、密钥加密；
+- 系统配置保存、逐项/全局恢复默认、历史记录；
+- 明暗主题、中英文、1440/390 响应式布局；
+- MySQL / Mongo / ES / Redis / RabbitMQ Docker 真实上游；
+- 只读闸门、危险命令拒绝、超时/行数/字节限制。
+
+### 未验证 / 边界
+
+- Kafka 真实上游端到端（镜像不可用）；
+- CLS、GitLab 真实凭证端到端；
+- 反向代理后的真实 HTTPS/TLS 验收；
+- 多用户、RBAC、OAuth/OIDC、MFA；
+- 密码找回页面（仅提供本地 CLI 重置）；
+- `install.json` / `install.key` / `secret.key` 丢失后的自动恢复。
+
+未验证能力不会因为其他组件通过就视为可用。
+
+---
 
 ## 文档
 
-- [docs/planning.md](docs/planning.md)：方案与实现契约（接口、表结构、只读与危险规则、工具清单）
-- [docs/milestones.md](docs/milestones.md)：里程碑拆分与每个检查点的验证目标
-- [docs/ui-design.md](docs/ui-design.md)：配置台设计系统、主题机制与页面规格
-- [docs/verify/](docs/verify/)：各里程碑的验证记录；[hardening-02.md](docs/verify/hardening-02.md) 记录 P0 安全收口；[settings-01.md](docs/verify/settings-01.md) 记录系统配置分组；[settings-02.md](docs/verify/settings-02.md) 记录真实 Chrome 截图/键盘走查；[sqlite-wal-01.md](docs/verify/sqlite-wal-01.md) 记录 SQLite WAL 可见性处理；[settings-03.md](docs/verify/settings-03.md) 记录 settings 表结构化改造；[i18n-01.md](docs/verify/i18n-01.md) 记录中英文 Web UI；[hardening-01.md](docs/verify/hardening-01.md) 记录 2026-11-02 复核硬化；[integration-01.md](docs/verify/integration-01.md) / [integration-02.md](docs/verify/integration-02.md) / [integration-03.md](docs/verify/integration-03.md) / [integration-04.md](docs/verify/integration-04.md) / [integration-05.md](docs/verify/integration-05.md) / [integration-06.md](docs/verify/integration-06.md) / [integration-07.md](docs/verify/integration-07.md) / [integration-08.md](docs/verify/integration-08.md) 记录真实 Docker 上游联调（基础冒烟 + 扩展矩阵 + TLS/多 host + target 级 CA + mTLS + Mongo 认证/高级认证 + Redis ACL/TLS/分页）
-- [scripts/integration/](scripts/integration/)：本地 Docker 联调栈与检查脚本
+- [docs/planning.md](docs/planning.md)：方案、接口、数据模型、只读/危险规则
+- [docs/milestones.md](docs/milestones.md)：里程碑与验收口径
+- [docs/ui-design.md](docs/ui-design.md)：配置台设计系统与页面规格
+- [docs/verify/m7-01.md](docs/verify/m7-01.md)：M7 安装、登录、多 Token
+- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 渐进增强约束
+- [docs/verify/ux-audit-01.md](docs/verify/ux-audit-01.md)：全站交互审计与修复
+- [docs/verify/settings-03.md](docs/verify/settings-03.md)：系统配置结构化
+- [docs/verify/](docs/verify/)：全部里程碑、集成与硬化验证记录
