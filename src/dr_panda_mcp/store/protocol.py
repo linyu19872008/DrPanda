@@ -66,11 +66,14 @@ class AuditEntry:
 
 @dataclass(frozen=True)
 class SettingsChange:
-    """一次系统配置修改的审计摘要。"""
+    """一次系统配置修改的结构化历史。"""
 
     created_at: datetime
     actor: str
     summary: str | None
+    key: str | None = None
+    old_value: str | None = None
+    new_value: str | None = None
 
 
 @dataclass(frozen=True)

@@ -243,6 +243,11 @@ async def test_settings_defaults(runtime: Runtime) -> None:
     assert await runtime.store.get_settings() == {
         "audit_retention_days": "90",
         "target_max_concurrency": "10",
+        "default_target_timeout_s": "15",
+        "default_target_max_rows": "100",
+        "default_target_max_bytes": "102400",
+        "audit_cleanup_interval_minutes": "60",
+        "catalog_max_clients": "32",
     }
     assert await settings.load(runtime.store) == Settings(
         audit_retention_days=90, target_max_concurrency=10
@@ -283,6 +288,11 @@ async def test_settings_invalid_rejected_without_side_effects(
     assert await runtime.store.get_settings() == {
         "audit_retention_days": "90",
         "target_max_concurrency": "10",
+        "default_target_timeout_s": "15",
+        "default_target_max_rows": "100",
+        "default_target_max_bytes": "102400",
+        "audit_cleanup_interval_minutes": "60",
+        "catalog_max_clients": "32",
     }
     assert _raw(runtime, "SELECT COUNT(*) FROM audit")[0][0] == audit_before
 
@@ -363,3 +373,15 @@ async def test_settings_changes_are_listed(runtime: Runtime) -> None:
     assert changes
     assert "audit_cleanup_interval_minutes" in (changes[0].summary or "")
     assert changes[0].actor == "anonymous"
+
+
+async def test_settings_history_keeps_old_and_new_values(runtime: Runtime) -> None:
+    await settings.update(
+        runtime.store, {"catalog_max_clients": "64"}, "anonymous"
+    )
+    changes = await runtime.store.list_settings_changes(5)
+    latest = changes[0]
+    assert latest.key == "catalog_max_clients"
+    assert latest.old_value == "32"
+    assert latest.new_value == "64"
+    assert latest.summary == "catalog_max_clients: 32 -> 64"

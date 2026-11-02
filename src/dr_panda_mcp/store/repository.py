@@ -26,7 +26,7 @@ from dr_panda_mcp.errors import (
     TargetNameTaken,
     TargetNotFound,
 )
-from dr_panda_mcp.store.models import AuditRow, SettingRow, TargetRow
+from dr_panda_mcp.store.models import AuditRow, SettingRow, SettingsHistoryRow, TargetRow
 from dr_panda_mcp.store.protocol import (
     TARGET_TYPES,
     AuditEntry,
@@ -232,12 +232,23 @@ class SqlConfigStore:
                 changes: list[str] = []
                 for key, value in patch.items():
                     row = existing.get(key)
-                    old = row.value if row is not None else None
                     if row is None:
-                        session.add(SettingRow(key=key, value=value, updated_at=now))
-                    else:
-                        row.value = value
-                        row.updated_at = now
+                        raise StorageUnavailable(
+                            f"系统配置缺少定义：{key}；请先执行迁移"
+                        )
+                    old = row.value
+                    row.value = value
+                    row.updated_at = now
+                    row.updated_by = actor
+                    session.add(
+                        SettingsHistoryRow(
+                            key=key,
+                            old_value=old,
+                            new_value=value,
+                            actor=actor,
+                            changed_at=now,
+                        )
+                    )
                     changes.append(f"{key}: {old} -> {value}")
                 session.add(
                     self._audit_row(
@@ -256,17 +267,22 @@ class SqlConfigStore:
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
-                    select(AuditRow)
-                    .where(AuditRow.action == "settings.update")
-                    .order_by(AuditRow.created_at.desc(), AuditRow.id.desc())
+                    select(SettingsHistoryRow)
+                    .order_by(
+                        SettingsHistoryRow.changed_at.desc(),
+                        SettingsHistoryRow.id.desc(),
+                    )
                     .limit(min(limit, 50))
                 )
             ).scalars().all()
         return [
             SettingsChange(
-                created_at=row.created_at,
+                created_at=row.changed_at,
                 actor=row.actor,
-                summary=row.summary,
+                summary=f"{row.key}: {row.old_value} -> {row.new_value}",
+                key=row.key,
+                old_value=row.old_value,
+                new_value=row.new_value,
             )
             for row in rows
         ]

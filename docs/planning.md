@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.22 |
+| 版本 | v0.24 |
 | 更新 | 2026-11-02 |
 | 状态 | M0–M6 已实现；M7 登录待定 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -40,6 +40,8 @@
 | v0.20 | 2026-11-02 | 系统配置 reset 确认页与最近变更历史 |
 | v0.21 | 2026-11-02 | 高级资源 `catalog_max_clients` 可配置；单项恢复默认；真实 Chrome 1440/390 与键盘走查 |
 | v0.22 | 2026-11-02 | `/settings` 改为左侧子菜单分组切换，保存只提交当前分组并保留 section |
+| v0.23 | 2026-11-02 | SQLite 启动/正常关闭 checkpoint，WAL 下外部查看器可见性收口 |
+| v0.24 | 2026-11-02 | settings 自描述元数据 + 7 行完整 seed + settings_history 结构化历史 |
 
 ## 1. 目标
 
@@ -381,6 +383,11 @@ class TargetView:                # 网页专用视图，不含密钥
 class Settings:                  # 解析并校验后的运行时策略
     audit_retention_days: int    # 默认 90，范围 1–3650
     target_max_concurrency: int  # 默认 10，范围 1–50
+    default_target_timeout_s: int = 15
+    default_target_max_rows: int = 100
+    default_target_max_bytes: int = 102400
+    audit_cleanup_interval_minutes: int = 60
+    catalog_max_clients: int = 32
 ```
 
 约定：
@@ -389,7 +396,7 @@ class Settings:                  # 解析并校验后的运行时策略
 - 单个目标的密钥解不开时读取不报错：`secret_ok=False`、`secret={}`、`secret_fields` 保留；连接器与工具据此返回 `SECRET_UNAVAILABLE`，网页标注"密钥不可用，请重新录入"。
 - 所有写方法（`create`、`update`、`set_enabled`、`delete`、`record_test`）都在同一次事务里追加一条审计；失败时两者一起回滚。
 - 时间一律 UTC 带时区，写入与读出都按 UTC。
-- 系统配置只通过 `settings.py` 访问：它持有默认值、键白名单与范围校验，仓储只负责读写字符串；读取时缺键补默认值，不缓存。
+- 系统配置值通过 `settings.py` 访问：它持有默认值、键白名单与范围校验；仓储读写值，数据库同时保存元数据与结构化历史；读取时缺键补默认值，不缓存。
 - 异常：`TargetNotFound`（网页 404）、`TargetNameTaken`（409）、`InvalidTarget`（400）、`StorageUnavailable`（500）、`SecretUnavailable`（密钥解不开，网页提示重新录入，工具返回 `SECRET_UNAVAILABLE`）。异常信息不含密钥。
 
 ### 5.3 表
@@ -431,7 +438,31 @@ class Settings:                  # 解析并校验后的运行时策略
 |---|---|---|---|
 | `key` | String(64) | 主键 | 键名，白名单见 4.5 |
 | `value` | String(64) | NOT NULL | 字符串原值；解析与范围校验在 `settings.py` |
+| `value_type` | String(16) | NOT NULL | int/bool/string/enum |
+| `group_key` | String(64) | NOT NULL | 分组键 |
+| `group_title` | String(128) | NOT NULL | 分组展示名 |
+| `label` | String(128) | NOT NULL | 字段名 |
+| `description` | Text | NOT NULL | 帮助说明 |
+| `default_value` | String(64) | NOT NULL | 默认值 |
+| `min_value` / `max_value` | BigInteger | NULL | 数值范围 |
+| `unit` | String(16) | NOT NULL | 秒/行/字节/分钟/个 |
+| `effect` | String(64) | NOT NULL | 生效方式 |
+| `editable` | Boolean | NOT NULL | 是否可网页编辑 |
+| `requires_restart` | Boolean | NOT NULL | 是否需要重启 |
+| `sort_order` | BigInteger | NOT NULL | 页面顺序 |
 | `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
+| `updated_by` | String(64) | NOT NULL | 修改人；M7 前 anonymous/system |
+
+`settings_history`
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | BigInteger | 主键自增 | |
+| `key` | String(64) | NOT NULL | 配置键，索引 |
+| `old_value` | String(64) | NULL | 旧值 |
+| `new_value` | String(64) | NOT NULL | 新值 |
+| `actor` | String(64) | NOT NULL | 操作者 |
+| `changed_at` | DateTime(timezone=True) | NOT NULL | UTC，索引 |
 
 初始化时写入两个默认值：`audit_retention_days=90`、`target_max_concurrency=10`。这张表只放 4.5 列出的运行策略，不做通用键值配置，也不存任何密钥。
 
@@ -496,9 +527,9 @@ class Settings:                  # 解析并校验后的运行时策略
 - 密钥缺失：用错误的密钥读取，抛 `SecretUnavailable`，不返回明文也不返回空值。
 - 清除：`clear` 后该字段的密文键消失，页面显示"未设置"。
 - 解密失败标记：换错密钥读取时 `secret_ok=False`、`secret={}`，`secret_fields` 仍保留；不抛异常、不拖垮列表。
-- 系统配置默认值：全新库读取 `get_settings` 时两个键都有值（90、10），即使 `settings` 行为空也按默认值返回。
+- 系统配置默认值：全新库迁移后有 7 个配置行，含新建目标默认值、并发、审计与高级资源；读取 `get_settings` 返回全部当前值。
 - 系统配置校验：`audit_retention_days=0`、`3651`、`abc` 与非整数被拒；`target_max_concurrency=0`、`51` 被拒；合法值写入后读出一致。
-- 系统配置同事务：更新值与写 `settings.update` 审计一起提交，审计 summary 含旧值与新值。
+- 系统配置同事务：更新值、写 `settings_history`（old/new）与 `settings.update` 审计一起提交。
 - 系统配置白名单：未知键（例如 `target_max_concurrency_x`、`readonly=false`）直接拒绝，仓储不写入未知键。
 
 ### 5.8 密钥加密

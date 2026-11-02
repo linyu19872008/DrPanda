@@ -16,7 +16,7 @@ from dr_panda_mcp.errors import StartupError
 from dr_panda_mcp.store.migrate import migrate
 from dr_panda_mcp.store.models import TargetRow
 from dr_panda_mcp.store.repository import SqlConfigStore
-from dr_panda_mcp.store.url import create_engine
+from dr_panda_mcp.store.url import checkpoint_sqlite, create_engine
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,8 @@ class Runtime:
 
     async def close(self) -> None:
         await self.catalog.close()
+        # 正常关闭时把 WAL 合并回主文件，外部 SQLite 查看器可直接看到表。
+        await checkpoint_sqlite(self.engine)
         await self.engine.dispose()
 
 
@@ -45,6 +47,8 @@ async def create_runtime(
     try:
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         await migrate(engine)
+        # 启动即 checkpoint 一次，避免主文件 schema=0 让查看器误以为空库。
+        await checkpoint_sqlite(engine)
         has_ciphertext = await _has_ciphertext(session_factory)
         secret_box = load_or_create_secret_box(
             config.secret_key_b64, key_file, has_ciphertext=has_ciphertext

@@ -1,6 +1,6 @@
 """SQLAlchemy 2 声明式表（planning 5.3）。
 
-三张表：``targets``、``audit``、``settings``。所有时间列用 UTC 带时区语义：
+四张表：``targets``、``audit``、``settings``、``settings_history``。所有时间列用 UTC 带时区语义：
 SQLite 存不带偏移的文本，读出时由 :class:`UTCDateTime` 统一补成 UTC。
 """
 
@@ -17,6 +17,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     TypeDecorator,
     UniqueConstraint,
 )
@@ -90,4 +91,33 @@ class SettingRow(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(64), nullable=False)
+    value_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    group_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    group_title: Mapped[str] = mapped_column(String(128), nullable=False)
+    label: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str] = mapped_column(Text(), nullable=False)
+    default_value: Mapped[str] = mapped_column(String(64), nullable=False)
+    min_value: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    max_value: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
+    unit: Mapped[str] = mapped_column(String(16), nullable=False)
+    effect: Mapped[str] = mapped_column(String(64), nullable=False)
+    editable: Mapped[bool] = mapped_column(Boolean(), nullable=False)
+    requires_restart: Mapped[bool] = mapped_column(Boolean(), nullable=False)
+    sort_order: Mapped[int] = mapped_column(BigInteger(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class SettingsHistoryRow(Base):
+    __tablename__ = "settings_history"
+    __table_args__ = (
+        Index("ix_settings_history_key", "key"),
+        Index("ix_settings_history_changed_at", "changed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    old_value: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    new_value: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor: Mapped[str] = mapped_column(String(64), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)

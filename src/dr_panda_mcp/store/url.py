@@ -96,6 +96,26 @@ def create_engine(url: str, *, echo: bool = False) -> AsyncEngine:
     return engine
 
 
+async def checkpoint_sqlite(engine: AsyncEngine) -> bool:
+    """把 SQLite WAL 合并回主文件；非 SQLite/内存库直接跳过。
+
+    只用于启动完成与正常关闭这两个安静时点；失败只记录日志，不阻断启动/关闭。
+    """
+    path = database_path(str(engine.url))
+    if path is None:
+        return False
+    try:
+        async with engine.begin() as connection:
+            await connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+        return True
+    except Exception:  # pragma: no cover - 取决于 SQLite 文件状态
+        # 这里不能用 logger 引入循环依赖吗？url.py 只依赖 errors/config；用标准 logging。
+        import logging
+
+        logging.getLogger(__name__).warning("SQLite WAL checkpoint 失败", exc_info=True)
+        return False
+
+
 def _sqlite_on_connect(dbapi_connection, _connection_record) -> None:
     """每条 SQLite 连接都打开 WAL、外键与 busy_timeout。"""
     cursor = dbapi_connection.cursor()
