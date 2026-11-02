@@ -64,6 +64,13 @@ TYPE_SPECS: dict[str, TypeSpec] = {
                 "pem",
                 help="粘贴 PEM 证书；配置后必须启用 SSL。",
             ),
+            Field(
+                "allow_processlist",
+                "允许 PROCESSLIST（风险）",
+                "bool",
+                default=False,
+                help="默认关闭；开启后 PROCESSLIST 可看到实例内其他库/用户的会话与 SQL。",
+            ),
         ),
         (
             SecretField("password", "密码", required=True),

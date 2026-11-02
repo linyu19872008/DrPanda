@@ -55,7 +55,14 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             started = time.monotonic()
             if not query.strip():
                 raise errors.InvalidArgument("query 不能为空")
-            window = require(cls_guard.check_cls("search_log", {"from": from_, "to": to}))
+            max_window = int(tgt.options.get("max_window_minutes", 1440) or 1440)
+            window = require(
+                cls_guard.check_cls(
+                    "search_log",
+                    {"from": from_, "to": to},
+                    max_window_minutes=max_window,
+                )
+            )
             chosen_topic = ensure_topic(tgt, topic)
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
             connector = get_connector("cls")
@@ -97,11 +104,20 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         target: str,
         topic: str,
         log_id: str,
+        btime: str,
+        pkg_log_id: int,
         before: int = 10,
         after: int = 10,
     ) -> dict[str, Any]:
-        """读取一条日志前后的上下文（按 PkgId 定位）。"""
-        params = {"topic": topic, "log_id": log_id, "before": before, "after": after}
+        """读取一条日志前后的上下文（PkgId + BTime + PkgLogId）。"""
+        params = {
+            "topic": topic,
+            "log_id": log_id,
+            "btime": btime,
+            "pkg_log_id": pkg_log_id,
+            "before": before,
+            "after": after,
+        }
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
@@ -109,19 +125,35 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             chosen_topic = ensure_topic(tgt, topic)
             if not log_id.strip():
                 raise errors.InvalidArgument("log_id 不能为空")
+            if not btime.strip():
+                raise errors.InvalidArgument("btime 不能为空（取 cls_search 返回的 btime）")
+            if pkg_log_id < 1:
+                raise errors.InvalidArgument("pkg_log_id 必须是正整数（取 cls_search 返回的 package_log_id）")
             if not 0 <= before <= 20 or not 0 <= after <= 20:
                 raise errors.InvalidArgument("before / after 必须在 0–20 之间")
             connector = get_connector("cls")
             client = await runtime.catalog.client(tgt, connector)
             rows = await connector.describe_context(
-                client, tgt, topic=chosen_topic, log_id=log_id, before=before, after=after
+                client,
+                tgt,
+                topic=chosen_topic,
+                log_id=log_id,
+                btime=btime,
+                pkg_log_id=pkg_log_id,
+                before=before,
+                after=after,
             )
             return finish(
                 tgt,
                 summary=f"DescribeLogContext topic={chosen_topic} pkg={log_id}",
                 started=started,
                 rows=rows,
-                stats={"topic": chosen_topic, "before": before, "after": after},
+                stats={
+                    "topic": chosen_topic,
+                    "before": before,
+                    "after": after,
+                    "package_log_id": pkg_log_id,
+                },
             )
 
         return await run_tool(

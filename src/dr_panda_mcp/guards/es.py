@@ -65,12 +65,54 @@ def _check_body(body: Mapping[str, Any]) -> Decision:
             "es.deep_pagination", f"from + size 不能超过 {forbidden.ES_MAX_WINDOW}"
         )
 
+    decision = _check_aggs(body)
+    if not decision.allowed:
+        return decision
     if _has_large_terms(body):
         return dangerous(
             "es.large_terms_agg",
             f"terms 聚合 size 不能超过 {forbidden.ES_MAX_TERMS_SIZE}",
         )
 
+    return allow()
+
+
+def _check_aggs(body: Mapping[str, Any]) -> Decision:
+    aggs = body.get("aggs", body.get("aggregations"))
+    if aggs is None:
+        return allow()
+    if not isinstance(aggs, Mapping):
+        return guard_rejected("es.invalid_aggs", "aggs 必须是对象")
+    return _walk_aggs(aggs)
+
+
+def _walk_aggs(aggs: Mapping[str, Any]) -> Decision:
+    for spec in aggs.values():
+        if not isinstance(spec, Mapping):
+            return guard_rejected("es.invalid_agg", "每个聚合定义必须是对象")
+        for key in spec:
+            if key in {"aggs", "aggregations", "meta"}:
+                continue
+            if key not in forbidden.ES_ALLOWED_AGG_TYPES:
+                return dangerous(
+                    "es.agg_type_not_allowed",
+                    f"只允许有界 terms 聚合，收到 {key}；请用明细查询或拆分范围",
+                )
+            terms = spec[key]
+            if not isinstance(terms, Mapping):
+                return guard_rejected("es.invalid_terms_agg", "terms 聚合必须是对象")
+            if _int(terms.get("size")) > forbidden.ES_MAX_TERMS_SIZE:
+                return dangerous(
+                    "es.large_terms_agg",
+                    f"terms 聚合 size 不能超过 {forbidden.ES_MAX_TERMS_SIZE}",
+                )
+        nested = spec.get("aggs", spec.get("aggregations"))
+        if nested is not None:
+            if not isinstance(nested, Mapping):
+                return guard_rejected("es.invalid_aggs", "嵌套 aggs 必须是对象")
+            decision = _walk_aggs(nested)
+            if not decision.allowed:
+                return decision
     return allow()
 
 

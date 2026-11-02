@@ -269,7 +269,13 @@ async def test_cls_context_and_validation(
     async with Client(server) as client:
         result = await client.call_tool(
             "cls_context",
-            {"target": "logs-cls", "topic": "logset/app", "log_id": "pkg-1"},
+            {
+                "target": "logs-cls",
+                "topic": "logset/app",
+                "log_id": "pkg-1",
+                "btime": "2026-01-01 09:00:00.000",
+                "pkg_log_id": 123,
+            },
         )
         with pytest.raises(ToolError) as excinfo:
             await client.call_tool(
@@ -278,6 +284,8 @@ async def test_cls_context_and_validation(
                     "target": "logs-cls",
                     "topic": "logset/app",
                     "log_id": "pkg-1",
+                    "btime": "2026-01-01 09:00:00.000",
+                    "pkg_log_id": 123,
                     "before": 99,
                 },
             )
@@ -287,6 +295,8 @@ async def test_cls_context_and_validation(
     assert payload["rows"][0]["content"] == "boom"
     assert errors.INVALID_ARGUMENT in str(excinfo.value)
     assert fake.context_calls[0]["before"] == 10
+    assert fake.context_calls[0]["btime"] == "2026-01-01 09:00:00.000"
+    assert fake.context_calls[0]["pkg_log_id"] == 123
 
 
 async def test_gitlab_search_code_scoped_to_allowed_projects(
@@ -431,7 +441,13 @@ async def test_disabled_and_mismatched_target(
         with pytest.raises(ToolError) as mismatched:
             await client.call_tool(
                 "cls_context",
-                {"target": "code-gitlab", "topic": "logset/app", "log_id": "p"},
+                {
+                    "target": "code-gitlab",
+                    "topic": "logset/app",
+                    "log_id": "p",
+                    "btime": "2026-01-01 09:00:00.000",
+                    "pkg_log_id": 123,
+                },
             )
 
     assert errors.TARGET_DISABLED in str(disabled.value)

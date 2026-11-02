@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from dr_panda_mcp.guards import forbidden
@@ -18,7 +18,12 @@ from dr_panda_mcp.guards.protocol import (
 )
 
 
-def check_cls(action: str, request: Mapping[str, Any] | None = None) -> Decision:
+def check_cls(
+    action: str,
+    request: Mapping[str, Any] | None = None,
+    *,
+    max_window_minutes: int | None = None,
+) -> Decision:
     if not isinstance(action, str) or not action:
         return guard_rejected("cls.empty_action", "动作不能为空")
     if action in forbidden.CLS_DANGEROUS_ACTIONS:
@@ -40,10 +45,13 @@ def check_cls(action: str, request: Mapping[str, Any] | None = None) -> Decision
             )
         if end < start:
             return guard_rejected("cls.invalid_window", "to 不能早于 from")
-        if end - start > forbidden.CLS_MAX_WINDOW:
+        limit = forbidden.CLS_MAX_WINDOW
+        if max_window_minutes is not None:
+            limit = min(limit, timedelta(minutes=max(int(max_window_minutes), 1)))
+        if end - start > limit:
             return dangerous(
                 "cls.window_too_large",
-                f"单次时间窗不能超过 {int(forbidden.CLS_MAX_WINDOW.total_seconds() // 3600)} 小时",
+                f"单次时间窗不能超过 {int(limit.total_seconds() // 60)} 分钟",
             )
         normalized.update({"from": start, "to": end})
 

@@ -53,6 +53,6 @@ uv run python scripts/integration/check_mongo_auth.py
 
 ## 未覆盖
 
-- X.509 / LDAP / AWS IAM / OIDC 等 `authMechanism` 的真实服务验证（URI 模式支持透传，未逐一验证）
-- replica set / mongodb+srv 的真实集群验证
+- X.509 与单节点 replica set 已由 [integration-07.md](integration-07.md) 覆盖
+- LDAP / AWS IAM / OIDC / mongodb+srv 仍因企业版/云/DNS 依赖未验证
 - 带口令的客户端私钥

@@ -35,6 +35,22 @@ def _items(target: Target, key: str) -> list[str]:
     return [str(item) for item in values]
 
 
+def ensure_processlist_allowed(target: Target) -> None:
+    if not target.options.get("allow_processlist"):
+        raise errors.ScopeDenied(
+            f"目标 {target.name} 未启用 PROCESSLIST；该命令可能暴露其他库/用户的会话"
+        )
+
+
+def ensure_mongo_collection(target: Target, collection: str) -> str:
+    value = (collection or "").strip()
+    if not value:
+        raise errors.InvalidArgument("collection 不能为空")
+    if value.lower().startswith("system."):
+        raise errors.ScopeDenied(f"不允许访问系统集合 {value}")
+    return value
+
+
 def ensure_db(target: Target, db: str) -> str:
     allowed = _items(target, "allowed_dbs")
     default = str(target.options.get("default_db") or "")
@@ -118,6 +134,15 @@ def _mysql_scope(target: Target, sql: str, default_db: str) -> None:
 def force_limit(sql: str, cap: int) -> str:
     expression = sqlglot.parse_one(sql, dialect=mysql_guard.DIALECT)
     if isinstance(expression, exp.Select):
+        existing = expression.args.get("limit")
+        if existing is not None:
+            try:
+                current = int(existing.expression.this)
+            except (AttributeError, TypeError, ValueError):
+                current = None
+            if current is not None and current <= cap:
+                # 用户已经写了更小的 LIMIT，不要擅自放大。
+                return expression.sql(dialect=mysql_guard.DIALECT)
         return expression.limit(cap).sql(dialect=mysql_guard.DIALECT)
     return sql
 
@@ -243,6 +268,8 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             decision = require(mysql_guard.check_sql(sql))
+            if decision.get("command") == "PROCESSLIST":
+                ensure_processlist_allowed(tgt)
             default_db = ensure_db(tgt, "")
             _mysql_scope(tgt, sql, default_db)
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
@@ -300,7 +327,9 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
-            require(mysql_guard.check_sql("SHOW PROCESSLIST"))
+            decision = require(mysql_guard.check_sql("SHOW PROCESSLIST"))
+            if decision.get("command") == "PROCESSLIST":
+                ensure_processlist_allowed(tgt)
             connector = get_connector("mysql")
             client = await runtime.catalog.client(tgt, connector)
             rows = await connector.fetch_rows(client, tgt, "SHOW PROCESSLIST")
@@ -327,6 +356,11 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             client = await runtime.catalog.client(tgt, connector)
             cap = connectors_base.max_rows(tgt)
             fetched = await connector.collections(client, tgt, db=chosen, limit=cap + 1)
+            fetched = [
+                row
+                for row in fetched
+                if not str(row.get("collection", "")).lower().startswith("system.")
+            ]
             rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
@@ -362,8 +396,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             chosen = ensure_db(tgt, db)
-            if not collection.strip():
-                raise errors.InvalidArgument("collection 不能为空")
+            chosen_collection = ensure_mongo_collection(tgt, collection)
             filter_obj = _json_object(filter, "filter", required=True)
             projection_obj = _json_object(projection, "projection", required=False) or None
             sort_obj = _json_object(sort, "sort", required=False) or None
@@ -384,7 +417,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
                 client,
                 tgt,
                 db=chosen,
-                collection=collection,
+                collection=chosen_collection,
                 filter_=filter_obj,
                 projection=projection_obj,
                 sort=sort_obj,
@@ -393,10 +426,10 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
-                summary=f"find {chosen}.{collection} (limit={cap})",
+                summary=f"find {chosen}.{chosen_collection} (limit={cap})",
                 started=started,
                 rows=rows,
-                stats={"db": chosen, "collection": collection, "limit": cap},
+                stats={"db": chosen, "collection": chosen_collection, "limit": cap},
                 truncation=truncation,
             )
 
@@ -419,23 +452,22 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             chosen = ensure_db(tgt, db)
-            if not collection.strip():
-                raise errors.InvalidArgument("collection 不能为空")
+            chosen_collection = ensure_mongo_collection(tgt, collection)
             stages = _json_array(pipeline, "pipeline")
             require(mongo_guard.check_mongo_command("aggregate", {"pipeline": stages}))
             cap = clamp_limit(limit or None, tgt, connectors_base.max_rows(tgt))
             connector = get_connector("mongo")
             client = await runtime.catalog.client(tgt, connector)
             fetched = await connector.aggregate(
-                client, tgt, db=chosen, collection=collection, pipeline=stages, limit=cap + 1
+                client, tgt, db=chosen, collection=chosen_collection, pipeline=stages, limit=cap + 1
             )
             rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
-                summary=f"aggregate {chosen}.{collection} (limit={cap})",
+                summary=f"aggregate {chosen}.{chosen_collection} (limit={cap})",
                 started=started,
                 rows=rows,
-                stats={"db": chosen, "collection": collection, "limit": cap},
+                stats={"db": chosen, "collection": chosen_collection, "limit": cap},
                 truncation=truncation,
             )
 
@@ -454,19 +486,23 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             chosen = ensure_db(tgt, db)
-            command = "collStats" if collection else "dbStats"
+            chosen_collection = (
+                ensure_mongo_collection(tgt, collection) if collection else None
+            )
+            command = "collStats" if chosen_collection else "dbStats"
             require(mongo_guard.check_mongo_command(command, {}))
             connector = get_connector("mongo")
             client = await runtime.catalog.client(tgt, connector)
             rows = await connector.stats(
-                client, tgt, db=chosen, collection=collection or None
+                client, tgt, db=chosen, collection=chosen_collection
             )
             return finish(
                 tgt,
-                summary=f"{command} {chosen}" + (f".{collection}" if collection else ""),
+                summary=f"{command} {chosen}"
+                + (f".{chosen_collection}" if chosen_collection else ""),
                 started=started,
                 rows=rows,
-                stats={"db": chosen, "collection": collection or None},
+                stats={"db": chosen, "collection": chosen_collection},
             )
 
         return await run_tool(
@@ -523,6 +559,8 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             query_obj = _json_object(query, "query", required=False)
             body["query"] = query_obj or {"match_all": {}}
             cap = connectors_base.max_rows(tgt)
+            if size < 0:
+                raise errors.InvalidArgument("size 不能为负数")
             requested = size or cap
             if requested > cap:
                 raise errors.GuardRejected(

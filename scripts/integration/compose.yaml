@@ -202,6 +202,46 @@ services:
       timeout: 5s
       retries: 40
 
+  mongo-x509:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo-x509
+    restart: "no"
+    command:
+      - mongod
+      - --auth
+      - --tlsMode
+      - requireTLS
+      - --tlsCertificateKeyFile
+      - /certs/mongo-server.pem
+      - --tlsCAFile
+      - /certs/ca.pem
+      - --bind_ip_all
+    ports:
+      - "17021:27017"
+    volumes:
+      - drpanda-mongo-x509-data:/data/db
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --tls --tlsCAFile /certs/ca.pem --tlsCertificateKeyFile /certs/client.pem --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  mongo-rs:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo-rs
+    restart: "no"
+    command: ["mongod", "--replSet", "drpanda-rs", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - drpanda-mongo-rs-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
   redis:
     image: public.ecr.aws/docker/library/redis:7.2-alpine
     container_name: drpanda-redis
@@ -240,6 +280,8 @@ volumes:
   drpanda-mongo-noauth-data:
   drpanda-mongo-tls-data:
   drpanda-mongo-mtls-data:
+  drpanda-mongo-x509-data:
+  drpanda-mongo-rs-data:
   drpanda-es-data:
   drpanda-es2-data:
   drpanda-es-tls-data:

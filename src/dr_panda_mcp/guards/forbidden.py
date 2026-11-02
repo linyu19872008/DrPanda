@@ -68,6 +68,7 @@ ES_DANGEROUS_BODY_KEYS = frozenset(
 )
 ES_MAX_WINDOW = 10_000
 ES_MAX_TERMS_SIZE = 100
+ES_ALLOWED_AGG_TYPES = frozenset({"terms"})
 ES_FORBIDDEN_PATH_PARTS = frozenset({"_all", "*"})
 
 # ---------------------------------------------------------------------------

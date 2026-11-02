@@ -200,8 +200,14 @@ async def test_cls_describe_context_maps_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = SimpleNamespace(
-        ContextInfos=[
-            SimpleNamespace(Time=1767229200, Log="context line", PkgId="pkg-1")
+        LogContextInfos=[
+            SimpleNamespace(
+                Time=1767229200,
+                BTime="2026-01-01 09:00:00.000",
+                Log="context line",
+                PkgId="pkg-1",
+                PkgLogId=123,
+            )
         ]
     )
     state = _install_fake_cls_sdk(monkeypatch, response)
@@ -213,10 +219,22 @@ async def test_cls_describe_context_maps_rows(
     client = _CLSClient(target)
 
     rows = await client.describe_context(
-        topic="logset/app", log_id="pkg-1", before=5, after=5
+        topic="logset/app",
+        log_id="pkg-1",
+        btime="2026-01-01 09:00:00.000",
+        pkg_log_id=123,
+        before=5,
+        after=5,
     )
 
-    assert state["context_request"].PkgId == "pkg-1"
-    assert state["context_request"].TopicId == "app"
+    request = state["context_request"]
+    assert request.PkgId == "pkg-1"
+    assert request.TopicId == "app"
+    assert request.BTime == "2026-01-01 09:00:00.000"
+    assert request.PkgLogId == 123
+    assert request.PrevLogs == 5
+    assert request.NextLogs == 5
     assert rows[0]["package_id"] == "pkg-1"
+    assert rows[0]["package_log_id"] == 123
+    assert rows[0]["btime"] == "2026-01-01 09:00:00.000"
     assert rows[0]["content"] == "context line"

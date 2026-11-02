@@ -85,7 +85,10 @@ class FakeMongo:
 
     async def collections(self, client, target, *, db, limit):
         self.calls.append(("collections", {"db": db, "limit": limit}))
-        return [{"collection": "orders", "type": "collection", "documents": 3, "indexes": 1}]
+        return [
+            {"collection": "orders", "type": "collection", "documents": 3, "indexes": 1},
+            {"collection": "system.users", "type": "collection", "documents": 1, "indexes": 1},
+        ]
 
     async def find(self, client, target, **kwargs):
         self.calls.append(("find", kwargs))
@@ -179,7 +182,8 @@ async def _target(runtime: Runtime, type_: str, name: str, options: dict, secret
 async def _setup(runtime: Runtime) -> None:
     await _target(runtime, "mysql", "db-mysql", {
         "host": "127.0.0.1", "port": 3306, "user": "ro", "default_db": "app",
-        "allowed_dbs": ["app", "logs"], "max_rows": 2, "max_bytes": 102400, "timeout_s": 15,
+        "allowed_dbs": ["app", "logs"], "max_rows": 2, "max_bytes": 102400,
+        "timeout_s": 15, "allow_processlist": True,
     }, {"password": "pw"})
     await _target(runtime, "mongo", "db-mongo", {
         "host": "127.0.0.1", "port": 27017, "allowed_dbs": ["app"],
@@ -361,6 +365,7 @@ async def test_mongo_collections_and_stats(
     stats = await _call(runtime, "mongo_stats", {"target": "db-mongo", "db": "app"})
 
     assert collections["rows"][0]["collection"] == "orders"
+    assert all(not row["collection"].startswith("system.") for row in collections["rows"])
     assert stats["rows"][0]["ns"] == "app.orders"
 
 
@@ -392,7 +397,11 @@ async def test_es_mapping_search_scope_and_limits(
     scope = await _error(runtime, "es_search", {
         "target": "db-es", "index": "other", "query": '{"match_all":{}}',
     })
+    negative = await _error(runtime, "es_search", {
+        "target": "db-es", "index": "logs-2026", "query": '{"match_all":{}}', "size": -1,
+    })
     assert errors.DANGEROUS_OPERATION in size
+    assert errors.INVALID_ARGUMENT in negative
     assert errors.DANGEROUS_OPERATION in script
     assert errors.SCOPE_DENIED in scope
 
@@ -447,6 +456,57 @@ async def test_redis_scope_and_scan_limit(
     assert redis.calls == []
 
 
+async def test_processlist_requires_explicit_target_switch(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _target(
+        runtime,
+        "mysql",
+        "db-mysql-no-process",
+        {
+            "host": "127.0.0.1", "port": 3306, "user": "ro", "default_db": "app",
+            "allowed_dbs": ["app"], "max_rows": 10, "max_bytes": 102400,
+            "timeout_s": 15,
+        },
+        {"password": "pw"},
+    )
+    _patch(monkeypatch, mysql=FakeMySQL())
+    server = create_server(runtime.config, runtime)
+
+    async with Client(server) as client:
+        with pytest.raises(ToolError) as process:
+            await client.call_tool("mysql_processlist", {"target": "db-mysql-no-process"})
+        with pytest.raises(ToolError) as query:
+            await client.call_tool(
+                "mysql_query",
+                {"target": "db-mysql-no-process", "sql": "SHOW PROCESSLIST"},
+            )
+
+    assert errors.SCOPE_DENIED in str(process.value)
+    assert errors.SCOPE_DENIED in str(query.value)
+
+
+async def test_mongo_system_collection_is_rejected(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _setup(runtime)
+    mongo = FakeMongo()
+    _patch(monkeypatch, mongo=mongo)
+    server = create_server(runtime.config, runtime)
+
+    async with Client(server) as client:
+        for tool, args in [
+            ("mongo_find", {"collection": "system.users", "filter": '{"_id":1}'}),
+            ("mongo_stats", {"collection": "system.users"}),
+        ]:
+            with pytest.raises(ToolError) as excinfo:
+                await client.call_tool(
+                    tool, {"target": "db-mongo", "db": "app", **args}
+                )
+            assert errors.SCOPE_DENIED in str(excinfo.value)
+    assert mongo.calls == []
+
+
 async def test_tool_calls_respect_target_concurrency(
     runtime: Runtime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -493,3 +553,47 @@ async def test_tool_call_has_whole_call_timeout(
             )
 
     assert errors.UPSTREAM_TIMEOUT in str(excinfo.value)
+
+
+async def test_stats_larger_than_byte_limit_is_truncated(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _target(
+        runtime,
+        "redis",
+        "db-redis-tiny",
+        {
+            "host": "127.0.0.1", "port": 6379, "db": 0, "key_prefix": "pay:",
+            "max_rows": 10, "max_bytes": 4096, "timeout_s": 15,
+        },
+    )
+    redis = FakeRedis()
+
+    async def huge_info(client, target, *, section):
+        return {"blob": "x" * 10_000}
+
+    redis.info = huge_info  # type: ignore[method-assign]
+    _patch(monkeypatch, redis=redis)
+
+    payload = await _call(runtime, "redis_info", {"target": "db-redis-tiny"})
+
+    assert payload["stats"]["truncated"] is True
+    assert payload["stats"]["reason"] == "bytes"
+    assert any("统计信息" in note for note in payload["notes"])
+
+
+async def test_mysql_query_keeps_lower_existing_limit(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _setup(runtime)
+    mysql = FakeMySQL()
+    _patch(monkeypatch, mysql=mysql)
+
+    await _call(
+        runtime,
+        "mysql_query",
+        {"target": "db-mysql", "sql": "SELECT * FROM users LIMIT 1"},
+    )
+
+    assert mysql.calls[-1].upper().endswith("LIMIT 1")
+    assert "LIMIT 3" not in mysql.calls[-1]

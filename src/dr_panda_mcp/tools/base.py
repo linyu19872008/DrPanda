@@ -127,6 +127,9 @@ def finish(
     )
     effective = truncation or auto_truncation
     notes = ["结果已截断，请缩小查询范围、时间窗或返回条数。"] if effective else []
+    stats, stats_truncated = _cap_stats(stats, connectors_base.max_bytes(target))
+    if stats_truncated:
+        notes.append("统计信息已因目标字节上限被截断。")
     return connectors_base.build_envelope(
         target,
         summary=summary[:200],
@@ -137,6 +140,17 @@ def finish(
         truncation=effective,
         notes=notes,
     )
+
+
+def _cap_stats(
+    stats: dict[str, Any] | None, byte_limit: int
+) -> tuple[dict[str, Any] | None, bool]:
+    if stats is None:
+        return None, False
+    raw = json.dumps(stats, ensure_ascii=False, default=str).encode("utf-8")
+    if len(raw) <= byte_limit:
+        return stats, False
+    return {"truncated": True, "reason": "bytes", "limit": byte_limit}, True
 
 
 def trim_rows(

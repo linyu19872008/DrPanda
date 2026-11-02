@@ -119,6 +119,13 @@ MONGO_PIPELINE_CASES = [
     ([{"$match": {}}, {"$set": {"a": 1}}], "guard"),
     ([{"$match": {}, "$limit": 1}], "guard"),
     ([], "guard"),
+    (
+        [
+            {"$match": {}},
+            {"$lookup": {"from": "system.users", "localField": "a", "foreignField": "b", "as": "u"}},
+        ],
+        "guard",
+    ),
 ]
 
 
@@ -156,6 +163,24 @@ ES_CASES = [
         "POST",
         "/orders/_search",
         {"aggs": {"a": {"terms": {"field": "x", "size": 500}}}},
+        "danger",
+    ),
+    (
+        "POST",
+        "/orders/_search",
+        {"aggs": {"a": {"terms": {"field": "x", "size": 10}}}},
+        "allow",
+    ),
+    (
+        "POST",
+        "/orders/_search",
+        {"aggs": {"a": {"date_histogram": {"field": "ts", "calendar_interval": "1d"}}}},
+        "danger",
+    ),
+    (
+        "POST",
+        "/orders/_search",
+        {"aggs": {"a": {"cardinality": {"field": "user"}}}},
         "danger",
     ),
 ]
@@ -291,6 +316,15 @@ def test_cls_guard(action: str, payload: dict, expected: str) -> None:
 # ---------------------------------------------------------------------------
 # require() 的错误码
 # ---------------------------------------------------------------------------
+def test_cls_target_max_window_is_enforced() -> None:
+    decision = cls_guard.check_cls(
+        "search_log",
+        {"from": "2026-01-01T00:00:00Z", "to": "2026-01-01T02:00:00Z"},
+        max_window_minutes=60,
+    )
+    assert_decision(decision, "danger")
+
+
 def test_require_raises_with_guard_code() -> None:
     with pytest.raises(errors.GuardRejected) as excinfo:
         require(mysql_guard.check_sql("UPDATE orders SET status = 'x'"))

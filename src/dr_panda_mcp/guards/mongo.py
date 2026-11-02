@@ -76,6 +76,13 @@ def check_mongo_pipeline(pipeline: Sequence[Mapping[str, Any]]) -> Decision:
             )
         if name == "$match":
             seen_match = True
+        if name == "$lookup" and isinstance(body, Mapping):
+            from_name = body.get("from")
+            if isinstance(from_name, str) and from_name.lower().startswith("system."):
+                return guard_rejected(
+                    "mongo.system_collection",
+                    f"$lookup 不允许引用系统集合 {from_name}",
+                )
         normalized.append(dict(stage))
 
     return allow({"stages": normalized})

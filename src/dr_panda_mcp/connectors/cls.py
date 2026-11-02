@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 from dr_panda_mcp import errors
@@ -23,6 +23,17 @@ def _time_text(value: Any) -> str | None:
         return None
     if isinstance(value, (int, float)):
         return datetime.fromtimestamp(value, tz=UTC).isoformat(timespec="seconds")
+    return str(value)
+
+
+def _btime_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        # CLS DescribeLogContext 要求 UTC+8 的 "YYYY-mm-dd HH:MM:SS.FFF"。
+        return datetime.fromtimestamp(value, tz=timezone(timedelta(hours=8))).strftime(
+            "%Y-%m-%d %H:%M:%S.000"
+        )
     return str(value)
 
 
@@ -96,7 +107,12 @@ class _CLSClient:
             rows.append(
                 {
                     "time": _time_text(getattr(item, "Time", None)),
+                    "btime": _btime_text(
+                        getattr(item, "BTime", None) or getattr(item, "Time", None)
+                    ),
                     "topic": topic,
+                    "package_id": getattr(item, "PkgId", None),
+                    "package_log_id": getattr(item, "PkgLogId", None),
                     "content": getattr(item, "Log", "")
                     or getattr(item, "Content", ""),
                 }
@@ -108,6 +124,8 @@ class _CLSClient:
         *,
         topic: str,
         log_id: str,
+        btime: str,
+        pkg_log_id: int,
         before: int,
         after: int,
     ) -> list[dict[str, Any]]:
@@ -117,6 +135,10 @@ class _CLSClient:
             request = models.DescribeLogContextRequest()
             request.TopicId = topic_id(topic)
             request.PkgId = log_id
+            request.BTime = btime
+            request.PkgLogId = pkg_log_id
+            request.PrevLogs = before
+            request.NextLogs = after
             return client.DescribeLogContext(request)
 
         try:
@@ -127,7 +149,8 @@ class _CLSClient:
             raise errors.UpstreamUnavailable(f"cls 上下文读取失败：{exc}") from exc
 
         items = (
-            getattr(response, "ContextInfos", None)
+            getattr(response, "LogContextInfos", None)
+            or getattr(response, "ContextInfos", None)
             or getattr(response, "Results", None)
             or []
         )
@@ -140,8 +163,13 @@ class _CLSClient:
                     ),
                     "topic": topic,
                     "package_id": getattr(item, "PkgId", None),
-                    "content": getattr(item, "Log", "")
-                    or getattr(item, "Content", ""),
+                    "package_log_id": getattr(item, "PkgLogId", None),
+                    "btime": _btime_text(
+                        getattr(item, "BTime", None)
+                        or getattr(item, "Time", None)
+                    ),
+                    "content": getattr(item, "Content", "")
+                    or getattr(item, "Log", ""),
                 }
             )
         return rows
@@ -184,11 +212,18 @@ class CLSConnector:
         *,
         topic: str,
         log_id: str,
+        btime: str,
+        pkg_log_id: int,
         before: int,
         after: int,
     ) -> list[dict[str, Any]]:
         return await client.describe_context(
-            topic=topic, log_id=log_id, before=before, after=after
+            topic=topic,
+            log_id=log_id,
+            btime=btime,
+            pkg_log_id=pkg_log_id,
+            before=before,
+            after=after,
         )
 
 

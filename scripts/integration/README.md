@@ -8,7 +8,7 @@
 # 0. 生成 MySQL TLS 测试证书（/tmp/drpanda-mysql-certs）
 bash scripts/integration/mysql-tls/gen-certs.sh
 
-# 1. 起 11 个上游（MySQL TLS/mTLS + 4 个 ES + Mongo 无认证/TLS/mTLS；Kafka 暂不启动）
+# 1. 起 13 个上游（MySQL TLS/mTLS + 4 个 ES + Mongo 无认证/TLS/mTLS/X.509/RS；Kafka 暂不启动）
 docker compose -f scripts/integration/compose.yaml up -d
 
 # 2. 安装驱动
@@ -25,8 +25,9 @@ bash scripts/integration/prepare_p1.sh
 bash scripts/integration/prepare_target_ca.sh
 bash scripts/integration/prepare_mtls.sh
 bash scripts/integration/prepare_mongo_auth.sh
+bash scripts/integration/prepare_mongo_advanced.sh
 
-# 5. 跑基础检查、扩展矩阵、P1、target CA、mTLS、Mongo 认证
+# 5. 跑基础检查、扩展矩阵、P1、target CA、mTLS、Mongo 认证/高级认证
 uv run python scripts/integration/check_tools.py
 uv run python scripts/integration/check_refusals.py
 uv run python scripts/integration/check_matrix.py
@@ -35,6 +36,7 @@ uv run python scripts/integration/check_p1.py
 uv run python scripts/integration/check_target_ca.py
 uv run python scripts/integration/check_mtls.py
 uv run python scripts/integration/check_mongo_auth.py
+uv run python scripts/integration/check_mongo_advanced.py
 ```
 
 ## 两套检查
@@ -45,7 +47,8 @@ uv run python scripts/integration/check_mongo_auth.py
 - `check_p1.py`：MySQL TLS 与 ES 多 host（4 条）
 - `check_target_ca.py`：target 级 CA（MySQL/ES，4 条）
 - `check_mtls.py`：MySQL REQUIRE X509 / ES 客户端证书（4 条）
-- `check_mongo_auth.py`：Mongo none/password/uri/TLS（5 条）
+- `check_mongo_auth.py`：Mongo none/password/uri/TLS/mTLS（7 条）
+- `check_mongo_advanced.py`：Mongo X.509 / replica set（3 条）
 
 ## P1 与 target 级 CA
 
@@ -63,6 +66,8 @@ uv run python scripts/integration/check_mongo_auth.py
 | MongoDB 无认证 | `drpanda-mongo-noauth` | 17018 | 无认证，用于 auth_mode=none |
 | MongoDB TLS | `drpanda-mongo-tls` | 17019 | TLS + 测试 CA，用于 auth_mode=none + tls |
 | MongoDB mTLS | `drpanda-mongo-mtls` | 17020 | TLS + 客户端证书必填，用于 mTLS |
+| MongoDB X.509 | `drpanda-mongo-x509` | 17021 | --auth + TLS，$external 用户 |
+| MongoDB replica set | `drpanda-mongo-rs` | 27017 | 单节点 `drpanda-rs` |
 | Elasticsearch | `drpanda-elasticsearch` | 19200 | `elastic` / `drpanda_es_pw`，HTTP 明文、单节点 |
 | Elasticsearch 2 | `drpanda-elasticsearch-2` | 19201 | 同上，用于多 host failover |
 | Elasticsearch TLS | `drpanda-elasticsearch-tls` | 19202 | HTTPS + 测试 CA，用于 target 级 CA |
@@ -75,6 +80,11 @@ uv run python scripts/integration/check_mongo_auth.py
 - `prepare_mongo_auth.sh` 创建 noauth / URI / TLS / mTLS / 无证书对照 target；`check_mongo_auth.py` 验证 7 条。
 - URI 模式只接受 `mongodb://` 或 `mongodb+srv://`，host/user/password 必须留空。
 - `register_targets.sh` 的 `drpanda-mongo` 使用 `auth_mode=password`。
+
+## Mongo 高级认证
+
+- `prepare_mongo_advanced.sh` 创建 X.509 与 replica set target；`check_mongo_advanced.py` 验证 3 条。
+- LDAP/AWS IAM/OIDC/`mongodb+srv` 不能靠社区 Docker 镜像真实验证，未伪造成通过。
 
 ## Kafka 为什么没起
 

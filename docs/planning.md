@@ -8,9 +8,9 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.15 |
-| 更新 | 2026-11-01 |
-| 状态 | 方案定稿，未开始编码 |
+| 版本 | v0.17 |
+| 更新 | 2026-11-02 |
+| 状态 | M0–M6 已实现；M7 登录待定 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
 | 契约地位 | 第 5、6、8 章是实现契约，代码偏离前先改本文 |
 
@@ -33,6 +33,8 @@
 | v0.13 | 2026-11-02 | 目标级 CA：MySQL / Elasticsearch 增加可选 `ca_pem`，私有 CA 不再依赖进程级 `SSL_CERT_FILE` |
 | v0.14 | 2026-11-02 | mTLS：MySQL / Elasticsearch 增加可选客户端证书与私钥（加密字段），支持双向 TLS |
 | v0.15 | 2026-11-02 | Mongo 认证模式：none/password/uri，旧 target 自动推断；增加 TLS/CA/客户端证书字段 |
+| v0.16 | 2026-11-02 | Mongo 高级认证联调：X.509 与 replica set 经 URI 模式真实验证；LDAP/AWS IAM/OIDC/SRV 因企业版/云/DNS 依赖暂不验证 |
+| v0.17 | 2026-11-02 | P0 安全收口：MySQL PROCESSLIST 显式开关、Mongo 系统集合拒绝、ES 负数 size/聚合边界、stats 字节上限、CLS 上下文与时间窗修复 |
 
 ## 1. 目标
 
@@ -700,6 +702,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 允许的库 | `options.allowed_dbs` | 否 | `[]` | 空表示只允许默认库 |
 | 是否 SSL | `options.ssl` | 否 | false | |
 | CA 证书 | `options.ca_pem` | 否 | 空 | PEM 文本；配置时 `ssl` 必须为 true，仅用于校验服务端证书 |
+| 允许 PROCESSLIST | `options.allow_processlist` | 否 | false | 默认关闭；开启后 PROCESSLIST 可看到其他库/用户会话 |
 
 查询强制补上 `LIMIT`，并设置语句执行超时。语句种类、会话只读见 6.3。
 
@@ -718,9 +721,11 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | CA 证书 | `options.ca_pem` | 否 | 空 | PEM；配置时必须启用 TLS |
 | 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥同时提供 |
 | 客户端私钥 | `secret.client_key` | 否 | 空 | PEM；加密保存，不支持带口令私钥 |
-| 允许的库 | `options.allowed_dbs` | 是 | — | 空表示拒绝全部，必须显式列 |
+| 允许的库 | `options.allowed_dbs` | 是 | — | 空表示拒绝全部，必须显式列；`system.*` 集合仍拒绝 |
 
 `find` 必须带过滤条件，空条件视为扫全表并拒绝。聚合设置 `maxTimeMS`。允许的阶段和写命令的拒绝见 6.3。
+
+认证方式：`none` / `password` / `uri`。X.509、replica set、`mongodb+srv` 以及 LDAP/AWS IAM/OIDC 等高级选项通过 `auth_mode=uri` 的完整连接串透传；其中 X.509 与单节点 replica set 已用真实 Docker 验证，LDAP/AWS IAM/OIDC/SRV 仍需企业版/云/DNS 环境。
 
 ### Elasticsearch
 
@@ -894,7 +899,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 |---|---|---|---|---|
 | `systems_status` | 无 | 全局工具：包络 `target="*"`、`type="all"`；`rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
 | `cls_search` | `target`、`query`、`from`、`to`（必填）、`topic`（唯一授权时可省略）、`limit` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
-| `cls_context` | `target`、`topic`、`log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
+| `cls_context` | `target`、`topic`、`log_id`、`btime`、`pkg_log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
 | `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |
 | `gitlab_get_file` | `target`、`project`、`path`、`ref` | `rows`: path、ref、content | 只发 GET；项目在允许列表 | 字节上限 |
 | `gitlab_blame` | `target`、`project`、`path`、`ref`、`line_from`、`line_to` | `rows`: 提交、作者、时间、行号范围 | 只发 GET；项目在允许列表 | 条数上限 |
@@ -918,7 +923,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | `mongo_aggregate` | `target`、`db`、`collection`、`pipeline`、`limit` | `rows`: 聚合结果 | 阶段白名单；`maxTimeMS`；库在允许列表 | 目标行数/字节 |
 | `mongo_stats` | `target`、`db`、`collection`（可空） | `stats`: 统计 | `collStats`/`dbStats`；库在允许列表 | 单次 |
 | `es_mapping` | `target`、`index` | `rows`: 字段、类型、分词器；`stats`: 分片与副本设置 | `GET /{index}/_mapping`、`_settings`；索引在允许列表 | 字节上限 |
-| `es_search` | `target`、`index`、`query`、`from`、`size`、`sort` | `rows`: hit 源；`stats`: total、took | `POST .../_search`；索引在允许列表；size ≤ 目标上限 | 目标行数/字节 |
+| `es_search` | `target`、`index`、`query`、`from`、`size`、`sort` | `rows`: hit 源；`stats`: total、took | `POST .../_search`；索引在允许列表；size ≤ 目标上限；根级聚合仅允许有界 terms | 目标行数/字节 |
 | `es_health` | `target` | `stats`: status、节点数、分片等 | `GET _cluster/health` | 单次 |
 | `es_index_stats` | `target`、`index` | `rows`: 索引统计 | `GET .../_stats`；索引在允许列表 | 目标行数 |
 | `redis_get` | `target`、`key` | `rows`: key、type、ttl、value | 命令白名单；key 前缀限制 | 字节上限 |
@@ -930,7 +935,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 - `mysql_query` 对 `SELECT` 用 sqlglot 重写 `LIMIT`（取请求值与目标 `max_rows` 较小者）；`SHOW` / `DESCRIBE` / `EXPLAIN` 不补 LIMIT。`mysql_tables` / `mysql_describe` 只用 `SHOW` 类语句，不查 `information_schema`；库引用必须在 `allowed_dbs` 内，`SHOW DATABASES` 在目标级被拒绝。
 - `mongo_aggregate` 在管道末尾追加 `$limit`，并统一带 `maxTimeMS`；`mongo_find` 同样带 `maxTimeMS`。`mongo_collections` 用 `listCollections` + `collStats`，不执行空条件 `find`。
-- `es_search` 的 `size` 不能超过目标 `max_rows`（超过直接 `DANGEROUS_OPERATION`）；`from + size` 仍受 10000 窗口限制。`es_mapping` 只发 `GET _mapping` 与 `GET _settings`。
+- `es_search` 的 `size` 不能超过目标 `max_rows`（超过直接 `DANGEROUS_OPERATION`）；`size` 不能为负数；`from + size` 仍受 10000 窗口限制。根级聚合仅允许 `terms` 且 size ≤ 100。`es_mapping` 只发 `GET _mapping` 与 `GET _settings`。
 - `redis_get` 按类型做有界读取：list/set/zset 先探测长度，超过 `max_rows` 直接拒绝；hash 用 `HSCAN`。配置了 `key_prefix` 时，`redis_scan` 的 `pattern` 也必须以该前缀开头。`redis_slowlog` 的 count 取请求值与 `max_rows` 较小者。
 
 ### 8.6 第三批：消息面
