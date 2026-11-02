@@ -177,11 +177,32 @@ TYPE_SPECS: dict[str, TypeSpec] = {
             Field("host", "主机", "text", required=True),
             Field("port", "端口", "int", default=6379),
             Field("db", "DB", "int", default=0),
+            Field("username", "ACL 用户名（可选）", "text"),
             Field("tls", "启用 TLS", "bool", default=False),
+            Field(
+                "ca_pem",
+                "CA 证书 PEM（可选，私有 CA 时填写）",
+                "pem",
+                help="配置后必须启用 TLS。",
+            ),
             Field("key_prefix", "key 前缀（空=不限）", "text"),
         ),
-        (SecretField("password", "密码"),),
-        "命令白名单；无界范围与全键命令一律拒绝。",
+        (
+            SecretField("password", "密码"),
+            SecretField(
+                "client_cert",
+                "客户端证书 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端证书，与私钥必须同时提供；不加密的私钥。",
+            ),
+            SecretField(
+                "client_key",
+                "客户端私钥 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。",
+            ),
+        ),
+        "命令白名单；支持 ACL 用户名、TLS CA 与客户端证书；无界范围与全键命令一律拒绝。",
     ),
     "gitlab": TypeSpec(
         "gitlab",
@@ -216,12 +237,38 @@ TYPE_SPECS: dict[str, TypeSpec] = {
                 default="PLAINTEXT",
                 choices=("PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"),
             ),
-            Field("sasl_mechanism", "SASL 机制", "text"),
+            Field(
+                "sasl_mechanism",
+                "SASL 机制",
+                "select",
+                default="PLAIN",
+                choices=("PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"),
+            ),
             Field("sasl_user", "SASL 用户", "text"),
+            Field(
+                "ca_pem",
+                "CA 证书 PEM（可选，私有 CA 时填写）",
+                "pem",
+                help="仅 SSL / SASL_SSL 可用。",
+            ),
             Field("allowed_topics", "允许的 topic（一行一个）", "list", required=True),
         ),
-        (SecretField("sasl_password", "SASL 密码"),),
-        "只做描述类接口与保留范围内的有限拉取，不加入消费组。",
+        (
+            SecretField("sasl_password", "SASL 密码"),
+            SecretField(
+                "client_cert",
+                "客户端证书 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端证书，与私钥必须同时提供；不加密的私钥。",
+            ),
+            SecretField(
+                "client_key",
+                "客户端私钥 PEM（可选）",
+                pem=True,
+                help="mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。",
+            ),
+        ),
+        "只做描述类接口与保留范围内的有限拉取，不加入消费组；SASL 字段必须完整。",
     ),
     "cls": TypeSpec(
         "cls",
@@ -365,7 +412,7 @@ def _cross_validate(
         has_user_auth = bool(options.get("username")) and bool(password)
         if has_user_auth == bool(api_key):
             errors["_form"] = "Elasticsearch 需要「用户名 + 密码」或 API Key，二选一"
-    if spec.type in {"mysql", "elasticsearch", "mongo"}:
+    if spec.type in {"mysql", "elasticsearch", "mongo", "redis", "kafka"}:
         cert = _secret_present(existing, secrets_set, secrets_clear, "client_cert")
         key = _secret_present(existing, secrets_set, secrets_clear, "client_key")
         if cert != key:
@@ -377,16 +424,43 @@ def _cross_validate(
                 errors["verify_tls"] = "配置客户端证书时必须保持 TLS 校验开启"
             if spec.type == "mongo" and not options.get("tls"):
                 errors["tls"] = "配置客户端证书时必须启用 TLS"
+            if spec.type == "redis" and not options.get("tls"):
+                errors["tls"] = "配置客户端证书时必须启用 TLS"
+            if spec.type == "kafka" and options.get("security_protocol") not in {"SSL", "SASL_SSL"}:
+                errors["_form"] = "配置客户端证书时 security_protocol 必须是 SSL 或 SASL_SSL"
     if spec.type == "mongo" and options.get("ca_pem") and not options.get("tls"):
         errors["tls"] = "配置 CA 证书时必须启用 TLS"
+    if spec.type == "redis" and options.get("ca_pem") and not options.get("tls"):
+        errors["tls"] = "配置 CA 证书时必须启用 TLS"
+    if spec.type == "kafka" and options.get("ca_pem") and options.get("security_protocol") not in {"SSL", "SASL_SSL"}:
+        errors["_form"] = "配置 CA 证书时 security_protocol 必须是 SSL 或 SASL_SSL"
     if spec.type == "mysql" and options.get("ca_pem") and not options.get("ssl"):
         errors["ssl"] = "配置 CA 证书时必须启用 SSL"
     if spec.type == "elasticsearch" and options.get("ca_pem") and not options.get("verify_tls"):
         errors["verify_tls"] = "配置 CA 证书时必须保持 TLS 校验开启"
+    if spec.type == "redis":
+        username = str(options.get("username") or "").strip()
+        if username and not _secret_present(
+            existing, secrets_set, secrets_clear, "password"
+        ):
+            errors["secret_password"] = "配置 ACL 用户名时必须填写密码"
     if spec.type == "kafka":
         protocol = str(options.get("security_protocol", "PLAINTEXT"))
-        if protocol.startswith("SASL") and not options.get("sasl_mechanism"):
-            errors["sasl_mechanism"] = "SASL 协议需要填写 SASL 机制"
+        mechanism = str(options.get("sasl_mechanism") or "").strip()
+        if protocol.startswith("SASL"):
+            if mechanism not in {"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"}:
+                errors["sasl_mechanism"] = "SASL 机制必须是 PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512"
+            if not options.get("sasl_user"):
+                errors["sasl_user"] = "SASL 协议需要填写 SASL 用户"
+            if not _secret_present(existing, secrets_set, secrets_clear, "sasl_password"):
+                errors["secret_sasl_password"] = "SASL 协议需要填写 SASL 密码"
+        else:
+            if mechanism and mechanism != "PLAIN":
+                errors["sasl_mechanism"] = "非 SASL 协议不应填写 SASL 机制"
+            if options.get("sasl_user") or _secret_present(
+                existing, secrets_set, secrets_clear, "sasl_password"
+            ):
+                errors["_form"] = "非 SASL 协议不应填写 SASL 用户或密码"
     if spec.type == "cls":
         default_window = options.get("default_window_minutes")
         max_window = options.get("max_window_minutes")

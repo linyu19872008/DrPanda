@@ -33,8 +33,13 @@ class _RabbitClient:
         require(rabbit_guard.check_rabbit("GET", path))
         client = self._client()
         try:
-            response = await client.get(path)
-            base.check_http_response(response, "rabbitmq")
+            response, _ = await base.stream_http(
+                client,
+                "GET",
+                path,
+                component="rabbitmq",
+                limit=base.max_bytes(self.target),
+            )
             return response.json()
         except errors.DrPandaError:
             raise

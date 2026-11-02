@@ -461,3 +461,52 @@ def test_mongo_tls_kwargs_use_target_ca_and_client_pair() -> None:
 
         for path in paths:
             _unlink(path)
+
+
+def test_redis_acl_and_tls_client_options() -> None:
+    from dr_panda_mcp.connectors.redis import _RedisClient
+
+    target = make_target(
+        type_="redis",
+        options={
+            "host": "127.0.0.1",
+            "port": 6379,
+            "username": "drpanda",
+            "tls": True,
+            "ca_pem": _ca_pem(),
+        },
+        secret={"password": "pw"},
+    )
+    client = _RedisClient(target)._client()
+    try:
+        kwargs = client.connection_pool.connection_kwargs
+        assert kwargs["username"] == "drpanda"
+        assert kwargs["password"] == "pw"
+        assert kwargs["ssl_ca_data"].startswith("-----BEGIN CERTIFICATE-----")
+    finally:
+        import asyncio
+
+        asyncio.run(client.aclose())
+
+
+def test_kafka_sasl_tls_client_options() -> None:
+    from dr_panda_mcp.connectors.kafka import _KafkaClient
+
+    target = make_target(
+        type_="kafka",
+        options={
+            "bootstrap_servers": ["127.0.0.1:9092"],
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": "SCRAM-SHA-256",
+            "sasl_user": "drpanda",
+            "allowed_topics": ["orders"],
+            "ca_pem": _ca_pem(),
+        },
+        secret={"sasl_password": "pw"},
+    )
+    kwargs = _KafkaClient(target)._kwargs()
+    assert kwargs["security_protocol"] == "SASL_SSL"
+    assert kwargs["sasl_mechanism"] == "SCRAM-SHA-256"
+    assert kwargs["sasl_plain_username"] == "drpanda"
+    assert kwargs["sasl_plain_password"] == "pw"
+    assert kwargs["ssl_context"] is not None

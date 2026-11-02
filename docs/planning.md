@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.17 |
+| 版本 | v0.18 |
 | 更新 | 2026-11-02 |
 | 状态 | M0–M6 已实现；M7 登录待定 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -35,6 +35,7 @@
 | v0.15 | 2026-11-02 | Mongo 认证模式：none/password/uri，旧 target 自动推断；增加 TLS/CA/客户端证书字段 |
 | v0.16 | 2026-11-02 | Mongo 高级认证联调：X.509 与 replica set 经 URI 模式真实验证；LDAP/AWS IAM/OIDC/SRV 因企业版/云/DNS 依赖暂不验证 |
 | v0.17 | 2026-11-02 | P0 安全收口：MySQL PROCESSLIST 显式开关、Mongo 系统集合拒绝、ES 负数 size/聚合边界、stats 字节上限、CLS 上下文与时间窗修复 |
+| v0.18 | 2026-11-02 | IO 流上限；Redis ACL/TLS/mTLS；Mongo/ES/CLS/GitLab 分页；CLS context 字段修复 |
 
 ## 1. 目标
 
@@ -750,8 +751,12 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 主机 | `options.host` | 是 | — | |
 | 端口 | `options.port` | 否 | 6379 | |
 | 密码 | `secret.password` | 否 | — | |
+| ACL 用户名 | `options.username` | 否 | — | Redis 6+ ACL；填写时密码必填 |
 | DB | `options.db` | 否 | 0 | 0–15 |
 | 是否 TLS | `options.tls` | 否 | false | |
+| CA 证书 | `options.ca_pem` | 否 | 空 | PEM；配置时必须启用 TLS |
+| 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥同时提供 |
+| 客户端私钥 | `secret.client_key` | 否 | 空 | PEM；加密保存 |
 | key 前缀 | `options.key_prefix` | 否 | `""` | 空表示不限；非空只读此前缀下的 key |
 
 `SCAN` 带 `COUNT` 上限。列表、集合、哈希、有序集合的返回条数受该目标上限约束。命令白名单见 6.3。
@@ -783,9 +788,12 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 |---|---|---|---|---|
 | bootstrap 地址 | `options.bootstrap_servers` | 是 | — | `host:9092` 列表 |
 | 安全协议 | `options.security_protocol` | 否 | PLAINTEXT | PLAINTEXT / SSL / SASL_PLAINTEXT / SASL_SSL |
-| SASL 机制 | `options.sasl_mechanism` | 条件 | — | 协议为 SASL 时必填 |
+| SASL 机制 | `options.sasl_mechanism` | 条件 | PLAIN | PLAIN / SCRAM-SHA-256 / SCRAM-SHA-512；SASL 协议必填 |
 | SASL 用户 | `options.sasl_user` | 条件 | — | 同上 |
 | SASL 密码 | `secret.sasl_password` | 条件 | — | 同上 |
+| CA 证书 | `options.ca_pem` | 否 | 空 | 仅 SSL / SASL_SSL |
+| 客户端证书 | `secret.client_cert` | 否 | 空 | 仅 SSL / SASL_SSL |
+| 客户端私钥 | `secret.client_key` | 否 | 空 | 仅 SSL / SASL_SSL |
 | 允许的 topic | `options.allowed_topics` | 是 | — | 空表示拒绝 |
 
 抽取条数受该目标上限约束。不加入消费组、不提交 offset、不创建生产者，见 6.3。
@@ -898,9 +906,9 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 工具 | 参数 | 返回 | 闸门与范围 | 上限 |
 |---|---|---|---|---|
 | `systems_status` | 无 | 全局工具：包络 `target="*"`、`type="all"`；`rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
-| `cls_search` | `target`、`query`、`from`、`to`（必填）、`topic`（唯一授权时可省略）、`limit` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
+| `cls_search` | `target`、`query`、`from`、`to`（必填）、`topic`（唯一授权时可省略）、`limit`、`offset` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
 | `cls_context` | `target`、`topic`、`log_id`、`btime`、`pkg_log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
-| `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |
+| `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20`、`page=1` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |
 | `gitlab_get_file` | `target`、`project`、`path`、`ref` | `rows`: path、ref、content | 只发 GET；项目在允许列表 | 字节上限 |
 | `gitlab_blame` | `target`、`project`、`path`、`ref`、`line_from`、`line_to` | `rows`: 提交、作者、时间、行号范围 | 只发 GET；项目在允许列表 | 条数上限 |
 
@@ -923,7 +931,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | `mongo_aggregate` | `target`、`db`、`collection`、`pipeline`、`limit` | `rows`: 聚合结果 | 阶段白名单；`maxTimeMS`；库在允许列表 | 目标行数/字节 |
 | `mongo_stats` | `target`、`db`、`collection`（可空） | `stats`: 统计 | `collStats`/`dbStats`；库在允许列表 | 单次 |
 | `es_mapping` | `target`、`index` | `rows`: 字段、类型、分词器；`stats`: 分片与副本设置 | `GET /{index}/_mapping`、`_settings`；索引在允许列表 | 字节上限 |
-| `es_search` | `target`、`index`、`query`、`from`、`size`、`sort` | `rows`: hit 源；`stats`: total、took | `POST .../_search`；索引在允许列表；size ≤ 目标上限；根级聚合仅允许有界 terms | 目标行数/字节 |
+| `es_search` | `target`、`index`、`query`、`from`、`size`、`sort`、`search_after` | `rows`: hit 源（含 `_sort`）；`stats`: total、took | `POST .../_search`；索引在允许列表；size ≤ 目标上限；根级聚合仅允许有界 terms | 目标行数/字节 |
 | `es_health` | `target` | `stats`: status、节点数、分片等 | `GET _cluster/health` | 单次 |
 | `es_index_stats` | `target`、`index` | `rows`: 索引统计 | `GET .../_stats`；索引在允许列表 | 目标行数 |
 | `redis_get` | `target`、`key` | `rows`: key、type、ttl、value | 命令白名单；key 前缀限制 | 字节上限 |

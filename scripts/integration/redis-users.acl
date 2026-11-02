@@ -1,0 +1,3 @@
+user default off
+user drpanda on >drpanda_redis_pw ~drpanda:* +@read +@slow +@connection +@keyspace +info +slowlog +ping
+user admin on >drpanda_admin_pw ~* +@all

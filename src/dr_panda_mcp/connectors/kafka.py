@@ -32,15 +32,37 @@ class _KafkaClient:
             servers = [part.strip() for part in servers.split(",") if part.strip()]
         if not servers:
             raise errors.UpstreamUnavailable("kafka 目标没有配置 bootstrap_servers")
+        protocol = str(options.get("security_protocol", "PLAINTEXT"))
         kwargs: dict[str, Any] = {
             "bootstrap_servers": servers,
             "request_timeout_ms": int(base.timeout_seconds(self.target) * 1000),
-            "security_protocol": options.get("security_protocol", "PLAINTEXT"),
+            "security_protocol": protocol,
         }
-        if options.get("sasl_mechanism"):
-            kwargs["sasl_mechanism"] = options["sasl_mechanism"]
-            kwargs["sasl_plain_username"] = options.get("sasl_user", "")
-            kwargs["sasl_plain_password"] = self.target.secret.get("sasl_password", "")
+        if protocol in {"SSL", "SASL_SSL"}:
+            ca_pem = str(options.get("ca_pem") or "").strip()
+            cert = self.target.secret.get("client_cert", "")
+            key = self.target.secret.get("client_key", "")
+            if ca_pem or cert or key:
+                kwargs["ssl_context"] = base.build_tls_context(
+                    ca_pem=ca_pem,
+                    client_cert=cert,
+                    client_key=key,
+                )
+        elif options.get("ca_pem") or self.target.secret.get("client_cert"):
+            raise errors.UpstreamUnavailable(
+                "kafka TLS 材料只允许用于 SSL / SASL_SSL"
+            )
+        if protocol.startswith("SASL"):
+            mechanism = str(options.get("sasl_mechanism") or "").strip()
+            user = str(options.get("sasl_user") or "").strip()
+            password = self.target.secret.get("sasl_password", "")
+            if not mechanism or not user or not password:
+                raise errors.UpstreamUnavailable(
+                    "kafka SASL 协议缺少机制、用户或密码"
+                )
+            kwargs["sasl_mechanism"] = mechanism
+            kwargs["sasl_plain_username"] = user
+            kwargs["sasl_plain_password"] = password
         return kwargs
 
     def _consumer(self):

@@ -611,3 +611,68 @@ async def test_mongo_auth_mode_validation(runtime: Runtime) -> None:
     assert target is not None and target.options["auth_mode"] == "password"
     assert target.secret_fields == frozenset({"password"})
     assert conflict.status_code == 400 and "必须留空" in conflict.text
+
+
+async def test_redis_acl_and_tls_fields(runtime: Runtime) -> None:
+    from tests.test_connectors_data import _ca_pem
+
+    base = {
+        "type": "redis",
+        "name": "redis-acl",
+        "enabled": "on",
+        "host": "127.0.0.1",
+        "port": "6379",
+        "db": "0",
+        "username": "drpanda",
+        "tls": "on",
+        "ca_pem": _ca_pem(),
+        **COMMON,
+    }
+    async with _client(runtime) as client:
+        no_password = dict(base)
+        rejected = await client.post("/targets", data=no_password)
+
+        valid = dict(base)
+        valid["secret_password"] = "pw"
+        created = await client.post("/targets", data=valid)
+        target = await runtime.store.get("redis-acl")
+
+    assert rejected.status_code == 400 and "密码" in rejected.text
+    assert created.status_code == 303
+    assert target is not None
+    assert target.options["username"] == "drpanda"
+    assert target.options["tls"] is True
+    assert target.secret_fields == frozenset({"password"})
+
+
+async def test_kafka_sasl_fields_validation(runtime: Runtime) -> None:
+    base = {
+        "type": "kafka",
+        "name": "kafka-sasl",
+        "enabled": "on",
+        "bootstrap_servers": "127.0.0.1:9092",
+        "security_protocol": "SASL_SSL",
+        "sasl_mechanism": "SCRAM-SHA-256",
+        "allowed_topics": "orders",
+        **COMMON,
+    }
+    async with _client(runtime) as client:
+        no_user = dict(base, secret_sasl_password="pw")
+        rejected = await client.post("/targets", data=no_user)
+
+        valid = dict(no_user, sasl_user="drpanda")
+        created = await client.post("/targets", data=valid)
+        target = await runtime.store.get("kafka-sasl")
+
+        non_sasl = dict(base)
+        non_sasl["security_protocol"] = "PLAINTEXT"
+        non_sasl["sasl_user"] = "drpanda"
+        non_sasl["secret_sasl_password"] = "pw"
+        conflict = await client.post("/targets", data=non_sasl)
+
+    assert rejected.status_code == 400 and "SASL 用户" in rejected.text
+    assert created.status_code == 303
+    assert target is not None
+    assert target.options["sasl_mechanism"] == "SCRAM-SHA-256"
+    assert target.secret_fields == frozenset({"sasl_password"})
+    assert conflict.status_code == 400 and "非 SASL" in conflict.text

@@ -161,6 +161,7 @@ class _MongoClient:
         projection: dict[str, Any] | None,
         sort: dict[str, Any] | None,
         limit: int,
+        skip: int = 0,
     ) -> list[dict[str, Any]]:
         require(mongo_guard.check_mongo_command("find", {"filter": filter_}))
         async with self._connected() as client:
@@ -172,6 +173,8 @@ class _MongoClient:
                 )
                 if sort:
                     cursor = cursor.sort(list(sort.items()))
+                if skip:
+                    cursor = cursor.skip(skip)
                 documents = await cursor.limit(limit).to_list(length=limit)
                 return [base.to_jsonable(document) for document in documents]
             except errors.DrPandaError:
@@ -268,8 +271,9 @@ class MongoConnector:
         projection: dict[str, Any] | None,
         sort: dict[str, Any] | None,
         limit: int,
+        skip: int = 0,
     ) -> list[dict[str, Any]]:
-        return await client.find(db, collection, filter_, projection, sort, limit)
+        return await client.find(db, collection, filter_, projection, sort, limit, skip)
 
     async def aggregate(
         self,

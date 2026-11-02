@@ -41,33 +41,47 @@ async def test_gitlab_search_code_request_and_parse(
 
     async def fake_get(path: str, params: dict[str, Any] | None = None):
         calls.append((path, params))
-        return _response(
-            path, json=[{"path": "app/main.py", "startline": 3, "data": "boom"}]
+        return (
+            _response(
+                path, json=[{"path": "app/main.py", "startline": 3, "data": "boom"}]
+            ),
+            False,
         )
 
     monkeypatch.setattr(client, "_get", fake_get)
 
-    rows = await client.search_code("group/app", "boom", ref="main", per_page=20)
+    rows = await client.search_code(
+        "group/app", "boom", ref="main", per_page=20, page=2
+    )
 
     assert rows == [{"path": "app/main.py", "startline": 3, "data": "boom"}]
     path, params = calls[0]
     assert path.startswith("/api/v4/projects/group%2Fapp/search")
-    assert params == {"scope": "blobs", "search": "boom", "per_page": 20, "ref": "main"}
+    assert params == {
+        "scope": "blobs",
+        "search": "boom",
+        "per_page": 20,
+        "ref": "main",
+        "page": 2,
+    }
 
 
 async def test_gitlab_get_file_returns_text(monkeypatch: pytest.MonkeyPatch) -> None:
     client = _GitLabClient(_gitlab_target())
     calls: list[tuple[str, dict[str, Any] | None]] = []
 
-    async def fake_get(path: str, params: dict[str, Any] | None = None):
+    async def fake_get(
+        path: str, params: dict[str, Any] | None = None, *, truncate: bool = False
+    ):
         calls.append((path, params))
-        return _response(path, text="print('hello')")
+        return _response(path, text="print('hello')"), False
 
     monkeypatch.setattr(client, "_get", fake_get)
 
-    content = await client.get_file("group/app", "app/main.py", ref="main")
+    content, cut = await client.get_file("group/app", "app/main.py", ref="main")
 
     assert content == "print('hello')"
+    assert cut is False
     assert calls[0][0].endswith("/repository/files/app%2Fmain.py/raw")
     assert calls[0][1] == {"ref": "main"}
 
@@ -78,9 +92,12 @@ async def test_gitlab_blame_request_and_parse(monkeypatch: pytest.MonkeyPatch) -
 
     async def fake_get(path: str, params: dict[str, Any] | None = None):
         calls.append((path, params))
-        return _response(
-            path,
-            json=[{"commit": {"short_id": "abc"}, "lines": ["a", "b"]}],
+        return (
+            _response(
+                path,
+                json=[{"commit": {"short_id": "abc"}, "lines": ["a", "b"]}],
+            ),
+            False,
         )
 
     monkeypatch.setattr(client, "_get", fake_get)
@@ -184,13 +201,19 @@ async def test_cls_search_log_maps_topic_and_rows(
     end = datetime(2026, 1, 1, 1, tzinfo=UTC)
 
     rows = await client.search_log(
-        topic="logset/app", query="level:ERROR", start=start, end=end, limit=10
+        topic="logset/app",
+        query="level:ERROR",
+        start=start,
+        end=end,
+        limit=10,
+        offset=5,
     )
 
     request = state["search_request"]
     assert request.TopicId == "app"
     assert request.Query == "level:ERROR"
     assert request.Limit == 10
+    assert request.Offset == 5
     assert rows[0]["content"] == "boom"
     assert rows[0]["time"] == "2026-01-01T01:00:00+00:00"
     assert rows[1]["time"] is None

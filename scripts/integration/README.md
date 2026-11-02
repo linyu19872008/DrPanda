@@ -8,7 +8,7 @@
 # 0. 生成 MySQL TLS 测试证书（/tmp/drpanda-mysql-certs）
 bash scripts/integration/mysql-tls/gen-certs.sh
 
-# 1. 起 13 个上游（MySQL TLS/mTLS + 4 个 ES + Mongo 无认证/TLS/mTLS/X.509/RS；Kafka 暂不启动）
+# 1. 起 15 个上游（MySQL TLS/mTLS + 4 个 ES + Mongo 无认证/TLS/mTLS/X.509/RS + Redis ACL/TLS；Kafka 暂不启动）
 docker compose -f scripts/integration/compose.yaml up -d
 
 # 2. 安装驱动
@@ -26,8 +26,9 @@ bash scripts/integration/prepare_target_ca.sh
 bash scripts/integration/prepare_mtls.sh
 bash scripts/integration/prepare_mongo_auth.sh
 bash scripts/integration/prepare_mongo_advanced.sh
+bash scripts/integration/prepare_redis_tls.sh
 
-# 5. 跑基础检查、扩展矩阵、P1、target CA、mTLS、Mongo 认证/高级认证
+# 5. 跑基础检查、扩展矩阵、P1、target CA、mTLS、Mongo 认证/高级认证、Redis ACL/TLS
 uv run python scripts/integration/check_tools.py
 uv run python scripts/integration/check_refusals.py
 uv run python scripts/integration/check_matrix.py
@@ -37,6 +38,7 @@ uv run python scripts/integration/check_target_ca.py
 uv run python scripts/integration/check_mtls.py
 uv run python scripts/integration/check_mongo_auth.py
 uv run python scripts/integration/check_mongo_advanced.py
+uv run python scripts/integration/check_redis_tls.py
 ```
 
 ## 两套检查
@@ -49,6 +51,7 @@ uv run python scripts/integration/check_mongo_advanced.py
 - `check_mtls.py`：MySQL REQUIRE X509 / ES 客户端证书（4 条）
 - `check_mongo_auth.py`：Mongo none/password/uri/TLS/mTLS（7 条）
 - `check_mongo_advanced.py`：Mongo X.509 / replica set（3 条）
+- `check_redis_tls.py`：Redis ACL/TLS/mTLS（3 条）
 
 ## P1 与 target 级 CA
 
@@ -73,6 +76,8 @@ uv run python scripts/integration/check_mongo_advanced.py
 | Elasticsearch TLS | `drpanda-elasticsearch-tls` | 19202 | HTTPS + 测试 CA，用于 target 级 CA |
 | Elasticsearch mTLS | `drpanda-elasticsearch-mtls` | 19203 | HTTPS + 客户端证书必填，用于 mTLS |
 | Redis | `drpanda-redis` | 16379 | 密码 `drpanda_redis_pw`，key 前缀 `drpanda:` |
+| Redis ACL/TLS | `drpanda-redis-acl-tls` | 16380 | ACL 用户 `drpanda` + TLS，key 前缀 `drpanda:` |
+| Redis ACL/mTLS | `drpanda-redis-acl-mtls` | 16381 | ACL 用户 `drpanda` + TLS + 客户端证书 |
 | RabbitMQ | `drpanda-rabbitmq` | 15673 | `drpanda` / `drpanda_rabbit_pw`，vhost `/` |
 
 ## Mongo 认证
@@ -85,6 +90,17 @@ uv run python scripts/integration/check_mongo_advanced.py
 
 - `prepare_mongo_advanced.sh` 创建 X.509 与 replica set target；`check_mongo_advanced.py` 验证 3 条。
 - LDAP/AWS IAM/OIDC/`mongodb+srv` 不能靠社区 Docker 镜像真实验证，未伪造成通过。
+
+## Redis ACL/TLS
+
+- `prepare_redis_tls.sh` 创建 ACL/TLS 与 ACL/mTLS target；`check_redis_tls.py` 验证 3 条。
+- mTLS target 无客户端证书必须失败（`UPSTREAM_UNAVAILABLE`）。
+
+## GitLab / CLS / Kafka 真实联调
+
+- GitLab：本机没有镜像、实例 URL 和 token；本轮未伪造成通过。
+- CLS：没有腾讯云 SecretId/SecretKey 和日志主题；未调用真实 API。
+- Kafka：仍没有可用镜像；不使用本地二进制或 Redpanda 替代。
 
 ## Kafka 为什么没起
 

@@ -41,6 +41,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         from_: Annotated[str, Field(alias="from")],
         to: Annotated[str, Field(alias="to")],
         limit: int = 0,
+        offset: int = 0,
     ) -> dict[str, Any]:
         """按条件检索 CLS 日志；必须带时间窗，单次不超过 24 小时。"""
         params = {
@@ -49,12 +50,15 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             "from": from_,
             "to": to,
             "limit": limit or None,
+            "offset": offset or None,
         }
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             if not query.strip():
                 raise errors.InvalidArgument("query 不能为空")
+            if offset < 0 or offset > 10_000:
+                raise errors.InvalidArgument("offset 必须在 0–10000 之间")
             max_window = int(tgt.options.get("max_window_minutes", 1440) or 1440)
             window = require(
                 cls_guard.check_cls(
@@ -75,6 +79,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                 start=window["from"],
                 end=window["to"],
                 limit=cap + 1,
+                offset=offset,
             )
             rows, truncation = trim_rows(fetched, cap)
             return finish(
@@ -82,7 +87,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                 summary=f"SearchLog topic={chosen_topic} query={query[:80]}",
                 started=started,
                 rows=rows,
-                stats={"topic": chosen_topic, "query": query},
+                stats={"topic": chosen_topic, "query": query, "offset": offset},
                 time_range={
                     "from": _utc_iso(window["from"]),
                     "to": _utc_iso(window["to"]),
@@ -172,9 +177,16 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         project: str = "",
         ref: str = "",
         limit: int = 20,
+        page: int = 1,
     ) -> dict[str, Any]:
         """在 GitLab 项目里搜索代码；project 省略时只在授权项目内搜索。"""
-        params = {"query": query, "project": project or None, "ref": ref or None, "limit": limit}
+        params = {
+            "query": query,
+            "project": project or None,
+            "ref": ref or None,
+            "limit": limit,
+            "page": page,
+        }
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
@@ -184,6 +196,8 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             projects = (
                 [ensure_project(tgt, project)] if project else allowed_projects(tgt)
             )
+            if page < 1 or page > 10_000:
+                raise errors.InvalidArgument("page 必须在 1–10000 之间")
             cap = clamp_limit(limit, tgt, 20)
             connector = get_connector("gitlab")
             client = await runtime.catalog.client(tgt, connector)
@@ -198,6 +212,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                     query=query,
                     ref=ref or None,
                     limit=min(cap + 1 - len(rows), 100),
+                    page=page,
                 )
                 for item in items:
                     rows.append(
@@ -215,7 +230,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                 summary=f"GitLab search blobs query={query[:80]} projects={len(projects)}",
                 started=started,
                 rows=rows,
-                stats={"projects": projects, "query": query},
+                stats={"projects": projects, "query": query, "page": page},
                 truncation=truncation,
             )
 
@@ -243,12 +258,12 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
                 raise errors.InvalidArgument("path 不能为空")
             connector = get_connector("gitlab")
             client = await runtime.catalog.client(tgt, connector)
-            content = await connector.get_file(
+            content, upstream_truncated = await connector.get_file(
                 client, tgt, project=chosen_project, path=path, ref=ref or None
             )
             byte_limit = connectors_base.max_bytes(tgt)
-            truncated = len(content.encode("utf-8")) > byte_limit
-            if truncated:
+            truncated = upstream_truncated or len(content.encode("utf-8")) > byte_limit
+            if truncated and not upstream_truncated:
                 # 给 JSON 字段名留余量，避免包络二次字节检查把整行丢掉
                 content = content.encode("utf-8")[: max(byte_limit - 1024, 1)].decode(
                     "utf-8", "ignore"

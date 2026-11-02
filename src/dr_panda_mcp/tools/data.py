@@ -385,18 +385,27 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         projection: str = "",
         sort: str = "",
         limit: int = 0,
+        skip: int = 0,
     ) -> dict[str, Any]:
         """按过滤条件查询文档（filter 必填）。"""
         params = {
             "db": db, "collection": collection, "filter": filter,
             "projection": projection or None, "sort": sort or None,
             "limit": limit or None,
+            "skip": skip or None,
         }
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             chosen = ensure_db(tgt, db)
             chosen_collection = ensure_mongo_collection(tgt, collection)
+            if skip < 0:
+                raise errors.InvalidArgument("skip 不能为负数")
+            if skip > 10_000:
+                raise errors.GuardRejected(
+                    "skip 不能超过 10000，请缩小过滤条件",
+                    code=errors.DANGEROUS_OPERATION,
+                )
             filter_obj = _json_object(filter, "filter", required=True)
             projection_obj = _json_object(projection, "projection", required=False) or None
             sort_obj = _json_object(sort, "sort", required=False) or None
@@ -422,14 +431,20 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
                 projection=projection_obj,
                 sort=sort_obj,
                 limit=cap + 1,
+                skip=skip,
             )
             rows, truncation = trim_rows(fetched, cap)
             return finish(
                 tgt,
-                summary=f"find {chosen}.{chosen_collection} (limit={cap})",
+                summary=f"find {chosen}.{chosen_collection} (limit={cap}, skip={skip})",
                 started=started,
                 rows=rows,
-                stats={"db": chosen, "collection": chosen_collection, "limit": cap},
+                stats={
+                    "db": chosen,
+                    "collection": chosen_collection,
+                    "limit": cap,
+                    "skip": skip,
+                },
                 truncation=truncation,
             )
 
@@ -545,11 +560,13 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         from_: Annotated[int, Field(alias="from")] = 0,
         size: int = 0,
         sort: str = "",
+        search_after: str = "",
     ) -> dict[str, Any]:
         """搜索索引（script、深分页与超限 size 会被拒绝）。"""
         params = {
             "index": index, "query": query or None, "from": from_,
             "size": size or None, "sort": sort or None,
+            "search_after": search_after or None,
         }
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -569,7 +586,21 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
                 )
             if from_ < 0:
                 raise errors.InvalidArgument("from 不能为负数")
-            body["from"] = from_
+            if search_after:
+                if from_:
+                    raise errors.InvalidArgument("search_after 不能与 from 同时使用")
+                if not sort:
+                    raise errors.InvalidArgument("search_after 必须配合 sort 使用")
+                try:
+                    after_value = json.loads(search_after)
+                except ValueError as exc:
+                    raise errors.InvalidArgument(f"search_after 不是合法 JSON：{exc}") from exc
+                if not isinstance(after_value, list):
+                    raise errors.InvalidArgument("search_after 必须是 JSON 数组")
+                body["search_after"] = after_value
+                body["from"] = 0
+            else:
+                body["from"] = from_
             available = max(10_000 - from_, 1)
             body["size"] = min(requested + 1, available)
             if sort:

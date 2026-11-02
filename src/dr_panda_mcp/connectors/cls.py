@@ -82,6 +82,7 @@ class _CLSClient:
         start: datetime,
         end: datetime,
         limit: int,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         client, models = self._sdk()
 
@@ -92,6 +93,7 @@ class _CLSClient:
             request.From = int(start.timestamp())
             request.To = int(end.timestamp())
             request.Limit = limit
+            request.Offset = offset
             request.Sort = "desc"
             return client.SearchLog(request)
 
@@ -200,9 +202,15 @@ class CLSConnector:
         start: datetime,
         end: datetime,
         limit: int,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         return await client.search_log(
-            topic=topic, query=query, start=start, end=end, limit=limit
+            topic=topic,
+            query=query,
+            start=start,
+            end=end,
+            limit=limit,
+            offset=offset,
         )
 
     async def describe_context(

@@ -51,6 +51,17 @@ cat mongo-server-cert.pem mongo-server-key.pem > mongo-server.pem
 cat client-cert.pem client-key.pem > client.pem
 chmod 644 mongo-server.pem client.pem
 
-chmod 644 ca.pem server-cert.pem server-key.pem es-server-cert.pem es-server-key.pem client-cert.pem
+# Redis TLS 服务端证书
+openssl genrsa -out redis-server-key.pem 2048 2>/dev/null
+openssl req -new -key redis-server-key.pem -subj "/CN=drpanda-redis" -out redis-server.csr 2>/dev/null
+cat > redis-san.cnf <<EOF
+subjectAltName=DNS:localhost,IP:127.0.0.1
+extendedKeyUsage=serverAuth
+EOF
+openssl x509 -req -in redis-server.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+  -out redis-server-cert.pem -days 3650 -sha256 -extfile redis-san.cnf 2>/dev/null
+cat redis-server-cert.pem redis-server-key.pem > redis-server.pem
+
+chmod 644 ca.pem server-cert.pem server-key.pem es-server-cert.pem es-server-key.pem redis-server.pem client-cert.pem
 chmod 600 client-key.pem
 echo "generated MySQL/Elasticsearch/MongoDB TLS + mTLS client certs in $DIR"

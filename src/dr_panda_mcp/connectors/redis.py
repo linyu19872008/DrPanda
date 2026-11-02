@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from typing import Any
 
 from dr_panda_mcp import errors
@@ -14,6 +16,27 @@ from dr_panda_mcp.store.protocol import Target
 class _RedisClient:
     def __init__(self, target: Target) -> None:
         self.target = target
+        self._cert_path: str | None = None
+        self._key_path: str | None = None
+        if target.options.get("tls"):
+            cert = target.secret.get("client_cert", "")
+            key = target.secret.get("client_key", "")
+            if cert or key:
+                if not (cert and key):
+                    raise errors.UpstreamUnavailable(
+                        "redis 客户端证书与私钥必须同时提供"
+                    )
+                self._cert_path = _temp_pem(cert, "cert")
+                self._key_path = _temp_pem(key, "key")
+                os.chmod(self._key_path, 0o600)
+
+    def close_files(self) -> None:
+        for path in (self._cert_path, self._key_path):
+            if path:
+                try:
+                    os.unlink(path)
+                except OSError:
+                    pass
 
     def _client(self):
         try:
@@ -23,16 +46,27 @@ class _RedisClient:
                 "redis 客户端未安装：uv sync --extra redis"
             ) from exc
         options = self.target.options
-        return redis_async.Redis(
-            host=options.get("host", "127.0.0.1"),
-            port=int(options.get("port", 6379)),
-            password=self.target.secret.get("password") or None,
-            db=int(options.get("db", 0)),
-            ssl=bool(options.get("tls", False)),
-            socket_connect_timeout=base.timeout_seconds(self.target),
-            socket_timeout=base.timeout_seconds(self.target),
-            decode_responses=True,
-        )
+        kwargs: dict[str, Any] = {
+            "host": options.get("host", "127.0.0.1"),
+            "port": int(options.get("port", 6379)),
+            "password": self.target.secret.get("password") or None,
+            "db": int(options.get("db", 0)),
+            "socket_connect_timeout": base.timeout_seconds(self.target),
+            "socket_timeout": base.timeout_seconds(self.target),
+            "decode_responses": True,
+        }
+        username = str(options.get("username") or "").strip()
+        if username:
+            kwargs["username"] = username
+        if options.get("tls"):
+            ca_pem = str(options.get("ca_pem") or "").strip()
+            if ca_pem:
+                kwargs["ssl_ca_data"] = ca_pem
+            kwargs["ssl"] = True
+            if self._cert_path and self._key_path:
+                kwargs["ssl_certfile"] = self._cert_path
+                kwargs["ssl_keyfile"] = self._key_path
+        return redis_async.Redis(**kwargs)
 
     async def _run(self, operation):
         client = self._client()
@@ -133,6 +167,16 @@ class _RedisClient:
         return await self._run(operation)
 
 
+def _temp_pem(content: str, suffix: str) -> str:
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=f".{suffix}.pem", delete=False
+    ) as handle:
+        handle.write(content)
+        path = handle.name
+    os.chmod(path, 0o600)
+    return path
+
+
 def _ensure_within(size: int, limit: int, kind: str, key: str) -> None:
     if size > limit:
         raise errors.GuardRejected(
@@ -154,7 +198,7 @@ class RedisConnector:
         await client.ping()
 
     async def close_client(self, client: _RedisClient) -> None:
-        return None
+        client.close_files()
 
     async def inspect(
         self,

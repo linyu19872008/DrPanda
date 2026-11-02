@@ -83,7 +83,7 @@ class FakeGitLabConnector:
 
     async def get_file(self, client, target, **kwargs):
         self.file_calls.append(kwargs)
-        return self.file_content
+        return self.file_content, False
 
     async def blame(self, client, target, **kwargs):
         self.blame_calls.append(kwargs)

@@ -11,11 +11,14 @@ import os
 import ssl
 import tempfile
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from datetime import time as time_value
 from decimal import Decimal
 from typing import Any, Protocol, Self
+
+import httpx
 
 from dr_panda_mcp import errors
 from dr_panda_mcp.guards.protocol import Decision
@@ -140,6 +143,63 @@ def max_bytes(target: Target) -> int:
     except (TypeError, ValueError):
         return DEFAULT_MAX_BYTES
     return min(max(size, 4096), 1_048_576)
+
+
+async def stream_http(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    *,
+    component: str,
+    limit: int,
+    json_body: Any = None,
+    params: Mapping[str, Any] | None = None,
+    truncate: bool = False,
+) -> tuple[httpx.Response, bool]:
+    """流式读取 HTTP 响应，超过 target 字节上限时中止或显式截断。
+
+    默认超限直接报错；只有明确 ``truncate=True`` 的文件读取才允许只保留前
+    ``limit`` 字节，并由调用方标记 ``truncated``。
+    """
+    async with client.stream(
+        method, url, json=json_body, params=params
+    ) as response:
+        check_http_response(response, component)
+        expected = response.headers.get("content-length")
+        if (
+            not truncate
+            and expected is not None
+            and expected.isdigit()
+            and int(expected) > limit
+        ):
+            raise errors.UpstreamUnavailable(
+                f"{component} 响应声明长度 {expected} 超过目标字节上限 {limit}"
+            )
+
+        chunks: list[bytes] = []
+        total = 0
+        cut = False
+        async for chunk in response.aiter_bytes():
+            if total + len(chunk) > limit:
+                if not truncate:
+                    raise errors.UpstreamUnavailable(
+                        f"{component} 响应超过目标字节上限 {limit}"
+                    )
+                chunks.append(chunk[: limit - total])
+                cut = True
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        content = b"".join(chunks)
+        return (
+            httpx.Response(
+                response.status_code,
+                headers=response.headers,
+                content=content,
+                request=response.request,
+            ),
+            cut,
+        )
 
 
 async def run_with_timeout(awaitable, seconds: float):

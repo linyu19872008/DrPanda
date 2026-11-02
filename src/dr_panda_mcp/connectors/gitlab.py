@@ -29,12 +29,25 @@ class _GitLabClient:
             timeout=base.timeout_seconds(self.target),
         )
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
+    async def _get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        truncate: bool = False,
+    ) -> tuple[httpx.Response, bool]:
         client = self._client()
         try:
-            response = await client.get(path, params=params)
-            base.check_http_response(response, "gitlab")
-            return response
+            response, cut = await base.stream_http(
+                client,
+                "GET",
+                path,
+                component="gitlab",
+                limit=base.max_bytes(self.target),
+                params=params,
+                truncate=truncate,
+            )
+            return response, cut
         except errors.DrPandaError:
             raise
         except Exception as exc:
@@ -46,7 +59,13 @@ class _GitLabClient:
         await self._get("/api/v4/user")
 
     async def search_code(
-        self, project: str, query: str, *, ref: str | None, per_page: int
+        self,
+        project: str,
+        query: str,
+        *,
+        ref: str | None,
+        per_page: int,
+        page: int = 1,
     ) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "scope": "blobs",
@@ -55,7 +74,9 @@ class _GitLabClient:
         }
         if ref:
             params["ref"] = ref
-        response = await self._get(
+        if page > 1:
+            params["page"] = page
+        response, _ = await self._get(
             f"/api/v4/projects/{quote(project, safe='')}/search", params=params
         )
         try:
@@ -66,14 +87,17 @@ class _GitLabClient:
             raise errors.UpstreamUnavailable("gitlab 搜索结果格式不符合预期")
         return [item for item in payload if isinstance(item, dict)]
 
-    async def get_file(self, project: str, path: str, *, ref: str | None) -> str:
+    async def get_file(
+        self, project: str, path: str, *, ref: str | None
+    ) -> tuple[str, bool]:
         params = {"ref": ref} if ref else None
-        response = await self._get(
+        response, cut = await self._get(
             f"/api/v4/projects/{quote(project, safe='')}"
             f"/repository/files/{quote(path, safe='')}/raw",
             params=params,
+            truncate=True,
         )
-        return response.text
+        return response.text, cut
 
     async def blame(
         self,
@@ -91,7 +115,7 @@ class _GitLabClient:
             params["range[start]"] = line_from
         if line_to is not None:
             params["range[end]"] = line_to
-        response = await self._get(
+        response, _ = await self._get(
             f"/api/v4/projects/{quote(project, safe='')}"
             f"/repository/files/{quote(path, safe='')}/blame",
             params=params or None,
@@ -129,8 +153,11 @@ class GitLabConnector:
         query: str,
         ref: str | None,
         limit: int,
+        page: int = 1,
     ) -> list[dict[str, Any]]:
-        return await client.search_code(project, query, ref=ref, per_page=limit)
+        return await client.search_code(
+            project, query, ref=ref, per_page=limit, page=page
+        )
 
     async def get_file(
         self,
@@ -140,7 +167,7 @@ class GitLabConnector:
         project: str,
         path: str,
         ref: str | None,
-    ) -> str:
+    ) -> tuple[str, bool]:
         return await client.get_file(project, path, ref=ref)
 
     async def blame(

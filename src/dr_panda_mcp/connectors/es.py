@@ -71,13 +71,19 @@ class _ESClient:
         for base_url in self._base_urls():
             client = self._client(base_url)
             try:
-                response = await client.request(method, path, json=body)
+                response, _ = await base.stream_http(
+                    client,
+                    method,
+                    path,
+                    component="elasticsearch",
+                    limit=base.max_bytes(self.target),
+                    json_body=body,
+                )
                 if response.status_code >= 500:
                     last_error = errors.UpstreamUnavailable(
                         f"elasticsearch 返回 HTTP {response.status_code}"
                     )
                     continue
-                base.check_http_response(response, "elasticsearch")
                 return response
             except errors.UpstreamNotFound:
                 raise
@@ -142,6 +148,8 @@ class _ESClient:
                 "_id": hit.get("_id"),
                 "_score": hit.get("_score"),
             }
+            if "sort" in hit:
+                row["_sort"] = hit.get("sort")
             source = hit.get("_source")
             if isinstance(source, dict):
                 row.update(source)

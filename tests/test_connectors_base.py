@@ -132,3 +132,40 @@ def test_tls_context_requires_cert_and_key_together() -> None:
 def test_tls_context_rejects_invalid_ca() -> None:
     with pytest.raises(errors.UpstreamUnavailable):
         base.build_tls_context(ca_pem="not a pem certificate")
+
+
+async def test_stream_http_rejects_oversize_response() -> None:
+    import httpx
+
+    from dr_panda_mcp import errors
+    from dr_panda_mcp.connectors import base as connector_base
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"x" * 100)
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        with pytest.raises(errors.UpstreamUnavailable):
+            await connector_base.stream_http(
+                client, "GET", "http://example.test/", component="test", limit=10
+            )
+
+
+async def test_stream_http_can_truncate_file_content() -> None:
+    import httpx
+
+    from dr_panda_mcp.connectors import base as connector_base
+
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(200, content=b"x" * 100)
+    )
+    async with httpx.AsyncClient(transport=transport) as client:
+        response, cut = await connector_base.stream_http(
+            client,
+            "GET",
+            "http://example.test/",
+            component="test",
+            limit=10,
+            truncate=True,
+        )
+    assert cut is True
+    assert response.content == b"x" * 10

@@ -354,6 +354,56 @@ async def test_mongo_find_aggregate_scope_and_guard(
     assert errors.SCOPE_DENIED in scope
 
 
+async def test_mongo_find_skip_and_cap(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _setup(runtime)
+    mongo = FakeMongo()
+    _patch(monkeypatch, mongo=mongo)
+
+    payload = await _call(runtime, "mongo_find", {
+        "target": "db-mongo", "db": "app", "collection": "orders",
+        "filter": '{"status":"paid"}', "skip": 5,
+    })
+    assert payload["stats"]["skip"] == 5
+    assert mongo.calls[-1][1]["skip"] == 5
+    too_deep = await _error(runtime, "mongo_find", {
+        "target": "db-mongo", "db": "app", "collection": "orders",
+        "filter": '{"status":"paid"}', "skip": 10001,
+    })
+    assert errors.DANGEROUS_OPERATION in too_deep
+
+
+async def test_es_search_after_and_negative_size(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await _setup(runtime)
+    es = FakeES()
+    _patch(monkeypatch, es=es)
+
+    payload = await _call(runtime, "es_search", {
+        "target": "db-es", "index": "logs-2026",
+        "query": '{"match_all":{}}', "sort": '[{"ts":"desc"}]',
+        "search_after": '[1767229200000, 10]',
+    })
+    assert payload["returned"] == 1
+    body = es.calls[-1][1]["body"]
+    assert body["from"] == 0
+    assert body["search_after"] == [1767229200000, 10]
+
+    with_after = await _error(runtime, "es_search", {
+        "target": "db-es", "index": "logs-2026",
+        "query": '{"match_all":{}}', "sort": '[{"ts":"desc"}]',
+        "search_after": '[1]', "from": 1,
+    })
+    missing_sort = await _error(runtime, "es_search", {
+        "target": "db-es", "index": "logs-2026",
+        "query": '{"match_all":{}}', "search_after": '[1]',
+    })
+    assert errors.INVALID_ARGUMENT in with_after
+    assert errors.INVALID_ARGUMENT in missing_sort
+
+
 async def test_mongo_collections_and_stats(
     runtime: Runtime, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -257,6 +257,68 @@ services:
       timeout: 3s
       retries: 30
 
+  redis-acl-tls:
+    image: public.ecr.aws/docker/library/redis:7.2-alpine
+    container_name: drpanda-redis-acl-tls
+    restart: "no"
+    command:
+      - redis-server
+      - --port
+      - "0"
+      - --tls-port
+      - "6380"
+      - --tls-cert-file
+      - /certs/redis-server.pem
+      - --tls-key-file
+      - /certs/redis-server-key.pem
+      - --tls-ca-cert-file
+      - /certs/ca.pem
+      - --tls-auth-clients
+      - "no"
+      - --aclfile
+      - /etc/redis/users.acl
+    ports:
+      - "16380:6380"
+    volumes:
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs:ro"
+      - ./redis-users.acl:/etc/redis/users.acl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 6380 --tls --cacert /certs/ca.pem --user drpanda --pass drpanda_redis_pw PING | grep PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  redis-acl-mtls:
+    image: public.ecr.aws/docker/library/redis:7.2-alpine
+    container_name: drpanda-redis-acl-mtls
+    restart: "no"
+    command:
+      - redis-server
+      - --port
+      - "0"
+      - --tls-port
+      - "6380"
+      - --tls-cert-file
+      - /certs/redis-server.pem
+      - --tls-key-file
+      - /certs/redis-server-key.pem
+      - --tls-ca-cert-file
+      - /certs/ca.pem
+      - --tls-auth-clients
+      - "yes"
+      - --aclfile
+      - /etc/redis/users.acl
+    ports:
+      - "16381:6380"
+    volumes:
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs/:ro"
+      - ./redis-users.acl:/etc/redis/users.acl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 6380 --tls --cacert /certs/ca.pem --cert /certs/client.pem --key /certs/client-key.pem --user drpanda --pass drpanda_redis_pw PING | grep PONG"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
   rabbitmq:
     image: public.ecr.aws/docker/library/rabbitmq:3.13-management
     container_name: drpanda-rabbitmq
