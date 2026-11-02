@@ -2,8 +2,8 @@
   {%- set invalid = ' aria-invalid="true" aria-describedby="err-' ~ row.key ~ '"' if row.error else '' -%}
   {%- if row.kind == "bool" -%}
     <input class="checkbox" type="checkbox" id="{{ field_id }}" name="{{ row.key }}"{% if row.value %} checked{% endif %}>
-  {%- elif row.kind == "list" -%}
-    <textarea class="input textarea" id="{{ field_id }}" name="{{ row.key }}" rows="3" spellcheck="false"{{ invalid }}>{{ row.value }}</textarea>
+  {%- elif row.kind in ("list", "pem") -%}
+    <textarea class="input textarea" id="{{ field_id }}" name="{{ row.key }}" rows="{{ 6 if row.kind == 'pem' else 3 }}" spellcheck="false"{{ invalid }}>{{ row.value }}</textarea>
   {%- elif row.kind == "select" -%}
     <select class="input select" id="{{ field_id }}" name="{{ row.key }}"{{ invalid }}>
       {%- for choice in row.choices %}<option value="{{ choice }}"{% if choice == row.value %} selected{% endif %}>{{ choice }}</option>{% endfor -%}

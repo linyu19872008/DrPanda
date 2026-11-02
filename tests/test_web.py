@@ -231,7 +231,16 @@ async def test_toggle_and_delete(runtime: Runtime) -> None:
     assert await runtime.store.get("redis-target") is None
 
 
-async def test_test_connection_failure_recorded(runtime: Runtime) -> None:
+async def test_test_connection_failure_recorded(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dr_panda_mcp import errors
+
+    async def failing(name: str, connector) -> None:
+        raise errors.UpstreamUnavailable("mysql 模拟连接失败")
+
+    monkeypatch.setattr(runtime.catalog, "test_connection", failing)
+
     async with _client(runtime) as client:
         await client.post("/targets", data=PAYLOADS["mysql"])
         target = await runtime.store.get("mysql-target")
@@ -514,3 +523,30 @@ def test_theme_next_rejects_backslash_variants() -> None:
     assert safe_next("/\\evil.example") == "/"
     assert safe_next("/%5Cevil.example") == "/"
     assert safe_next("//evil.example") == "/"
+
+
+async def test_ca_pem_validation_and_persistence(runtime: Runtime) -> None:
+    from tests.test_connectors_data import _ca_pem
+
+    async with _client(runtime) as client:
+        form = await client.get("/targets/new?type=mysql")
+        invalid = dict(PAYLOADS["mysql"])
+        invalid["ssl"] = "on"
+        invalid["ca_pem"] = "not a certificate"
+        bad = await client.post("/targets", data=invalid)
+
+        no_ssl = dict(PAYLOADS["mysql"])
+        no_ssl["ca_pem"] = _ca_pem()
+        rejected = await client.post("/targets", data=no_ssl)
+
+        valid = dict(PAYLOADS["mysql"])
+        valid["ssl"] = "on"
+        valid["ca_pem"] = _ca_pem()
+        created = await client.post("/targets", data=valid)
+        target = await runtime.store.get("mysql-target")
+
+    assert "CA 证书 PEM" in form.text
+    assert bad.status_code == 400 and "CA 证书不是合法 PEM" in bad.text
+    assert rejected.status_code == 400 and "必须启用 SSL" in rejected.text
+    assert created.status_code == 303
+    assert target is not None and target.options["ca_pem"].startswith("-----BEGIN CERTIFICATE-----")

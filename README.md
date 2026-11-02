@@ -14,6 +14,7 @@
 - 配置台支持浅色/深色主题（默认跟随系统，Cookie 实现、零 JS），列表带统计/搜索/类型筛选，窄屏自动转卡片。
 - M7 前只允许监听 `127.0.0.1` / `::1` / `localhost`；请勿把当前无认证服务直接暴露到内网。
 - 审计清理任务随进程启动（60 秒后首跑、每小时一轮）。
+- 已用 Docker 真实联调 MySQL / MongoDB / Elasticsearch / Redis / RabbitMQ：19 个工具冒烟 + 69 条参数/边界/失败矩阵全部通过；MySQL TLS（含 target 级 CA）与 ES 双 host failover 也已通过。Kafka 镜像不可用、CLS/GitLab 缺凭证，尚未真实联调。
 - `/mcp` 已提供 28 个工具：`systems_status`；CLS 检索/上下文；GitLab 代码搜索/读文件/blame；MySQL 5 个；Mongo 4 个；Elasticsearch 4 个；Redis 4 个；RabbitMQ 2 个；Kafka 3 个。全部带 `tool.call` 审计，并提供 `investigate_error` prompt。
 
 ![配置台](docs/verify/assets/ui/light-index.png)
@@ -74,7 +75,7 @@ uv sync --extra postgres     # asyncpg
 
 ## 登记目标
 
-每类目标登记一次，工具调用时只传 `target` 名。八种类型：`mysql`、`mongo`、`elasticsearch`、`redis`、`gitlab`、`rabbitmq`、`kafka`、`cls`。每类都需要填主机或地址、凭证、允许访问的范围（库、索引、topic、项目、vhost），范围只缩小可读边界。名称只允许小写字母、数字与连字符，创建后不可改；密钥只存密文，不回显。
+每类目标登记一次，工具调用时只传 `target` 名。八种类型：`mysql`、`mongo`、`elasticsearch`、`redis`、`gitlab`、`rabbitmq`、`kafka`、`cls`。每类都需要填主机或地址、凭证、允许访问的范围（库、索引、topic、项目、vhost），范围只缩小可读边界。MySQL / Elasticsearch 可额外填 `CA 证书 PEM`（`ca_pem`）用于私有 CA，证书是公开材料，不加密、不回显在列表；配置 CA 时 MySQL 必须启用 SSL、ES 必须保持 TLS 校验。名称只允许小写字母、数字与连字符，创建后不可改；密钥只存密文，不回显。
 
 ## 绝对只读与危险命令
 
@@ -106,4 +107,5 @@ uv run ruff check .               # 静态检查
 - [docs/planning.md](docs/planning.md)：方案与实现契约（接口、表结构、只读与危险规则、工具清单）
 - [docs/milestones.md](docs/milestones.md)：里程碑拆分与每个检查点的验证目标
 - [docs/ui-design.md](docs/ui-design.md)：配置台设计系统、主题机制与页面规格
-- [docs/verify/](docs/verify/)：各里程碑的验证记录；[hardening-01.md](docs/verify/hardening-01.md) 记录 2026-11-02 复核硬化
+- [docs/verify/](docs/verify/)：各里程碑的验证记录；[hardening-01.md](docs/verify/hardening-01.md) 记录 2026-11-02 复核硬化；[integration-01.md](docs/verify/integration-01.md) / [integration-02.md](docs/verify/integration-02.md) / [integration-03.md](docs/verify/integration-03.md) / [integration-04.md](docs/verify/integration-04.md) 记录真实 Docker 上游联调（基础冒烟 + 扩展矩阵 + TLS/多 host + target 级 CA）
+- [scripts/integration/](scripts/integration/)：本地 Docker 联调栈与检查脚本

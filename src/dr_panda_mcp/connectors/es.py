@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ssl
 from typing import Any
 from urllib.parse import quote
 
@@ -12,6 +13,20 @@ from dr_panda_mcp.connectors import base
 from dr_panda_mcp.guards import es as es_guard
 from dr_panda_mcp.guards.protocol import Decision
 from dr_panda_mcp.store.protocol import Target
+
+
+def _tls_verify(target: Target) -> bool | ssl.SSLContext:
+    options = target.options
+    ca_pem = str(options.get("ca_pem") or "").strip()
+    client_cert = target.secret.get("client_cert", "")
+    client_key = target.secret.get("client_key", "")
+    if ca_pem or client_cert or client_key:
+        return base.build_tls_context(
+            ca_pem=ca_pem,
+            client_cert=client_cert,
+            client_key=client_key,
+        )
+    return bool(options.get("verify_tls", True))
 
 
 class _ESClient:
@@ -41,7 +56,7 @@ class _ESClient:
             base_url=base_url,
             auth=auth,
             headers=headers,
-            verify=bool(options.get("verify_tls", True)),
+            verify=_tls_verify(self.target),
             timeout=base.timeout_seconds(self.target),
         )
 

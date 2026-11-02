@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ssl
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -56,6 +57,12 @@ TYPE_SPECS: dict[str, TypeSpec] = {
             Field("default_db", "默认库", "text", required=True),
             Field("allowed_dbs", "允许的库（一行一个，空=只允许默认库）", "list"),
             Field("ssl", "启用 SSL", "bool", default=False),
+            Field(
+                "ca_pem",
+                "CA 证书 PEM（可选，私有 CA 时填写）",
+                "pem",
+                help="粘贴 PEM 证书；配置后必须启用 SSL。",
+            ),
         ),
         (SecretField("password", "密码", required=True),),
         "只允许单条 SELECT / SHOW / DESCRIBE / EXPLAIN；连接后强制事务只读。",
@@ -84,6 +91,12 @@ TYPE_SPECS: dict[str, TypeSpec] = {
             Field("username", "用户名", "text"),
             Field("allowed_indices", "允许的索引（一行一个）", "list", required=True),
             Field("verify_tls", "校验 TLS", "bool", default=True),
+            Field(
+                "ca_pem",
+                "CA 证书 PEM（可选，私有 CA 时填写）",
+                "pem",
+                help="粘贴 PEM 证书；配置后必须保持 TLS 校验开启。",
+            ),
         ),
         (
             SecretField("password", "密码"),
@@ -285,6 +298,10 @@ def _cross_validate(
         has_user_auth = bool(options.get("username")) and bool(password)
         if has_user_auth == bool(api_key):
             errors["_form"] = "Elasticsearch 需要「用户名 + 密码」或 API Key，二选一"
+    if spec.type == "mysql" and options.get("ca_pem") and not options.get("ssl"):
+        errors["ssl"] = "配置 CA 证书时必须启用 SSL"
+    if spec.type == "elasticsearch" and options.get("ca_pem") and not options.get("verify_tls"):
+        errors["verify_tls"] = "配置 CA 证书时必须保持 TLS 校验开启"
     if spec.type == "kafka":
         protocol = str(options.get("security_protocol", "PLAINTEXT"))
         if protocol.startswith("SASL") and not options.get("sasl_mechanism"):
@@ -307,6 +324,17 @@ def _parse_field(field: Field, raw: str, form: Mapping[str, Any]) -> tuple[Any, 
         return (parsed if parsed is not None else field.default), None
     if field.kind == "bool":
         return _checked(form, field.key), None
+    if field.kind == "pem":
+        value = raw.strip()
+        if not value:
+            return None, None
+        if len(value) > 65_536:
+            return None, "CA 证书不能超过 64KB"
+        try:
+            ssl.create_default_context(cadata=value)
+        except ssl.SSLError:
+            return None, "CA 证书不是合法 PEM"
+        return value, None
     if field.kind == "list":
         items = [line.strip() for line in raw.splitlines() if line.strip()]
         return list(dict.fromkeys(items)), None

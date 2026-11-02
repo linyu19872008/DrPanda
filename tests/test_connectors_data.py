@@ -350,3 +350,51 @@ async def test_redis_string_over_byte_limit_is_rejected(
         await client.inspect("pay:1", limit=10, byte_limit=50)
 
     assert excinfo.value.code == errors.DANGEROUS_OPERATION
+
+
+def _ca_pem() -> str:
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "drpanda-test-ca")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
+        .not_valid_after(dt.datetime(2030, 1, 1, tzinfo=dt.UTC))
+        .sign(key, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
+def test_mysql_ca_context_uses_target_ca() -> None:
+    from dr_panda_mcp.connectors.mysql import _ssl_context
+
+    target = make_target(
+        type_="mysql",
+        options={"ssl": True, "ca_pem": _ca_pem()},
+        secret={"password": "pw"},
+    )
+    context = _ssl_context(target)
+    assert context.cert_store_stats()["x509"] >= 1
+
+
+def test_es_client_uses_target_ca() -> None:
+    import ssl as ssl_module
+
+    from dr_panda_mcp.connectors.es import _tls_verify
+
+    target = make_target(
+        type_="elasticsearch",
+        options={"hosts": ["https://es:9200"], "ca_pem": _ca_pem(), "verify_tls": True},
+    )
+    verify = _tls_verify(target)
+    assert isinstance(verify, ssl_module.SSLContext)

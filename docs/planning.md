@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.12 |
+| 版本 | v0.13 |
 | 更新 | 2026-11-01 |
 | 状态 | 方案定稿，未开始编码 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -30,6 +30,7 @@
 | v0.10 | 2026-11-01 | M5 落地同步：数据面十七个工具上线；补充强制 LIMIT、聚合尾 `$limit`、ES `size` 上限、Redis 前缀与有界读取、schema 工具可用性 |
 | v0.11 | 2026-11-01 | M6 落地同步：RabbitMQ/Kafka 五个工具上线；补充 vhost 遍历、消费组位点读取、low watermark 硬校验与无消费组拉取 |
 | v0.12 | 2026-11-02 | 硬化：MySQL 可执行注释拒绝、工具级并发/超时、截断哨兵、必填密钥、SSL、重定向与若干连接器修复；文档与验证口径同步 |
+| v0.13 | 2026-11-02 | 目标级 CA：MySQL / Elasticsearch 增加可选 `ca_pem`，私有 CA 不再依赖进程级 `SSL_CERT_FILE` |
 
 ## 1. 目标
 
@@ -694,6 +695,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 默认库 | `options.default_db` | 是 | — | |
 | 允许的库 | `options.allowed_dbs` | 否 | `[]` | 空表示只允许默认库 |
 | 是否 SSL | `options.ssl` | 否 | false | |
+| CA 证书 | `options.ca_pem` | 否 | 空 | PEM 文本；配置时 `ssl` 必须为 true，仅用于校验服务端证书 |
 
 查询强制补上 `LIMIT`，并设置语句执行超时。语句种类、会话只读见 6.3。
 
@@ -721,6 +723,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | API Key | `secret.api_key` | 二选一 | — | |
 | 允许的索引 | `options.allowed_indices` | 是 | — | 空表示拒绝；`_all` 与单独 `*` 不接受 |
 | 校验 TLS | `options.verify_tls` | 否 | true | |
+| CA 证书 | `options.ca_pem` | 否 | 空 | PEM 文本；配置时 `verify_tls` 必须为 true，仅用于校验服务端证书 |
 
 搜索的 `size` 不超过该目标的返回上限。允许的 HTTP 方法和路径见 6.3。
 

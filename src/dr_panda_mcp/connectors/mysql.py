@@ -104,8 +104,16 @@ async def _connect(asyncmy: Any, target: Target) -> Any:
         "autocommit": True,
     }
     if options.get("ssl"):
-        kwargs["ssl"] = ssl.create_default_context()
+        kwargs["ssl"] = _ssl_context(target)
     return await asyncmy.connect(**kwargs)
+
+
+def _ssl_context(target: Target) -> ssl.SSLContext:
+    return base.build_tls_context(
+        ca_pem=str(target.options.get("ca_pem") or "").strip(),
+        client_cert=target.secret.get("client_cert", ""),
+        client_key=target.secret.get("client_key", ""),
+    )
 
 
 async def _close(connection: Any) -> None:

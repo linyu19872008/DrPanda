@@ -1,0 +1,154 @@
+# 本地真实上游联调栈；所有容器/卷/网络以 drpanda 开头。
+# 仅用于本机集成测试，密码是测试值，不要用于任何真实环境。
+name: drpanda
+
+services:
+  mysql:
+    image: public.ecr.aws/docker/library/mysql:8.0.36
+    container_name: drpanda-mysql
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: drpanda_root_pw
+      MYSQL_DATABASE: drpanda
+    ports:
+      - "13306:3306"
+    command:
+      - --ssl-ca=/certs/ca.pem
+      - --ssl-cert=/certs/server-cert.pem
+      - --ssl-key=/certs/server-key.pem
+    volumes:
+      - drpanda-mysql-data:/var/lib/mysql
+      - ./mysql-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/certs:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pdrpanda_root_pw --silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  mongo:
+    image: public.ecr.aws/docker/library/mongo:7.0
+    container_name: drpanda-mongo
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: drpanda_root
+      MONGO_INITDB_ROOT_PASSWORD: drpanda_root_pw
+      MONGO_INITDB_DATABASE: drpanda
+    ports:
+      - "17017:27017"
+    volumes:
+      - drpanda-mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/01-init.js:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username drpanda_root --password drpanda_root_pw --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: drpanda-elasticsearch
+    restart: "no"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: drpanda_es_pw
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "19200:9200"
+    volumes:
+      - drpanda-es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:drpanda_es_pw http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  elasticsearch-2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: drpanda-elasticsearch-2
+    restart: "no"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: drpanda_es_pw
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "19201:9200"
+    volumes:
+      - drpanda-es2-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:drpanda_es_pw http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+  elasticsearch-tls:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: drpanda-elasticsearch-tls
+    restart: "no"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "true"
+      xpack.security.http.ssl.key: /usr/share/elasticsearch/config/certs/es-server-key.pem
+      xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/certs/es-server-cert.pem
+      xpack.security.http.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca.pem
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: drpanda_es_pw
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "19202:9200"
+    volumes:
+      - drpanda-es-tls-data:/usr/share/elasticsearch/data
+      - "${DRPANDA_MYSQL_CERTS:-/tmp/drpanda-mysql-certs}:/usr/share/elasticsearch/config/certs:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --cacert /usr/share/elasticsearch/config/certs/ca.pem -u elastic:drpanda_es_pw https://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 50
+
+  redis:
+    image: public.ecr.aws/docker/library/redis:7.2-alpine
+    container_name: drpanda-redis
+    restart: "no"
+    command: ["redis-server", "--requirepass", "drpanda_redis_pw", "--appendonly", "no"]
+    ports:
+      - "16379:6379"
+    volumes:
+      - drpanda-redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a drpanda_redis_pw ping | grep PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: public.ecr.aws/docker/library/rabbitmq:3.13-management
+    container_name: drpanda-rabbitmq
+    restart: "no"
+    environment:
+      RABBITMQ_DEFAULT_USER: drpanda
+      RABBITMQ_DEFAULT_PASS: drpanda_rabbit_pw
+    ports:
+      - "15673:15672"
+    volumes:
+      - drpanda-rabbit-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+
+volumes:
+  drpanda-mysql-data:
+  drpanda-mongo-data:
+  drpanda-es-data:
+  drpanda-es2-data:
+  drpanda-es-tls-data:
+  drpanda-redis-data:
+  drpanda-rabbit-data:

@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import ssl
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -62,6 +65,54 @@ def to_jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set, frozenset)):
         return [to_jsonable(item) for item in value]
     return str(value)
+
+
+def build_tls_context(
+    *,
+    ca_pem: str = "",
+    client_cert: str = "",
+    client_key: str = "",
+) -> ssl.SSLContext:
+    """按 target 级 CA / 客户端证书构造 SSLContext。
+
+    ``client_cert`` 与 ``client_key`` 都是 PEM 文本；私钥只在临时文件里短暂落盘。
+    不支持带口令的私钥（没有可录入的 passphrase 字段）。
+    """
+    try:
+        context = (
+            ssl.create_default_context(cadata=ca_pem)
+            if ca_pem
+            else ssl.create_default_context()
+        )
+        if client_cert or client_key:
+            if not (client_cert and client_key):
+                raise errors.UpstreamUnavailable("客户端证书与私钥必须同时提供")
+            cert_path = _temp_pem(client_cert, "cert")
+            key_path = _temp_pem(client_key, "key")
+            os.chmod(key_path, 0o600)
+            try:
+                context.load_cert_chain(certfile=cert_path, keyfile=key_path)
+            finally:
+                for path in (cert_path, key_path):
+                    try:
+                        os.unlink(path)
+                    except OSError:
+                        pass
+        return context
+    except errors.DrPandaError:
+        raise
+    except (ssl.SSLError, OSError) as exc:
+        raise errors.UpstreamUnavailable(
+            "TLS 客户端证书/私钥/CA 无法加载"
+        ) from exc
+
+
+def _temp_pem(content: str, suffix: str) -> str:
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=f".{suffix}.pem", delete=False
+    ) as handle:
+        handle.write(content)
+        return handle.name
 
 
 def timeout_seconds(target: Target) -> float:
