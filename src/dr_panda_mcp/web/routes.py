@@ -206,12 +206,16 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             values=None,
             startup_rows=_startup_rows(runtime),
             history=await _settings_history(store),
+            active_section=request.query_params.get("section", ""),
             flash=_flash(request),
         )
 
     @server.custom_route("/settings", methods=["POST"])
     async def settings_save(request: Request) -> Response:
         form = await request.form()
+        section = str(form.get("section", "")).strip() or request.query_params.get(
+            "section", ""
+        )
         current = await settings_module.load(store)
         values = {
             spec.key: str(form.get(spec.key, getattr(current, spec.key))).strip()
@@ -241,13 +245,17 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 values=values,
                 startup_rows=_startup_rows(runtime),
                 history=await _settings_history(store),
+                active_section=section,
                 status=400,
             )
+        if section:
+            return _redirect("/settings", section=section, flash="saved")
         return _redirect("/settings", flash="saved")
 
     @server.custom_route("/settings/reset", methods=["GET"])
     async def settings_reset_confirm(request: Request) -> HTMLResponse:
         key = request.query_params.get("key", "").strip()
+        section = request.query_params.get("section", "").strip()
         if key and key not in settings_module.DEFAULTS:
             return _error(request, "未知的系统配置键", 400, "无法恢复默认值")
         specs = (
@@ -260,6 +268,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             "settings_reset.html",
             request=request,
             key=key,
+            section=section,
             specs=specs,
             current_values={spec.key: getattr(current, spec.key) for spec in specs},
         )
@@ -268,6 +277,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def settings_reset(request: Request) -> Response:
         form = await request.form()
         key = str(form.get("key", "")).strip()
+        section = str(form.get("section", "")).strip()
         if key and key not in settings_module.DEFAULTS:
             return _error(request, "未知的系统配置键", 400, "无法恢复默认值")
         patch = (
@@ -276,6 +286,8 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             else dict(settings_module.DEFAULTS)
         )
         await settings_module.update(store, patch, ACTOR)
+        if section:
+            return _redirect("/settings", section=section, flash="reset")
         return _redirect("/settings", flash="reset")
 
     @server.custom_route("/theme", methods=["POST"])
@@ -450,6 +462,7 @@ def _settings_page(
     values: dict[str, str] | None = None,
     startup_rows: list[dict[str, str]] | None = None,
     history: list[dict[str, str]] | None = None,
+    active_section: str = "",
     flash: dict[str, str] | None = None,
     status: int = 200,
 ) -> HTMLResponse:
@@ -476,10 +489,31 @@ def _settings_page(
                 }
             )
         groups.append({**group, "rows": rows})
+    sections: list[dict[str, str]] = [
+        {
+            "key": str(group["key"]),
+            "title": str(group["title"]),
+            "kind": "form",
+            "meta": "可编辑",
+        }
+        for group in groups
+    ]
+    sections.extend(
+        [
+            {"key": "security", "title": "安全边界", "kind": "security", "meta": "只读"},
+            {"key": "startup", "title": "启动配置", "kind": "startup", "meta": "只读"},
+            {"key": "history", "title": "最近变更", "kind": "history", "meta": "只读"},
+        ]
+    )
+    active = active_section if any(item["key"] == active_section for item in sections) else sections[0]["key"]
+    active_group = next((group for group in groups if group["key"] == active), None)
     return render.render(
         "settings.html",
         request=request,
+        sections=sections,
         groups=groups,
+        active_section=active,
+        active_group=active_group,
         startup_rows=startup_rows or [],
         history=history or [],
         errors=errors,

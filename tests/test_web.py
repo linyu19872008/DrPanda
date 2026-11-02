@@ -273,12 +273,12 @@ async def test_test_connection_success_recorded(
 
 async def test_settings_page_and_update(runtime: Runtime) -> None:
     async with _client(runtime) as client:
-        page = await client.get("/settings")
+        page = await client.get("/settings?section=runtime")
         saved = await client.post(
             "/settings",
             data={"audit_retention_days": "30", "target_max_concurrency": "5"},
         )
-        after = await client.get("/settings")
+        after = await client.get("/settings?section=runtime")
         invalid = await client.post(
             "/settings",
             data={"audit_retention_days": "0", "target_max_concurrency": "10"},
@@ -684,11 +684,12 @@ async def test_settings_page_is_grouped(runtime: Runtime) -> None:
 
     assert "新建目标默认值" in page.text
     assert "并发与审计" in page.text
-    assert "安全边界不在此页" in page.text
+    assert "高级资源" in page.text
+    assert "安全边界" in page.text
     assert "启动配置" in page.text
-    assert "settings-section" in page.text
+    assert "settings-nav" in page.text
     assert "仅新建目标" in page.text
-    assert "立即生效" in page.text
+    assert "立即生效" not in page.text
 
 
 async def test_new_target_uses_system_default_limits(
@@ -760,15 +761,14 @@ async def test_settings_reset_and_history(runtime: Runtime) -> None:
         confirm = await client.get("/settings/reset")
         page = await client.get("/settings")
         reset = await client.post("/settings/reset")
-        after = await client.get("/settings")
+        after_runtime = await client.get("/settings?section=runtime")
 
     assert saved.status_code == 303
     assert confirm.status_code == 200
     assert "恢复默认配置" in confirm.text
     assert "最近变更" in page.text
-    assert "default_target_timeout_s" in page.text
     assert reset.status_code == 303
-    assert "60" in after.text
+    assert "60" in after_runtime.text
     current = await runtime.store.get_settings()
     assert current["default_target_timeout_s"] == "15"
     assert current["audit_cleanup_interval_minutes"] == "60"
@@ -805,9 +805,30 @@ async def test_single_setting_reset(runtime: Runtime) -> None:
 
 async def test_settings_group_advanced_and_single_reset_links(runtime: Runtime) -> None:
     async with _client(runtime) as client:
-        page = await client.get("/settings")
+        page = await client.get("/settings?section=advanced")
 
     assert "高级资源" in page.text
     assert "连接器缓存上限" in page.text
     assert "settings/reset?key=catalog_max_clients" in page.text
-    assert "settings/reset?key=default_target_timeout_s" in page.text
+
+
+async def test_settings_section_switching_and_save(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        advanced = await client.get("/settings?section=advanced")
+        security = await client.get("/settings?section=security")
+        saved = await client.post(
+            "/settings",
+            data={"section": "advanced", "catalog_max_clients": "64"},
+        )
+        advanced_after = await client.get("/settings?section=advanced")
+        invalid = await client.get("/settings?section=not-a-section")
+
+    assert "连接器缓存上限" in advanced.text
+    assert "默认超时" not in advanced.text
+    assert "安全边界" in security.text
+    assert "settings-field__reset" not in security.text
+    assert saved.status_code == 303
+    assert "section=advanced" in saved.headers["location"]
+    assert 'value="64"' in advanced_after.text
+    assert invalid.status_code == 200
+    assert "默认超时" in invalid.text

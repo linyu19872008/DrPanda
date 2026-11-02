@@ -4,7 +4,7 @@
 <div class="page-header">
   <div>
     <h1>系统配置</h1>
-    <p class="page-subtitle">按影响范围分组管理运行策略；保存后写明何时生效，安全边界不在此页放宽。</p>
+    <p class="page-subtitle">按分组切换配置；每次保存只影响当前分组，生效时机写在字段旁。</p>
   </div>
 </div>
 
@@ -27,19 +27,43 @@
 </div>
 {% endif %}
 
-<div class="settings-layout">
-  <form class="card settings-form" method="post" action="/settings">
-    {% for group in groups %}
-    <fieldset class="settings-section">
-      <legend class="settings-section__legend">{{ group.title }}</legend>
-      <p class="settings-section__desc">{{ group.description }}</p>
+<div class="settings-shell">
+  <aside class="settings-nav" aria-label="系统配置分组">
+    <p class="settings-nav__eyebrow">配置分组</p>
+    <nav class="settings-nav__list">
+      {% for section in sections %}
+      <a class="settings-nav__item{% if section.key == active_section %} is-active{% endif %}"
+         href="/settings?section={{ section.key }}"
+         {% if section.key == active_section %}aria-current="page"{% endif %}>
+        <span class="settings-nav__title">{{ section.title }}</span>
+        <span class="settings-nav__meta">{{ section.meta }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="settings-nav__footer">
+      <a class="btn btn--secondary btn--block" href="/settings/reset">恢复全部默认值</a>
+    </div>
+  </aside>
+
+  <section class="settings-main">
+    {% if active_group %}
+    <form class="card settings-form" method="post" action="/settings">
+      <input type="hidden" name="section" value="{{ active_section }}">
+      <div class="settings-panel-head">
+        <div>
+          <h2 class="settings-panel-title">{{ active_group.title }}</h2>
+          <p class="settings-panel-desc">{{ active_group.description }}</p>
+        </div>
+        <span class="badge badge--muted">可编辑</span>
+      </div>
+
       <div class="settings-grid">
-        {% for row in group.rows %}
+        {% for row in active_group.rows %}
         <div class="settings-field">
           <div class="settings-field__head">
             <label class="field__label" for="setting-{{ row.key }}">{{ row.label }}</label>
             <span class="settings-field__tools">
-              <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}">恢复默认</a>
+              <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">恢复默认</a>
               <span class="badge badge--quiet">{{ row.effect }}</span>
             </span>
           </div>
@@ -60,27 +84,59 @@
         </div>
         {% endfor %}
       </div>
-    </fieldset>
-    {% endfor %}
 
-    <div class="settings-actions">
-      <span class="settings-actions__hint">保存会写入审计；带“下一轮清理”的项不会立即执行。</span>
-      <span class="settings-actions__buttons">
-        <a class="btn btn--secondary" href="/settings/reset">恢复全部默认值</a>
-        <button class="btn btn--primary" type="submit">保存配置</button>
-      </span>
-    </div>
-  </form>
-
-  <aside class="settings-aside">
-    <section class="card card--aside settings-aside__card">
-      <h3>安全边界不在此页</h3>
-      <p>只读白名单、危险命令、目标范围、密钥与 TLS 校验不受系统配置影响，不能通过本页放宽。</p>
-      <p class="muted small">这里只调整默认值和运行节奏，不改变“能查什么、能连哪里”。</p>
+      <div class="settings-actions">
+        <span class="settings-actions__hint">保存本组会写入审计；切换分组前请先保存。</span>
+        <span class="settings-actions__buttons">
+          <button class="btn btn--primary" type="submit">保存本组配置</button>
+        </span>
+      </div>
+    </form>
+    {% elif active_section == "security" %}
+    <section class="card settings-panel">
+      <div class="settings-panel-head">
+        <div>
+          <h2 class="settings-panel-title">安全边界</h2>
+          <p class="settings-panel-desc">这些规则是硬边界，不通过系统配置放宽。</p>
+        </div>
+        <span class="badge badge--muted">只读</span>
+      </div>
+      <div class="settings-prose">
+        <p>只读白名单、危险命令、目标范围、密钥与 TLS 校验不受系统配置影响。</p>
+        <p>本页只调整默认值和运行节奏，不改变“能查什么、能连哪里”。</p>
+        <ul>
+          <li>行数、字节、超时和并发只影响资源消耗，不绕过目标授权范围。</li>
+          <li>危险与高开销规则、目标级 CA/mTLS、密钥加密始终生效。</li>
+        </ul>
+      </div>
     </section>
-
-    <section class="card card--aside settings-aside__card">
-      <h3>最近变更</h3>
+    {% elif active_section == "startup" %}
+    <section class="card settings-panel">
+      <div class="settings-panel-head">
+        <div>
+          <h2 class="settings-panel-title">启动配置</h2>
+          <p class="settings-panel-desc">由环境变量/启动参数控制，修改需要重启；这里只读展示。</p>
+        </div>
+        <span class="badge badge--muted">只读</span>
+      </div>
+      <dl class="settings-readonly">
+        {% for row in startup_rows %}
+        <div class="settings-readonly__row">
+          <dt>{{ row.label }}</dt>
+          <dd><span class="mono">{{ row.value }}</span><span class="badge badge--quiet">{{ row.note }}</span></dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </section>
+    {% elif active_section == "history" %}
+    <section class="card settings-panel">
+      <div class="settings-panel-head">
+        <div>
+          <h2 class="settings-panel-title">最近变更</h2>
+          <p class="settings-panel-desc">最近 5 条系统配置审计摘要。</p>
+        </div>
+        <span class="badge badge--muted">只读</span>
+      </div>
       {% if history %}
       <ol class="settings-history">
         {% for change in history %}
@@ -95,19 +151,7 @@
       <p class="muted small">还没有系统配置变更记录。</p>
       {% endif %}
     </section>
-
-    <section class="card card--aside settings-aside__card">
-      <h3>启动配置</h3>
-      <dl class="settings-readonly">
-        {% for row in startup_rows %}
-        <div class="settings-readonly__row">
-          <dt>{{ row.label }}</dt>
-          <dd><span class="mono">{{ row.value }}</span><span class="badge badge--quiet">{{ row.note }}</span></dd>
-        </div>
-        {% endfor %}
-      </dl>
-      <p class="muted small">这些值由环境变量/启动参数控制，修改后需要重启；密钥内容不展示。</p>
-    </section>
-  </aside>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
