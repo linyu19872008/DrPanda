@@ -1,30 +1,30 @@
 {% extends "base.html" %}
-{% block title %}删除目标 · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('删除目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="面包屑">
-  <a href="/">排查目标</a><span aria-hidden="true">/</span><span>删除 {{ target.name }}</span>
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
+  <a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('删除') }} {{ target.name }}</span>
 </nav>
 
 <div class="card card--danger">
-  <span class="badge badge--danger">不可撤销</span>
-  <h1>删除目标</h1>
-  <p>确认删除 <strong class="mono">{{ target.name }}</strong>（{{ target.type_label }}）？</p>
+  <span class="badge badge--danger">{{ t('不可撤销') }}</span>
+  <h1>{{ t('删除目标') }}</h1>
+  <p>{{ t('确认删除') }} <strong class="mono">{{ target.name }}</strong>（{{ t(target.type_label) }}）？</p>
 
   <dl class="summary">
-    <div><dt>端点</dt><dd class="mono">{{ target.endpoint }}</dd></div>
-    <div><dt>授权范围</dt><dd>{{ target.scope }}</dd></div>
-    <div><dt>最近测试</dt><dd>
+    <div><dt>{{ t('端点') }}</dt><dd class="mono">{{ t(target.endpoint) }}</dd></div>
+    <div><dt>{{ t('授权范围') }}</dt><dd>{{ t(target.scope_source, **target.scope_params) }}</dd></div>
+    <div><dt>{{ t('最近测试') }}</dt><dd>
       {% if target.last_test_at_display %}
-        <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ '成功' if target.last_test_ok else '失败' }}</span>
+        <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
         <span class="muted small">{{ target.last_test_at_display }}</span>
-      {% else %}<span class="muted">未测试</span>{% endif %}
+      {% else %}<span class="muted">{{ t('未测试') }}</span>{% endif %}
     </dd></div>
   </dl>
 
-  <p class="muted">删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。</p>
+  <p class="muted">{{ t('删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。') }}</p>
   <form method="post" action="/targets/{{ target.id }}/delete" class="form-actions form-actions--inline">
-    <a class="btn btn--secondary" href="/">取消</a>
-    <button class="btn btn--danger" type="submit">确认删除</button>
+    <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>
+    <button class="btn btn--danger" type="submit">{{ t('确认删除') }}</button>
   </form>
 </div>
 {% endblock %}

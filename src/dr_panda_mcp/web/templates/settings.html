@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}系统配置 · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('系统配置') }} · Dr Panda MCP{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>系统配置</h1>
-    <p class="page-subtitle">按分组切换配置；每次保存只影响当前分组，生效时机写在字段旁。</p>
+    <h1>{{ t('系统配置') }}</h1>
+    <p class="page-subtitle">{{ t('按分组切换配置；每次保存只影响当前分组，生效时机写在字段旁。') }}</p>
   </div>
 </div>
 
@@ -14,12 +14,12 @@
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></svg>
   </span>
   <div class="alert__body">
-    <strong>保存失败</strong>
+    <strong>{{ t('保存失败') }}</strong>
     <ul class="settings-error-list">
       {% for key, message in errors.items() %}
       <li>
-        {% if key == "_form" %}{{ message }}
-        {% else %}<a href="#setting-{{ key }}">{{ message }}</a>{% endif %}
+        {% if key == "_form" %}{{ t(message) }}
+        {% else %}<a href="#setting-{{ key }}">{{ t(message) }}</a>{% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -28,20 +28,20 @@
 {% endif %}
 
 <div class="settings-shell">
-  <aside class="settings-nav" aria-label="系统配置分组">
-    <p class="settings-nav__eyebrow">配置分组</p>
+  <aside class="settings-nav" aria-label="{{ t('系统配置') }}">
+    <p class="settings-nav__eyebrow">{{ t('配置分组') }}</p>
     <nav class="settings-nav__list">
       {% for section in sections %}
       <a class="settings-nav__item{% if section.key == active_section %} is-active{% endif %}"
          href="/settings?section={{ section.key }}"
          {% if section.key == active_section %}aria-current="page"{% endif %}>
-        <span class="settings-nav__title">{{ section.title }}</span>
-        <span class="settings-nav__meta">{{ section.meta }}</span>
+        <span class="settings-nav__title">{{ t(section.title) }}</span>
+        <span class="settings-nav__meta">{{ t(section.meta) }}</span>
       </a>
       {% endfor %}
     </nav>
     <div class="settings-nav__footer">
-      <a class="btn btn--secondary btn--block" href="/settings/reset">恢复全部默认值</a>
+      <a class="btn btn--secondary btn--block" href="/settings/reset">{{ t('恢复全部默认值') }}</a>
     </div>
   </aside>
 
@@ -51,26 +51,26 @@
       <input type="hidden" name="section" value="{{ active_section }}">
       <div class="settings-panel-head">
         <div>
-          <h2 class="settings-panel-title">{{ active_group.title }}</h2>
-          <p class="settings-panel-desc">{{ active_group.description }}</p>
+          <h2 class="settings-panel-title">{{ t(active_group.title) }}</h2>
+          <p class="settings-panel-desc">{{ t(active_group.description) }}</p>
         </div>
       </div>
 
       {% for subgroup in active_group.subgroups %}
-      {% if subgroup.title %}<h3 class="settings-subtitle">{{ subgroup.title }}</h3>{% endif %}
+      {% if subgroup.title %}<h3 class="settings-subtitle">{{ t(subgroup.title) }}</h3>{% endif %}
       <div class="settings-rows">
         {% for row in subgroup.rows %}
         <div class="settings-field-row">
           <div class="settings-field-copy">
             <div class="settings-field-title">
-              <label class="field__label" for="setting-{{ row.key }}">{{ row.label }}</label>
-              <span class="settings-effect">{{ row.effect }}</span>
+              <label class="field__label" for="setting-{{ row.key }}">{{ t(row.label) }}</label>
+              <span class="settings-effect">{{ t(row.effect) }}</span>
             </div>
             <p class="field__hint" id="hint-setting-{{ row.key }}">
-              默认 {{ row.default }}，范围 {{ row.low }}–{{ row.high }}。{{ row.help }}
+              {{ t('默认') }} {{ row.default }}，{{ t('范围') }} {{ row.low }}–{{ row.high }}。{{ t(row.help) }}
             </p>
             {% if row.error %}
-            <p class="field__error" id="err-setting-{{ row.key }}" role="alert">{{ row.error }}</p>
+            <p class="field__error" id="err-setting-{{ row.key }}" role="alert">{{ t(row.error) }}</p>
             {% endif %}
           </div>
           <div class="settings-field-control">
@@ -80,9 +80,9 @@
                      value="{{ row.value }}"
                      aria-describedby="hint-setting-{{ row.key }}{% if row.error %} err-setting-{{ row.key }}{% endif %}"
                      {% if row.error %}aria-invalid="true"{% endif %}>
-              <span class="input-group__suffix">{{ row.unit }}</span>
+              <span class="input-group__suffix">{{ t(row.unit) }}</span>
             </div>
-            <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">恢复本项默认</a>
+            <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}">{{ t('恢复本项默认') }}</a>
           </div>
         </div>
         {% endfor %}
@@ -90,9 +90,9 @@
       {% endfor %}
 
       <div class="settings-actions">
-        <span class="settings-actions__hint">保存本组会写入审计；切换分组前请先保存。</span>
+        <span class="settings-actions__hint">{{ t('保存本组会写入审计；切换分组前请先保存。') }}</span>
         <span class="settings-actions__buttons">
-          <button class="btn btn--primary" type="submit">保存本组配置</button>
+          <button class="btn btn--primary" type="submit">{{ t('保存本组配置') }}</button>
         </span>
       </div>
     </form>
@@ -100,17 +100,16 @@
     <section class="card settings-panel">
       <div class="settings-panel-head">
         <div>
-          <h2 class="settings-panel-title">安全边界</h2>
-          <p class="settings-panel-desc">这些规则是硬边界，不通过系统配置放宽。</p>
+          <h2 class="settings-panel-title">{{ t('安全边界') }}</h2>
+          <p class="settings-panel-desc">{{ t('这些规则是硬边界，不通过系统配置放宽。') }}</p>
         </div>
-        <span class="badge badge--muted">只读</span>
       </div>
       <div class="settings-prose">
-        <p>只读白名单、危险命令、目标范围、密钥与 TLS 校验不受系统配置影响。</p>
-        <p>本页只调整默认值和运行节奏，不改变“能查什么、能连哪里”。</p>
+        <p>{{ t('只读白名单、危险命令、目标范围、密钥与 TLS 校验不受系统配置影响。') }}</p>
+        <p>{{ t('本页只调整默认值和运行节奏，不改变“能查什么、能连哪里”。') }}</p>
         <ul>
-          <li>行数、字节、超时和并发只影响资源消耗，不绕过目标授权范围。</li>
-          <li>危险与高开销规则、目标级 CA/mTLS、密钥加密始终生效。</li>
+          <li>{{ t('行数、字节、超时和并发只影响资源消耗，不绕过目标授权范围。') }}</li>
+          <li>{{ t('危险与高开销规则、目标级 CA/mTLS、密钥加密始终生效。') }}</li>
         </ul>
       </div>
     </section>
@@ -118,16 +117,15 @@
     <section class="card settings-panel">
       <div class="settings-panel-head">
         <div>
-          <h2 class="settings-panel-title">启动配置</h2>
-          <p class="settings-panel-desc">由环境变量/启动参数控制，修改需要重启；这里只读展示。</p>
+          <h2 class="settings-panel-title">{{ t('启动配置') }}</h2>
+          <p class="settings-panel-desc">{{ t('由环境变量/启动参数控制，修改需要重启；这里只读展示。') }}</p>
         </div>
-        <span class="badge badge--muted">只读</span>
       </div>
       <dl class="settings-readonly">
         {% for row in startup_rows %}
         <div class="settings-readonly__row">
-          <dt>{{ row.label }}</dt>
-          <dd><span class="mono">{{ row.value }}</span><span class="badge badge--quiet">{{ row.note }}</span></dd>
+          <dt>{{ t(row.label) }}</dt>
+          <dd><span class="mono">{{ row.value }}</span><span class="badge badge--quiet">{{ t(row.note) }}</span></dd>
         </div>
         {% endfor %}
       </dl>
@@ -136,23 +134,22 @@
     <section class="card settings-panel">
       <div class="settings-panel-head">
         <div>
-          <h2 class="settings-panel-title">最近变更</h2>
-          <p class="settings-panel-desc">最近 5 条系统配置审计摘要。</p>
+          <h2 class="settings-panel-title">{{ t('最近变更') }}</h2>
+          <p class="settings-panel-desc">{{ t('最近 5 条系统配置审计摘要。') }}</p>
         </div>
-        <span class="badge badge--muted">只读</span>
       </div>
       {% if history %}
       <ol class="settings-history">
         {% for change in history %}
         <li>
           <span class="settings-history__time">{{ change.at }}</span>
-          <span class="settings-history__summary">{{ change.summary }}</span>
+          <span class="settings-history__summary">{{ t(change.summary) }}</span>
           <span class="settings-history__actor">{{ change.actor }}</span>
         </li>
         {% endfor %}
       </ol>
       {% else %}
-      <p class="muted small">还没有系统配置变更记录。</p>
+      <p class="muted small">{{ t('还没有系统配置变更记录。') }}</p>
       {% endif %}
     </section>
     {% endif %}

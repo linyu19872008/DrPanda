@@ -1939,9 +1939,8 @@ ul {
   }
 
   .settings-nav__item {
-    flex: 1 1 46%;
+    flex: 1 1 100%;
     min-width: 0;
-    white-space: nowrap;
     gap: 7px;
   }
 
@@ -2075,5 +2074,45 @@ ul {
 
   .settings-field-control .settings-field__reset {
     text-align: left;
+  }
+}
+
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.lang-switch__btn {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 7px;
+}
+
+.lang-switch__btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.lang-switch__btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+@media (max-width: 640px) {
+  .topbar__side {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 }

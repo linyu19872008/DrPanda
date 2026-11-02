@@ -20,53 +20,53 @@
   {% if row.kind == "bool" %}
   <label class="checkline checkline--field" for="field-{{ row.key }}">
     {{ control(row, 'field-' ~ row.key) }}
-    <span>{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</span>
+    <span>{{ t(row.label) }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</span>
   </label>
   {% else %}
-  <label class="field__label" for="field-{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
+  <label class="field__label" for="field-{{ row.key }}">{{ t(row.label) }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
   {{ control(row, 'field-' ~ row.key) }}
   {% endif %}
-  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
-  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ t(row.error) }}</p>{% endif %}
+  {% if row.help %}<p class="field__hint">{{ t('默认 {default}；范围 {low}–{high}', default=row.default, low=row.low, high=row.high) }}</p>{% endif %}
 </div>
 {%- endmacro %}
 
 {% macro secret_field(row) -%}
 <div class="field{% if row.error %} field--invalid{% endif %}">
   <div class="field__label-row">
-    <label class="field__label" for="secret-{{ row.key }}">{{ row.label }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
-    {% if row.has_value %}<span class="badge badge--success">已设置</span>{% else %}<span class="badge badge--muted">未设置</span>{% endif %}
+    <label class="field__label" for="secret-{{ row.key }}">{{ t(row.label) }}{% if row.required %}<span class="required" aria-hidden="true">*</span>{% endif %}</label>
+    {% if row.has_value %}<span class="badge badge--success">{{ t('已设置') }}</span>{% else %}<span class="badge badge--muted">{{ t('未设置') }}</span>{% endif %}
   </div>
   {% if row.pem %}
   <textarea class="input textarea" rows="6" spellcheck="false" id="secret-{{ row.key }}"
             name="secret_{{ row.key }}"
-            placeholder="{{ '留空表示不修改' if row.has_value else '粘贴 PEM 内容' }}"
+            placeholder="{{ t('留空表示不修改') if row.has_value else t('粘贴 PEM 内容') }}"
             {% if row.error %}aria-invalid="true" aria-describedby="err-secret_{{ row.key }}"{% endif %}></textarea>
   {% else %}
   <input class="input" type="password" autocomplete="new-password" id="secret-{{ row.key }}"
          name="secret_{{ row.key }}" value=""
-         placeholder="{{ '留空表示不修改' if row.has_value else '请输入' }}"
+         placeholder="{{ t('留空表示不修改') if row.has_value else t('请输入') }}"
          {% if row.error %}aria-invalid="true" aria-describedby="err-secret_{{ row.key }}"{% endif %}>
   {% endif %}
   {% if row.has_value %}
   <label class="checkline" for="clear-{{ row.key }}">
-    <input class="checkbox" type="checkbox" id="clear-{{ row.key }}" name="clear_{{ row.key }}"> 清除已保存的密钥
+    <input class="checkbox" type="checkbox" id="clear-{{ row.key }}" name="clear_{{ row.key }}"> {{ t('清除已保存的密钥') }}
   </label>
   {% endif %}
-  {% if row.error %}<p class="field__error" id="err-secret_{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
-  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+  {% if row.error %}<p class="field__error" id="err-secret_{{ row.key }}" role="alert">{{ t(row.error) }}</p>{% endif %}
+  <p class="field__hint">{{ t('默认 {default}；范围 {low}–{high}', default=row.default, low=row.low, high=row.high) }}</p>
 </div>
 {%- endmacro %}
 
 {% macro number_field(row) -%}
 <div class="field{% if row.error %} field--invalid{% endif %}">
-  <label class="field__label" for="field-{{ row.key }}">{{ row.label }}</label>
+  <label class="field__label" for="field-{{ row.key }}">{{ t(row.label) }}</label>
   <div class="input-group">
     <input class="input" type="number" inputmode="numeric" id="field-{{ row.key }}" name="{{ row.key }}"
            value="{{ row.value }}"{% if row.error %} aria-invalid="true" aria-describedby="err-{{ row.key }}"{% endif %}>
-    <span class="input-group__suffix">{{ row.unit }}</span>
+    <span class="input-group__suffix">{{ t(row.unit) }}</span>
   </div>
-  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ row.error }}</p>{% endif %}
-  {% if row.help %}<p class="field__hint">{{ row.help }}</p>{% endif %}
+  {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ t(row.error) }}</p>{% endif %}
+  <p class="field__hint">{{ t('默认 {default}；范围 {low}–{high}', default=row.default, low=row.low, high=row.high) }}</p>
 </div>
 {%- endmacro %}

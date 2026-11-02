@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t(title) }} · Dr Panda MCP{% endblock %}
 {% block content %}
 <section class="error-page">
   <p class="error-page__code">{{ code }}</p>
-  <h1>{{ title }}</h1>
-  <p class="error-page__message">{{ message }}</p>
+  <h1>{{ t(title) }}</h1>
+  <p class="error-page__message">{{ t(message) }}</p>
   <div class="error-page__actions">
-    <a class="btn btn--primary" href="/">返回排查目标</a>
-    <a class="btn btn--secondary" href="/settings">系统配置</a>
+    <a class="btn btn--primary" href="/">{{ t('返回排查目标') }}</a>
+    <a class="btn btn--secondary" href="/settings">{{ t('系统配置') }}</a>
   </div>
 </section>
 {% endblock %}

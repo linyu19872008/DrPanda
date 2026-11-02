@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"{% if data_theme %} data-theme="{{ data_theme }}"{% endif %}>
+<html lang="{{ html_lang }}"{% if data_theme %} data-theme="{{ data_theme }}"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,44 +9,53 @@
   <link rel="stylesheet" href="/static/app.css?v={{ asset_version }}">
 </head>
 <body>
-  <a class="skip-link" href="#main">跳到主要内容</a>
+  <a class="skip-link" href="#main">{{ t('跳到主要内容') }}</a>
 
   <header class="topbar">
     <div class="topbar__inner">
       <a class="brand" href="/">
         <span class="brand__mark" aria-hidden="true"></span>
         <span class="brand__name">Dr Panda</span>
-        <span class="brand__sub">MCP 配置台</span>
+        <span class="brand__sub">{{ t('MCP 配置台') }}</span>
       </a>
 
-      <nav class="tabs" aria-label="主导航">
+      <nav class="tabs" aria-label="{{ t('主导航') }}">
         <a class="tab{% if nav_active == 'targets' %} is-active{% endif %}" href="/"
-           {% if nav_active == 'targets' %}aria-current="page"{% endif %}>排查目标</a>
+           {% if nav_active == 'targets' %}aria-current="page"{% endif %}>{{ t('排查目标') }}</a>
         <a class="tab{% if nav_active == 'settings' %} is-active{% endif %}" href="/settings"
-           {% if nav_active == 'settings' %}aria-current="page"{% endif %}>系统配置</a>
+           {% if nav_active == 'settings' %}aria-current="page"{% endif %}>{{ t('系统配置') }}</a>
       </nav>
 
       <div class="topbar__side">
-        <span class="chip" title="当前版本">v{{ app_version }}</span>
-        <form class="theme-switch" method="post" action="/theme" aria-label="主题">
-          <input type="hidden" name="next" value="{{ current_path }}">
+        <span class="chip" title="{{ t('当前版本') }}">v{{ app_version }}</span>
+        <form class="lang-switch" method="post" action="/language" aria-label="{{ t('语言') }}">
+          <input type="hidden" name="next" value="{{ current_url }}">
+          {% for lang in language_options %}
+          <button class="lang-switch__btn{% if lang.code == locale %} is-active{% endif %}"
+                  type="submit" name="lang" value="{{ lang.code }}"
+                  aria-pressed="{{ 'true' if lang.code == locale else 'false' }}"
+                  title="{{ lang.label }}">{{ lang.short }}</button>
+          {% endfor %}
+        </form>
+        <form class="theme-switch" method="post" action="/theme" aria-label="{{ t('主题') }}">
+          <input type="hidden" name="next" value="{{ current_url }}">
           <button class="theme-switch__btn{% if theme_mode == 'system' %} is-active{% endif %}"
                   type="submit" name="mode" value="system"
-                  aria-pressed="{{ 'true' if theme_mode == 'system' else 'false' }}" title="跟随系统">
+                  aria-pressed="{{ 'true' if theme_mode == 'system' else 'false' }}" title="{{ t('跟随系统') }}">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
-            <span class="sr-only">跟随系统</span>
+            <span class="sr-only">{{ t('跟随系统') }}</span>
           </button>
           <button class="theme-switch__btn{% if theme_mode == 'light' %} is-active{% endif %}"
                   type="submit" name="mode" value="light"
-                  aria-pressed="{{ 'true' if theme_mode == 'light' else 'false' }}" title="浅色">
+                  aria-pressed="{{ 'true' if theme_mode == 'light' else 'false' }}" title="{{ t('浅色') }}">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>
-            <span class="sr-only">浅色</span>
+            <span class="sr-only">{{ t('浅色') }}</span>
           </button>
           <button class="theme-switch__btn{% if theme_mode == 'dark' %} is-active{% endif %}"
                   type="submit" name="mode" value="dark"
-                  aria-pressed="{{ 'true' if theme_mode == 'dark' else 'false' }}" title="深色">
+                  aria-pressed="{{ 'true' if theme_mode == 'dark' else 'false' }}" title="{{ t('深色') }}">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></svg>
-            <span class="sr-only">深色</span>
+            <span class="sr-only">{{ t('深色') }}</span>
           </button>
         </form>
       </div>
@@ -64,8 +73,8 @@
         {% endif %}
       </span>
       <div class="alert__body">
-        <strong>{{ flash.title }}</strong>
-        {% if flash.detail %}<span class="alert__detail">{{ flash.detail }}</span>{% endif %}
+        <strong>{{ t(flash.title, **(flash.title_params or {})) }}</strong>
+        {% if flash.detail %}<span class="alert__detail">{{ t(flash.detail) }}</span>{% endif %}
       </div>
     </div>
     {% endif %}

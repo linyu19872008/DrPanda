@@ -21,6 +21,8 @@ class TargetView:
     enabled: bool
     endpoint: str
     scope: str
+    scope_source: str
+    scope_params: dict[str, Any]
     secret_fields: tuple[str, ...]
     secret_ok: bool
     updated_at_display: str | None
@@ -85,35 +87,36 @@ def _endpoint(target: Target) -> str:
     return EMPTY
 
 
-def _scope(target: Target) -> str:
+def _scope(target: Target) -> tuple[str, dict[str, Any]]:
     options = target.options
     kind = target.type
     if kind == "mysql":
         dbs = options.get("allowed_dbs") or []
-        return f"{len(dbs)} 个库" if dbs else "默认库"
+        return ("{count} 个库", {"count": len(dbs)}) if dbs else ("默认库", {})
     if kind in {"mongo", "elasticsearch"}:
         key = "allowed_dbs" if kind == "mongo" else "allowed_indices"
         items = options.get(key) or []
-        label = "个库" if kind == "mongo" else "个索引"
-        return f"{len(items)} {label}" if items else "未授权"
+        source = "{count} 个库" if kind == "mongo" else "{count} 个索引"
+        return (source, {"count": len(items)}) if items else ("未授权", {})
     if kind == "redis":
         prefix = options.get("key_prefix")
-        return f"前缀 {prefix}" if prefix else "全部 key"
+        return ("前缀 {prefix}", {"prefix": prefix}) if prefix else ("全部 key", {})
     if kind == "gitlab":
         items = options.get("allowed_projects") or []
-        return f"{len(items)} 个项目" if items else "未授权"
+        return ("{count} 个项目", {"count": len(items)}) if items else ("未授权", {})
     if kind == "rabbitmq":
         items = options.get("allowed_vhosts") or []
-        return f"{len(items)} 个 vhost" if items else "未授权"
+        return ("{count} 个 vhost", {"count": len(items)}) if items else ("未授权", {})
     if kind in {"kafka", "cls"}:
         items = options.get("allowed_topics") or []
-        label = "个 topic" if kind == "kafka" else "个日志主题"
-        return f"{len(items)} {label}" if items else "未授权"
-    return EMPTY
+        source = "{count} 个 topic" if kind == "kafka" else "{count} 个日志主题"
+        return (source, {"count": len(items)}) if items else ("未授权", {})
+    return ("—", {})
 
 
 def to_view(target: Target) -> TargetView:
     spec = TYPE_SPECS.get(target.type)
+    scope_source, scope_params = _scope(target)
     return TargetView(
         id=target.id,
         type=target.type,
@@ -121,7 +124,9 @@ def to_view(target: Target) -> TargetView:
         name=target.name,
         enabled=target.enabled,
         endpoint=_endpoint(target),
-        scope=_scope(target),
+        scope=scope_source,
+        scope_source=scope_source,
+        scope_params=scope_params,
         secret_fields=tuple(sorted(target.secret_fields)),
         secret_ok=target.secret_ok,
         updated_at_display=_display_time(target.updated_at),

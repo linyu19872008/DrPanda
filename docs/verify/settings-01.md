@@ -30,7 +30,7 @@
 
 ## 验证
 
-- `pytest`：**416 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
+- `pytest`：**420 passed**（新增配置、分组、新目标默认值、字段错误、单项/全局 reset、history、catalog 缓存上限、子菜单切换用例）
 - `ruff check .`：通过
 - 未启动真实浏览器截图；分组与可访问性由模板/测试断言覆盖
 

@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}新建目标 · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('新建目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="面包屑"><a href="/">排查目标</a><span aria-hidden="true">/</span><span>新建目标</span></nav>
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
 <div class="page-header">
   <div>
-    <h1>选择目标类型</h1>
-    <p class="page-subtitle">不同系统的连接方式、授权范围和只读规则不同，先选类型再填连接。</p>
+    <h1>{{ t('选择目标类型') }}</h1>
+    <p class="page-subtitle">{{ t('不同系统的连接方式、授权范围和只读规则不同，先选类型再填连接。') }}</p>
   </div>
-  <a class="btn btn--secondary" href="/">返回列表</a>
+  <a class="btn btn--secondary" href="/">{{ t('返回列表') }}</a>
 </div>
 <div class="type-grid">
   {% for card in type_cards %}
   <a class="type-card" href="/targets/new?type={{ card.type }}">
     <span class="type-card__head">
-      <span class="badge badge--type">{{ card.label }}</span>
+      <span class="badge badge--type">{{ t(card.label) }}</span>
       <span class="type-card__arrow" aria-hidden="true">→</span>
     </span>
-    <span class="type-card__note">{{ card.note }}</span>
+    <span class="type-card__note">{{ t(card.note) }}</span>
   </a>
   {% endfor %}
 </div>

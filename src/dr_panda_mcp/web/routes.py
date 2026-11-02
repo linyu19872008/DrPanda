@@ -20,7 +20,7 @@ from dr_panda_mcp.connectors import get_connector
 from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import ConfigStore, Target
-from dr_panda_mcp.web import assets, forms, render, theme, views
+from dr_panda_mcp.web import assets, forms, i18n, render, theme, views
 
 logger = logging.getLogger(__name__)
 
@@ -290,6 +290,14 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             return _redirect("/settings", section=section, flash="reset")
         return _redirect("/settings", flash="reset")
 
+    @server.custom_route("/language", methods=["POST"])
+    async def set_language(request: Request) -> Response:
+        form = await request.form()
+        locale = i18n.normalize_locale(str(form.get("lang", "")))
+        next_path = theme.safe_next(str(form.get("next", "/")))
+        response = RedirectResponse(next_path, status_code=303)
+        return i18n.apply_language(response, locale)
+
     @server.custom_route("/theme", methods=["POST"])
     async def set_theme(request: Request) -> Response:
         form = await request.form()
@@ -354,10 +362,16 @@ def _flash(request: Request) -> dict[str, str] | None:
     if code == "tested":
         name = request.query_params.get("name", "")
         if request.query_params.get("result") == "ok":
-            return {"tone": "success", "title": f"{name} 连接测试成功", "detail": ""}
+            return {
+                "tone": "success",
+                "title": "{name} 连接测试成功",
+                "title_params": {"name": name},
+                "detail": "",
+            }
         return {
             "tone": "danger",
-            "title": f"{name} 连接测试失败",
+            "title": "{name} 连接测试失败",
+            "title_params": {"name": name},
             "detail": "失败原因已记录在目标行，可展开查看。",
         }
     message = _FLASH_MESSAGES.get(code)

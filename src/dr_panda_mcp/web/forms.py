@@ -669,6 +669,9 @@ def common_rows(
             "value": values.get(key, str((defaults or {}).get(key, default))),
             "error": errors.get(key),
             "help": f"默认 {(defaults or {}).get(key, default)}；范围 {low}–{high}",
+            "default": (defaults or {}).get(key, default),
+            "low": low,
+            "high": high,
             "unit": COMMON_UNITS[key],
         }
         for key, label, default, (low, high) in COMMON_FIELDS

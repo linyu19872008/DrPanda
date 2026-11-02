@@ -65,7 +65,7 @@
 
 | 组件 | 类 | 规则 |
 |---|---|---|
-| 顶栏 | `.topbar` | sticky，含品牌、主导航、版本 chip、主题切换；窄屏换行 |
+| 顶栏 | `.topbar` | sticky，含品牌、主导航、版本 chip、语言切换（EN / 中文）、主题切换；窄屏换行 |
 | 导航项 | `.tab` | 选中态用 accent-soft 底 + accent 文字 + `aria-current` |
 | 按钮 | `.btn` + `--primary/--secondary/--ghost/--danger/--danger-ghost` | 高度 34（sm 28）；每页最多一个 primary；危险操作用 danger |
 | 输入框 | `.input` | 高 34、1px 边框、focus 环；错误态 `.field--invalid` 红边 |
@@ -82,7 +82,10 @@
 | 详情折叠 | `.details` | `<details>` 展示失败原因等长文本 |
 | 危险区 | `.card--danger` | danger-soft 底 + danger 边；确认页使用 |
 
-## 4. 主题机制
+## 4. 语言与主题机制
+
+- 语言：默认英文，Cookie `drpanda_lang` 持久化；`en` / `zh-Hans`；顶部 POST `/language` 切换，保留当前路径与设置页 section；零 JS。
+- 主题：
 
 ```
 无 Cookie                 → <html> 无 data-theme；CSS prefers-color-scheme 跟随系统

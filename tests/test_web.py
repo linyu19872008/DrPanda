@@ -93,10 +93,12 @@ PAYLOADS: dict[str, dict[str, str]] = {
 }
 
 
-def _client(runtime: Runtime) -> httpx.AsyncClient:
+def _client(runtime: Runtime, locale: str | None = "zh-Hans") -> httpx.AsyncClient:
+    kwargs = {"cookies": {"drpanda_lang": locale}} if locale else {}
     return httpx.AsyncClient(
         transport=ASGITransport(app=create_app(runtime.config, runtime)),
         base_url=BASE_URL,
+        **kwargs,
     )
 
 
@@ -327,7 +329,7 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
         page = await client.get("/")
 
     text = page.text
-    assert '<html lang="zh-CN">' in text
+    assert '<html lang="zh-Hans">' in text
     assert 'class="skip-link"' in text
     assert 'id="main"' in text
     assert 'aria-current="page"' in text
@@ -352,7 +354,7 @@ async def test_theme_cookie_roundtrip(runtime: Runtime) -> None:
 
         await client.post("/theme", data={"mode": "system", "next": "/"})
         page = await client.get("/")
-        assert '<html lang="zh-CN">' in page.text
+        assert '<html lang="zh-Hans">' in page.text
 
 
 async def test_theme_rejects_open_redirect(runtime: Runtime) -> None:
@@ -844,3 +846,78 @@ async def test_settings_runtime_uses_field_rows_and_subgroups(runtime: Runtime) 
     assert "恢复本项默认" in page.text
     assert "settings-field__reset" in page.text
     assert "立即生效" in page.text
+
+
+async def test_default_english_and_language_switch(runtime: Runtime) -> None:
+    async with _client(runtime, locale=None) as client:
+        home = await client.get("/")
+        settings = await client.get("/settings?section=runtime")
+        switched = await client.post(
+            "/language", data={"lang": "zh-Hans", "next": "/settings?section=runtime"}
+        )
+        chinese = await client.get("/settings?section=runtime")
+
+    assert '<html lang="en">' in home.text
+    assert "Targets" in home.text
+    assert "Settings" in settings.text
+    assert "Concurrency &amp; audit" in settings.text
+    assert settings.headers["content-language"] == "en"
+    assert switched.status_code == 303
+    assert switched.headers["location"] == "/settings?section=runtime"
+    assert '<html lang="zh-Hans">' in chinese.text
+    assert "系统配置" in chinese.text
+    assert chinese.headers["content-language"] == "zh-Hans"
+
+
+async def test_invalid_language_falls_back_to_english(runtime: Runtime) -> None:
+    async with _client(runtime, locale=None) as client:
+        await client.post("/language", data={"lang": "xx", "next": "/"})
+        page = await client.get("/")
+
+    assert '<html lang="en">' in page.text
+    assert "Targets" in page.text
+
+
+async def test_english_pages_are_fully_translated(runtime: Runtime) -> None:
+    import re
+
+    urls = [
+        "/",
+        "/targets/new",
+        "/targets/new?type=mysql",
+        "/targets/new?type=mongo",
+        "/targets/new?type=elasticsearch",
+        "/settings",
+        "/settings?section=runtime",
+        "/settings?section=advanced",
+        "/settings?section=security",
+        "/settings?section=startup",
+        "/settings?section=history",
+        "/settings/reset?key=default_target_timeout_s",
+        "/nope",
+    ]
+    async with _client(runtime, locale=None) as client:
+        for url in urls:
+            response = await client.get(url)
+            assert response.status_code in {200, 404}
+            chinese = [
+                chunk
+                for chunk in re.findall(r"[\u4e00-\u9fff][^<>]*", response.text)
+                if chunk.strip().strip('"') not in {"简体中文", "中文"}
+            ]
+            assert not chinese, f"{url} has untranslated Chinese: {chinese[:5]}"
+
+
+async def test_english_validation_errors_are_translated(runtime: Runtime) -> None:
+    import re
+
+    payload = dict(PAYLOADS["mysql"])
+    payload.pop("name")
+    payload["port"] = "not-a-number"
+    async with _client(runtime, locale=None) as client:
+        response = await client.post("/targets", data=payload)
+
+    assert response.status_code == 400
+    assert "Name is required" in response.text
+    assert "Port must be an integer" in response.text
+    assert not [c for c in re.findall(r"[\u4e00-\u9fff][^<>]*", response.text) if c.strip().strip('"') not in {"简体中文", "中文"}]

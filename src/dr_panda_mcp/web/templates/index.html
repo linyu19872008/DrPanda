@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}排查目标 · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('排查目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>排查目标</h1>
-    <p class="page-subtitle">登记线上系统并授权只读范围，模型按名称调用排查工具。</p>
+    <h1>{{ t('排查目标') }}</h1>
+    <p class="page-subtitle">{{ t('登记线上系统并授权只读范围，模型按名称调用排查工具。') }}</p>
   </div>
-  <a class="btn btn--primary" href="/targets/new">＋ 新建目标</a>
+  <a class="btn btn--primary" href="/targets/new">{{ t('＋ 新建目标') }}</a>
 </div>
 
-<div class="stats" aria-label="概览">
-  <div class="stat"><span class="stat__label">目标总数</span><span class="stat__value">{{ stats.total }}</span></div>
-  <div class="stat"><span class="stat__label">已启用</span><span class="stat__value">{{ stats.enabled }}</span></div>
-  <div class="stat{% if stats.failed %} stat--danger{% endif %}"><span class="stat__label">最近测试失败</span><span class="stat__value">{{ stats.failed }}</span></div>
-  <div class="stat{% if stats.key_issues %} stat--warning{% endif %}"><span class="stat__label">密钥异常</span><span class="stat__value">{{ stats.key_issues }}</span></div>
+<div class="stats" aria-label="{{ t('概览') }}">
+  <div class="stat"><span class="stat__label">{{ t('目标总数') }}</span><span class="stat__value">{{ stats.total }}</span></div>
+  <div class="stat"><span class="stat__label">{{ t('已启用') }}</span><span class="stat__value">{{ stats.enabled }}</span></div>
+  <div class="stat{% if stats.failed %} stat--danger{% endif %}"><span class="stat__label">{{ t('最近测试失败') }}</span><span class="stat__value">{{ stats.failed }}</span></div>
+  <div class="stat{% if stats.key_issues %} stat--warning{% endif %}"><span class="stat__label">{{ t('密钥异常') }}</span><span class="stat__value">{{ stats.key_issues }}</span></div>
 </div>
 
 {% if stats.key_issues %}
@@ -21,99 +21,99 @@
   <span class="alert__icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17v.5"/></svg>
   </span>
-  <div class="alert__body"><strong>{{ stats.key_issues }} 个目标的密钥不可用</strong><span class="alert__detail">请在对应目标里重新录入密钥，否则工具会拒绝使用它。</span></div>
+  <div class="alert__body"><strong>{{ t('{count} 个目标的密钥不可用', count=stats.key_issues) }}</strong><span class="alert__detail">{{ t('请在对应目标里重新录入密钥，否则工具会拒绝使用它。') }}</span></div>
 </div>
 {% endif %}
 
 {% if has_targets %}
 <form class="toolbar" method="get" action="/" role="search">
   <div class="toolbar__search">
-    <input class="input" type="search" name="q" value="{{ q }}" placeholder="搜索名称、类型或地址" aria-label="搜索目标">
+    <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
     {% if active_type %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
-    <button class="btn btn--secondary" type="submit">搜索</button>
+    <button class="btn btn--secondary" type="submit">{{ t('搜索') }}</button>
   </div>
-  <div class="filter-chips" role="group" aria-label="按类型筛选">
+  <div class="filter-chips" role="group" aria-label="{{ t('按类型筛选') }}">
     {% for item in type_filters %}
     <a class="chip-link{% if item.active %} is-active{% endif %}" href="{{ item.href }}"
-       {% if item.active %}aria-current="true"{% endif %}>{{ item.label }}<span class="chip-link__count">{{ item.count }}</span></a>
+       {% if item.active %}aria-current="true"{% endif %}>{{ t(item.label) }}<span class="chip-link__count">{{ item.count }}</span></a>
     {% endfor %}
   </div>
-  {% if q or active_type %}<a class="link-reset" href="/">清除筛选</a>{% endif %}
+  {% if q or active_type %}<a class="link-reset" href="/">{{ t('清除筛选') }}</a>{% endif %}
 </form>
 {% endif %}
 
 {% if not has_targets %}
 <section class="empty">
-  <h2>还没有登记任何目标</h2>
-  <p>先选一个类型登记连接与只读范围，三个客户端随后就能按名称调用它。</p>
+  <h2>{{ t('还没有登记任何目标') }}</h2>
+  <p>{{ t('先选一个类型登记连接与只读范围，三个客户端随后就能按名称调用它。') }}</p>
   <div class="type-grid type-grid--compact">
     {% for type, label in type_options %}
     <a class="type-card type-card--sm" href="/targets/new?type={{ type }}">
-      <span class="type-card__title">{{ label }}</span><span class="type-card__arrow" aria-hidden="true">→</span>
+      <span class="type-card__title">{{ t(label) }}</span><span class="type-card__arrow" aria-hidden="true">→</span>
     </a>
     {% endfor %}
   </div>
 </section>
 {% elif not rows %}
 <section class="empty empty--sm">
-  <h2>没有匹配的目标</h2>
-  <p>调整搜索词或类型筛选后再试。</p>
-  <a class="btn btn--secondary" href="/">清除筛选</a>
+  <h2>{{ t('没有匹配的目标') }}</h2>
+  <p>{{ t('调整搜索词或类型筛选后再试。') }}</p>
+  <a class="btn btn--secondary" href="/">{{ t('清除筛选') }}</a>
 </section>
 {% else %}
 <div class="table-card">
   <table class="table table--responsive">
     <thead>
       <tr>
-        <th scope="col">名称</th>
-        <th scope="col">类型</th>
-        <th scope="col">端点</th>
-        <th scope="col">授权范围</th>
-        <th scope="col">状态</th>
-        <th scope="col">最近测试</th>
-        <th scope="col" class="cell-actions">操作</th>
+        <th scope="col">{{ t('名称') }}</th>
+        <th scope="col">{{ t('类型') }}</th>
+        <th scope="col">{{ t('端点') }}</th>
+        <th scope="col">{{ t('授权范围') }}</th>
+        <th scope="col">{{ t('状态') }}</th>
+        <th scope="col">{{ t('最近测试') }}</th>
+        <th scope="col" class="cell-actions">{{ t('操作') }}</th>
       </tr>
     </thead>
     <tbody>
       {% for target in rows %}
       <tr>
-        <td data-label="名称" class="cell-name">
+        <td data-label="{{ t('名称') }}" class="cell-name">
           <a class="mono link-strong" href="/targets/{{ target.id }}/edit">{{ target.name }}</a>
-          {% if target.secret_fields and not target.secret_ok %}<span class="badge badge--warning">密钥异常</span>{% endif %}
+          {% if target.secret_fields and not target.secret_ok %}<span class="badge badge--warning">{{ t('密钥异常') }}</span>{% endif %}
         </td>
-        <td data-label="类型"><span class="badge badge--type">{{ target.type_label }}</span></td>
-        <td data-label="端点"><span class="mono truncate" title="{{ target.endpoint }}">{{ target.endpoint }}</span></td>
-        <td data-label="授权范围"><span class="muted">{{ target.scope }}</span></td>
-        <td data-label="状态">
+        <td data-label="{{ t('类型') }}"><span class="badge badge--type">{{ t(target.type_label) }}</span></td>
+        <td data-label="{{ t('端点') }}"><span class="mono truncate" title="{{ target.endpoint }}">{{ t(target.endpoint) }}</span></td>
+        <td data-label="{{ t('授权范围') }}"><span class="muted">{{ t(target.scope_source, **target.scope_params) }}</span></td>
+        <td data-label="{{ t('状态') }}">
           <form method="post" action="/targets/{{ target.id }}/toggle" class="inline-form">
             <button class="switch{% if target.enabled %} is-on{% endif %}" type="submit"
                     aria-pressed="{{ 'true' if target.enabled else 'false' }}"
-                    title="{{ '点击停用' if target.enabled else '点击启用' }}">
+                    title="{{ t('点击停用') if target.enabled else t('点击启用') }}">
               <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
-              <span class="switch__label">{{ '已启用' if target.enabled else '已停用' }}</span>
+              <span class="switch__label">{{ t('已启用') if target.enabled else t('已停用') }}</span>
             </button>
           </form>
         </td>
-        <td data-label="最近测试">
+        <td data-label="{{ t('最近测试') }}">
           {% if target.last_test_at_display %}
           <div class="test-line">
-            <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ '成功' if target.last_test_ok else '失败' }}</span>
+            <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
             <span class="muted small">{{ target.last_test_at_display }}</span>
           </div>
           {% if target.last_test_error %}
-          <details class="details"><summary>失败详情</summary><p class="details__body mono">{{ target.last_test_error }}</p></details>
+          <details class="details"><summary>{{ t('失败详情') }}</summary><p class="details__body mono">{{ target.last_test_error }}</p></details>
           {% endif %}
           {% else %}
-          <span class="status status--none"><span class="status__dot"></span>未测试</span>
+          <span class="status status--none"><span class="status__dot"></span>{{ t('未测试') }}</span>
           {% endif %}
         </td>
-        <td data-label="操作" class="cell-actions">
+        <td data-label="{{ t('操作') }}" class="cell-actions">
           <div class="row-actions">
             <form method="post" action="/targets/{{ target.id }}/test" class="inline-form">
-              <button class="btn btn--secondary btn--sm" type="submit">测试</button>
+              <button class="btn btn--secondary btn--sm" type="submit">{{ t('测试') }}</button>
             </form>
-            <a class="btn btn--ghost btn--sm" href="/targets/{{ target.id }}/edit">编辑</a>
-            <a class="btn btn--danger-ghost btn--sm" href="/targets/{{ target.id }}/delete">删除</a>
+            <a class="btn btn--ghost btn--sm" href="/targets/{{ target.id }}/edit">{{ t('编辑') }}</a>
+            <a class="btn btn--danger-ghost btn--sm" href="/targets/{{ target.id }}/delete">{{ t('删除') }}</a>
           </div>
         </td>
       </tr>
