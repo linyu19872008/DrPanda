@@ -1,6 +1,6 @@
 # 配置台视觉与交互设计
 
-本文件是配置台网页的设计系统与页面规格，配合 `src/dr_panda_mcp/web/static/app.css` 使用。技术约束见 [planning.md](planning.md) 4.4：服务端渲染、手写 CSS、零 JS、无外部字体/CDN。
+本文件是配置台网页的设计系统与页面规格，配合 `src/dr_panda_mcp/web/static/app.css` 使用。技术约束见 [planning.md](planning.md) 4.4：服务端渲染、手写 CSS、无外部字体/CDN；除 Token 结果页复制按钮的渐进增强脚本外保持零 JS。
 
 ## 1. 设计原则
 
@@ -86,7 +86,8 @@
 
 - `/setup`：两步卡片式向导，第 1 步管理员密码，第 2 步配置库选择/连接测试；不显示主导航，保留品牌与语言切换。
 - 数据库类型用链接切换 SQLite / MySQL / PostgreSQL，零 JS；测试成功后才启用“完成安装”。
-- 安装完成页显示 MCP URL 与 Token；完整 Token 不在后续页面回显，可在“我的”页面重新生成。
+- 安装完成页显示 MCP URL 与 Token；完整 Token 不在后续页面回显。Token 结果弹窗提供复制按钮（静态脚本，JS 失败时隐藏按钮并显示手动复制提示）。
+- “我的”页面用 CSS `:target` 弹窗创建和删除 Token，不跳转独立页面；创建成功后弹窗显示一次 Token，删除需同页二次确认；列表按 20 条/页分页。
 - `/login`：单列登录卡片，用户名/密码 + CSRF；不显示管理导航的可操作入口。
 - 安装/登录页均已接入 `t()` 中英文文案。
 

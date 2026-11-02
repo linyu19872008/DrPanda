@@ -8,6 +8,9 @@
   </div>
 </div>
 
+{% if notice %}
+<div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(notice) }}</strong></div></div>
+{% endif %}
 {% if error %}
 <div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>
 {% endif %}
@@ -46,14 +49,14 @@
     </section>
   </aside>
 
-  <section class="profile-main">
+  <section class="profile-main" id="token-list">
     <div class="card profile-card">
       <div class="profile-card__head">
         <div>
           <h2>{{ t('MCP 访问') }}</h2>
           <p class="field__hint">{{ t('每个 Token 独立有效，删除后立即失效。') }}</p>
         </div>
-        <a class="btn btn--primary btn--sm" href="/me/tokens/new">{{ t('+ 生成新 Token') }}</a>
+        <a class="btn btn--primary btn--sm" href="#token-create">{{ t('+ 生成新 Token') }}</a>
       </div>
       <p class="field__label">{{ t('MCP 地址') }}</p>
       <pre class="mono profile-endpoint">{{ mcp_url }}</pre>
@@ -72,7 +75,7 @@
               <td data-label="{{ t('创建时间') }}" class="muted small">{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
               <td data-label="{{ t('最近使用') }}" class="muted small">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M UTC') if token.last_used_at else t('从未使用') }}</td>
               <td data-label="{{ t('操作') }}" class="cell-actions">
-                <a class="btn btn--danger-ghost btn--sm" href="/me/tokens/{{ token.id }}/delete">{{ t('删除') }}</a>
+                <a class="btn btn--danger-ghost btn--sm" href="#delete-token-{{ token.id }}">{{ t('删除') }}</a>
               </td>
             </tr>
           {% endfor %}
@@ -90,10 +93,76 @@
       <div class="empty empty--sm">
         <h2>{{ t('还没有 MCP Token') }}</h2>
         <p>{{ t('生成一个 Token 给 Cursor、Codex 或 DeepSeek Harness 使用。') }}</p>
-        <a class="btn btn--primary" href="/me/tokens/new">{{ t('+ 生成第一个 Token') }}</a>
+        <a class="btn btn--primary" href="#token-create">{{ t('+ 生成第一个 Token') }}</a>
       </div>
       {% endif %}
     </div>
   </section>
 </div>
+
+{% for token in tokens %}
+<section id="delete-token-{{ token.id }}" class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-token-title-{{ token.id }}">
+  <a class="modal__backdrop" href="#token-list" aria-label="{{ t('关闭') }}"></a>
+  <div class="modal__panel">
+    <a class="modal__close" href="#token-list" aria-label="{{ t('关闭') }}">×</a>
+    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
+    <h2 id="delete-token-title-{{ token.id }}">{{ t('删除 Token') }}</h2>
+    <p class="field__hint">{{ t('删除后该 Token 立即失效，且无法恢复；其他 Token 不受影响。') }}</p>
+    <dl class="summary">
+      <div><dt>{{ t('名称') }}</dt><dd>{{ token.name or '—' }}</dd></div>
+      <div><dt>{{ t('Token 前缀') }}</dt><dd class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</dd></div>
+      <div><dt>{{ t('创建时间') }}</dt><dd>{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd></div>
+    </dl>
+    <div class="alert alert--danger"><div class="alert__body"><strong>{{ t('这会立即断开使用该 Token 的客户端') }}</strong><span class="alert__detail">{{ t('如果这是最后一个 Token，MCP 将暂时不可用，直到重新生成。') }}</span></div></div>
+    <form method="post" action="/me/tokens/{{ token.id }}/delete" class="form-actions form-actions--inline">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <a class="btn btn--secondary" href="#token-list">{{ t('取消') }}</a>
+      <button class="btn btn--danger" type="submit">{{ t('确认删除') }}</button>
+    </form>
+  </div>
+</section>
+{% endfor %}
+
+<section id="token-create" class="modal{% if modal_open %} is-open{% endif %}" role="dialog" aria-modal="true" aria-labelledby="token-create-title">
+  <a class="modal__backdrop" href="#token-list" aria-label="{{ t('关闭') }}"></a>
+  <div class="modal__panel">
+    <a class="modal__close" href="#token-list" aria-label="{{ t('关闭') }}">×</a>
+    {% if new_token %}
+    <span class="badge badge--success">{{ t('Token 已生成') }}</span>
+    <h2 id="token-create-title">{{ t('请立即保存') }}</h2>
+    <p class="field__hint">{{ t('完整 Token 只显示一次，关闭页面后无法再次查看。') }}</p>
+    <div class="token-copy">
+      <pre id="mcp-token-value" class="mono setup-secret">{{ new_token }}</pre>
+      <div class="token-copy__actions">
+        <button id="copy-mcp-token" class="btn btn--secondary btn--sm" type="button" hidden
+                aria-label="{{ t('复制 MCP Token') }}"
+                data-copied="{{ t('已复制') }}"
+                data-selected="{{ t('已选中，请按 ⌘C / Ctrl+C 复制') }}">{{ t('复制') }}</button>
+        <span id="copy-mcp-token-status" class="field__hint" role="status" aria-live="polite"></span>
+      </div>
+      <p class="field__hint">{{ t('无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。') }}</p>
+    </div>
+    <div class="alert alert--warning"><div class="alert__body"><strong>{{ t('只显示一次') }}</strong><span class="alert__detail">{{ t('请把它配置到对应客户端；丢失后只能删除并重新生成。') }}</span></div></div>
+    <a class="btn btn--primary" href="#token-list">{{ t('返回 Token 列表') }}</a>
+    {% else %}
+    <h2 id="token-create-title">{{ t('生成新 Token') }}</h2>
+    <p class="field__hint">{{ t('名称可选，用于区分 Cursor、Codex 等客户端。') }}</p>
+    {% if modal_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(modal_error) }}</strong></div></div>{% endif %}
+    <form method="post" action="/me/tokens" class="profile-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="field">
+        <label class="field__label" for="token-name">{{ t('Token 名称（可选）') }}</label>
+        <input class="input" id="token-name" name="name" maxlength="64" value="{{ token_name }}" placeholder="{{ t('例如 Cursor') }}">
+      </div>
+      <div class="form-actions form-actions--inline">
+        <a class="btn btn--secondary" href="#token-list">{{ t('取消') }}</a>
+        <button class="btn btn--primary" type="submit">{{ t('生成 Token') }}</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{% if new_token %}<script src="/static/copy-token.js?v={{ script_version }}" defer></script>{% endif %}
 {% endblock %}

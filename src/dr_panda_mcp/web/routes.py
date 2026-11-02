@@ -309,6 +309,10 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def app_css(request: Request) -> Response:
         return assets.css_response(request)
 
+    @server.custom_route("/static/copy-token.js", methods=["GET"])
+    async def copy_token_js(request: Request) -> Response:
+        return assets.copy_js_response(request)
+
 
 async def _target(store: ConfigStore, target_id: int) -> Target | None:
     return await store.get_by_id(target_id)

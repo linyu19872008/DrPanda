@@ -48,7 +48,12 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         page: int = 1,
         error: str | None = None,
         password_error: str | None = None,
+        modal_open: bool = False,
+        modal_error: str | None = None,
+        token_name: str = "",
+        new_token: str | None = None,
         status_code: int = 200,
+        notice: str | None = None,
     ) -> HTMLResponse:
         total = await auth.count_mcp_tokens(runtime.session_factory, profile.user.id)
         pages = max(1, math.ceil(total / PAGE_SIZE))
@@ -75,11 +80,12 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             modal_error=modal_error,
             token_name=token_name,
             new_token=new_token,
+            notice=notice,
             last_login=_display_time(profile.last_login_at),
             status_code=status_code,
         )
         response.headers["Cache-Control"] = "no-store"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Referrer-Policy"] = "same-origin"
         return response
 
     @server.custom_route("/me", methods=["GET"])
@@ -91,7 +97,8 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             page = int(request.query_params.get("page", "1"))
         except ValueError:
             page = 1
-        return await _render_me_with_tokens(request, profile, page=page)
+        notice = "Token 已删除" if request.query_params.get("deleted") == "1" else None
+        return await _render_me_with_tokens(request, profile, page=page, notice=notice)
 
     @server.custom_route("/me/tokens/new", methods=["GET"])
     async def new_token_page(request: Request) -> Response:
@@ -142,17 +149,10 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
 
     @server.custom_route("/me/tokens/{token_id:int}/delete", methods=["GET"])
     async def delete_token_page(request: Request) -> Response:
-        profile = await _current_profile()
-        if profile is None:
-            return RedirectResponse("/login", status_code=303)
-        token = await auth.get_mcp_token(
-            runtime.session_factory, profile.user.id, request.path_params["token_id"]
+        # 正常入口是 /me#delete-token-{id} 的 CSS 弹窗；旧链接跳回同一页面。
+        return RedirectResponse(
+            f"/me#delete-token-{request.path_params['token_id']}", status_code=303
         )
-        if token is None:
-            return await _render_me_with_tokens(request, profile, error="Token 不存在", status_code=404)
-        response = render.render("token_delete.html", request=request, token=token)
-        response.headers["Cache-Control"] = "no-store"
-        return response
 
     @server.custom_route("/me/tokens/{token_id:int}/delete", methods=["POST"])
     async def delete_token(request: Request) -> Response:
@@ -175,7 +175,7 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
                     summary=f"name={token.name or '-'}; prefix={token.token_prefix or '-'}",
                 )
             )
-        return RedirectResponse("/me", status_code=303)
+        return RedirectResponse("/me?deleted=1", status_code=303)
 
     @server.custom_route("/me/password", methods=["POST"])
     async def change_password(request: Request) -> Response:

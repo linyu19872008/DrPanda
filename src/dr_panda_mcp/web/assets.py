@@ -13,6 +13,7 @@ from starlette.responses import Response
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 CSS_PATH = STATIC_DIR / "app.css"
+COPY_JS_PATH = STATIC_DIR / "copy-token.js"
 
 
 def _read_css() -> bytes:
@@ -21,6 +22,19 @@ def _read_css() -> bytes:
 
 def asset_version() -> str:
     return hashlib.sha256(_read_css()).hexdigest()[:10]
+
+
+def script_version() -> str:
+    return hashlib.sha256(COPY_JS_PATH.read_bytes()).hexdigest()[:10]
+
+
+def copy_js_response(request: Request) -> Response:
+    data = COPY_JS_PATH.read_bytes()
+    etag = f'"{hashlib.sha256(data).hexdigest()}"'
+    headers = {"Cache-Control": "public, max-age=300", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(data, media_type="text/javascript; charset=utf-8", headers=headers)
 
 
 def css_response(request: Request) -> Response:

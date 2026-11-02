@@ -358,8 +358,11 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
                 data={"_csrf": csrf, "name": "Cursor"},
             )
             assert created.status_code == 200
+            assert 'id="copy-mcp-token"' in created.text
+            assert 'src="/static/copy-token.js' in created.text
+            assert "无 JS 时可点击 Token 全选" in created.text or "Without JS, click the token" in created.text
             import re
-            match = re.search(r'<pre class="mono setup-secret">([^<]+)</pre>', created.text)
+            match = re.search(r'<pre id="mcp-token-value" class="mono setup-secret">([^<]+)</pre>', created.text)
             assert match is not None
             new_token = match.group(1).strip()
             assert new_token != old_token
@@ -391,6 +394,9 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
                 follow_redirects=False,
             )
             assert deleted.status_code == 303
+            assert deleted.headers["location"] == "/me?deleted=1"
+            after_delete = await client.get("/me?deleted=1")
+            assert "Token deleted" in after_delete.text
             assert (
                 await auth.authenticate_mcp_token(
                     runtime.session_factory, auth.hash_token(old_token)
@@ -483,5 +489,46 @@ async def test_token_list_pagination(tmp_path: Path) -> None:
         assert "第 1 / 2 页" in first.text
         assert "第 2 / 2 页" in second.text
         assert "共 26 个" in first.text
+    finally:
+        await runtime.close()
+
+
+async def test_me_forms_accept_same_origin_header(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            me = await client.get("/me")
+            assert me.headers["referrer-policy"] == "same-origin"
+
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            created = await client.post(
+                "/me/tokens",
+                headers={"Origin": BASE},
+                data={"_csrf": csrf, "name": "origin-test"},
+                follow_redirects=False,
+            )
+        assert created.status_code == 200
+        assert "origin-test" in created.text
+    finally:
+        await runtime.close()
+
+
+async def test_copy_token_script_is_served(tmp_path: Path) -> None:
+    runtime, cfg, key, _ = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
+            response = await client.get("/static/copy-token.js")
+        assert response.status_code == 200
+        assert "navigator.clipboard" in response.text
+        assert "copy-mcp-token" in response.text
     finally:
         await runtime.close()

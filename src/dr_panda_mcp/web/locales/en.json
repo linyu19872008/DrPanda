@@ -395,5 +395,13 @@
   "Token 已生成": "Token generated",
   "请立即保存": "Save it now",
   "管理账号密码和 MCP 客户端访问凭证。": "Manage your password and MCP client credentials.",
-  "名称可选，用于区分 Cursor、Codex 等客户端。": "Name is optional; use it to distinguish Cursor, Codex, and other clients."
+  "名称可选，用于区分 Cursor、Codex 等客户端。": "Name is optional; use it to distinguish Cursor, Codex, and other clients.",
+  "关闭": "Close",
+  "返回 Token 列表": "Back to token list",
+  "复制": "Copy",
+  "复制 MCP Token": "Copy MCP token",
+  "已复制": "Copied",
+  "已选中，请按 ⌘C / Ctrl+C 复制": "Selected. Press Ctrl/Cmd+C to copy.",
+  "无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。": "Without JS, click the token to select it, then press Ctrl/Cmd+C.",
+  "Token 已删除": "Token deleted"
 }
