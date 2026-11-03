@@ -99,6 +99,7 @@ class AuditRow(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     actor: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
+    environment_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     target_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     summary: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 

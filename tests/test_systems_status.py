@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import pytest
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
+from sqlalchemy import select
 
+from dr_panda_mcp import auth
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.server import create_server
+from dr_panda_mcp.store.models import AuditRow
 
 
 async def test_systems_status_tool_listed(runtime: Runtime) -> None:
@@ -52,3 +57,32 @@ async def test_systems_status_returns_envelope(runtime: Runtime) -> None:
     assert payload["stats"]["environments"] == 1
     assert payload["stats"]["targets"] == 0
     assert payload["notes"]
+
+
+async def test_systems_status_is_audited(runtime: Runtime) -> None:
+    server = create_server(runtime.config, runtime)
+    async with Client(server) as client:
+        with auth.use_actor(
+            "admin",
+            client=auth.ClientIdentity(name="Cursor", prefix="abcdefghijkl"),
+        ):
+            await client.call_tool("systems_status", {"environment": "default"})
+            with pytest.raises(ToolError):
+                await client.call_tool("systems_status", {"environment": "missing"})
+
+    async with runtime.session_factory() as session:
+        rows = (
+            await session.execute(
+                select(AuditRow).where(AuditRow.action == "tool.call").order_by(AuditRow.id)
+            )
+        ).scalars().all()
+
+    assert rows[0].environment_key == "default"
+    assert rows[0].summary is not None
+    assert "systems_status" in rows[0].summary
+    assert "client=Cursor" in rows[0].summary
+    assert "prefix=abcdefghijkl" in rows[0].summary
+    assert "error=-" in rows[0].summary
+    assert rows[1].environment_key == "missing"
+    assert rows[1].summary is not None
+    assert "error=-" not in rows[1].summary

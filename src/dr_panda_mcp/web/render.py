@@ -72,6 +72,8 @@ def render(
                 if path.startswith("/me")
                 else "settings"
                 if path.startswith("/settings")
+                else "audit"
+                if path.startswith("/audit")
                 else "environments"
                 if path.startswith("/environments")
                 else "targets"

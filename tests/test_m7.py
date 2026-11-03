@@ -627,7 +627,7 @@ async def test_login_hides_primary_navigation(tmp_path: Path) -> None:
         async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
             login = await client.get("/login")
         assert login.status_code == 200
-        assert 'class="tabs"' not in login.text
+        assert 'class="sidebar"' not in login.text
         assert "Targets" not in login.text
     finally:
         await runtime.close()

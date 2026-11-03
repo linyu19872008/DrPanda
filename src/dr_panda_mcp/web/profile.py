@@ -17,6 +17,21 @@ from dr_panda_mcp.store.protocol import AuditEntry
 from dr_panda_mcp.web import async_api, render
 
 PAGE_SIZE = 20
+PROFILE_TABS = ("mcp", "account", "password")
+
+
+def _profile_tab(
+    request: Request, *, password_error: str | None, modal_open: bool
+) -> str:
+    """出错或弹窗时停在对应分区，否则跟地址栏，默认打开 MCP 访问。"""
+    if password_error:
+        return "password"
+    if modal_open:
+        return "mcp"
+    tab = request.query_params.get("tab", "")
+    if tab in PROFILE_TABS:
+        return tab
+    return "mcp"
 
 
 def _mcp_url(config: Config) -> str:
@@ -81,6 +96,9 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             token_name=token_name,
             new_token=new_token,
             notice=notice,
+            tab=_profile_tab(
+                request, password_error=password_error, modal_open=modal_open
+            ),
             last_login=_display_time(profile.last_login_at),
             status_code=status_code,
         )

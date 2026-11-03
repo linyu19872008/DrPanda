@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ t('审计') }} · {{ product_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ t('审计') }}</h1>
+    <p class="page-subtitle">{{ t('查看已经发生的操作。') }}</p>
+  </div>
+</div>
+
+<form class="toolbar audit-filters" method="get" action="/audit" role="search">
+  <input type="hidden" name="range" value="{{ range_key }}">
+  <div class="filter-chips" role="group" aria-label="{{ t('时间范围') }}">
+    {% for item in ranges %}
+    <a class="chip-link{% if item.active %} is-active{% endif %}" href="{{ item.href }}"
+       {% if item.active %}aria-current="true"{% endif %}>{{ t(item.label) }}</a>
+    {% endfor %}
+  </div>
+  <select class="input input--compact" name="action" aria-label="{{ t('动作') }}">
+    <option value="">{{ t('全部动作') }}</option>
+    {% for code, label in actions %}
+    <option value="{{ code }}"{% if action == code %} selected{% endif %}>{{ t(label) }}</option>
+    {% endfor %}
+  </select>
+  <select class="input input--compact" name="env" aria-label="{{ t('所在环境') }}">
+    <option value="">{{ t('全部环境') }}</option>
+    {% for item in environments %}
+    <option value="{{ item.key }}"{% if env == item.key %} selected{% endif %}>{% if item.key == 'default' and item.title == '默认' %}{{ t('默认') }}{% else %}{{ item.title }}{% endif %} · {{ item.key }}</option>
+    {% endfor %}
+  </select>
+  <div class="toolbar__search">
+    <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('对象名') }}" aria-label="{{ t('对象名') }}" autocomplete="off">
+    <button class="btn btn--secondary" type="submit">{{ t('筛选') }}</button>
+  </div>
+  {% if filtered %}<a class="link-reset" href="/audit">{{ t('清除筛选') }}</a>{% endif %}
+</form>
+
+{% if rows %}
+<p class="audit-count">{{ t('共 {total} 条', total=total) }}</p>
+<div class="table-card">
+  <table class="table table--responsive table--audit">
+    <thead>
+      <tr>
+        <th scope="col">{{ t('时间') }}</th>
+        <th scope="col">{{ t('操作者') }}</th>
+        <th scope="col">{{ t('动作') }}</th>
+        <th scope="col">{{ t('所在环境') }}</th>
+        <th scope="col">{{ t('对象') }}</th>
+        <th scope="col">{{ t('摘要') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td data-label="{{ t('时间') }}" class="cell-when">{{ row.at }}</td>
+        <td data-label="{{ t('操作者') }}">{{ row.actor }}</td>
+        <td data-label="{{ t('动作') }}"><span class="badge badge--quiet">{{ t(row.action_label) }}</span></td>
+        <td data-label="{{ t('所在环境') }}">
+          {% if row.environment_key %}
+          <span>{% if row.environment_key == 'default' and row.environment_title == '默认' %}{{ t('默认') }}{% else %}{{ row.environment_title or row.environment_key }}{% endif %}</span>
+          {% if row.environment_title and row.environment_title != row.environment_key %}<span class="mono cell-key">{{ row.environment_key }}</span>{% endif %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('摘要') }}" class="cell-summary">{% if row.summary %}{{ row.summary }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if pages > 1 %}
+<nav class="pagination" aria-label="{{ t('分页') }}">
+  {% if page > 1 %}<a class="btn btn--secondary btn--sm" href="{{ prev_href }}">{{ t('上一页') }}</a>{% endif %}
+  <span class="pagination__info">{{ t('第 {page} / {pages} 页', page=page, pages=pages) }} · {{ t('共 {total} 条', total=total) }}</span>
+  {% if page < pages %}<a class="btn btn--secondary btn--sm" href="{{ next_href }}">{{ t('下一页') }}</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<section class="empty">
+  <h2>{% if filtered %}{{ t('没有符合条件的记录。') }}{% else %}{{ t('近 24 小时还没有操作。') }}{% endif %}</h2>
+  <p>{% if filtered %}{{ t('换个时间或动作，或清除筛选后再看。') }}{% else %}{{ t('可以改成近 7 天或近 30 天再看。') }}{% endif %}</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -42,6 +42,7 @@ from dr_panda_mcp.store.models import (
 from dr_panda_mcp.store.protocol import (
     TARGET_TYPES,
     AuditEntry,
+    AuditRecord,
     Environment,
     SecretPatch,
     SettingsChange,
@@ -64,6 +65,23 @@ class _EnvRef:
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _target_update_summary(environment_key: str, patch: SecretPatch) -> str:
+    parts = [f"env={environment_key}", "options"]
+    secret_bits: list[str] = []
+    if patch.set:
+        secret_bits.append("set=" + ",".join(sorted(patch.set)))
+    if patch.clear:
+        secret_bits.append("clear=" + ",".join(sorted(patch.clear)))
+    if secret_bits:
+        parts.append("secret:" + " ".join(secret_bits))
+    return " ".join(parts)
+
+
+def _contains(column, text: str):
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return column.ilike(f"%{escaped}%", escape="\\")
 
 
 class SqlConfigStore:
@@ -117,7 +135,13 @@ class SqlConfigStore:
             async with self._session_factory() as session, session.begin():
                 session.add(row)
                 session.add(
-                    self._audit_row(actor, "environment.create", key, f"title={title}")
+                    self._audit_row(
+                        actor,
+                        "environment.create",
+                        key,
+                        f"title={title}",
+                        environment_key=key,
+                    )
                 )
                 await session.flush()
                 return _environment(row, {})
@@ -151,6 +175,7 @@ class SqlConfigStore:
                             action,
                             row.key,
                             f"title={title} enabled={enabled}",
+                            environment_key=row.key,
                         )
                     )
                 counts = await self._environment_counts(session, row.id)
@@ -179,7 +204,13 @@ class SqlConfigStore:
                 title = row.title
                 await session.delete(row)
                 session.add(
-                    self._audit_row(actor, "environment.delete", key, f"title={title}")
+                    self._audit_row(
+                        actor,
+                        "environment.delete",
+                        key,
+                        f"title={title}",
+                        environment_key=key,
+                    )
                 )
         except (EnvironmentNotFound, EnvironmentNotEmpty):
             raise
@@ -235,6 +266,7 @@ class SqlConfigStore:
                             "target.create",
                             draft.name,
                             f"env={env.key} type={draft.type}",
+                            environment_key=env.key,
                         )
                     )
                     await session.flush()
@@ -268,7 +300,15 @@ class SqlConfigStore:
                     row.options_json = dict(draft.options)
                     row.secret_json = envelope
                     row.updated_at = utc_now()
-                    session.add(self._audit_row(actor, "target.update", row.name, "options/secret"))
+                    session.add(
+                        self._audit_row(
+                            actor,
+                            "target.update",
+                            row.name,
+                            _target_update_summary(env_row.key, draft.secret_patch),
+                            environment_key=env_row.key,
+                        )
+                    )
                 return self._to_target(row, env_row)
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
@@ -279,10 +319,17 @@ class SqlConfigStore:
             async with self._session_factory() as session:
                 async with session.begin():
                     row = await self._require_row(session, target_id)
+                    env_row = await session.get(EnvironmentRow, row.environment_id)
                     row.enabled = bool(enabled)
                     row.updated_at = utc_now()
                     session.add(
-                        self._audit_row(actor, action, row.name, f"enabled={bool(enabled)}")
+                        self._audit_row(
+                            actor,
+                            action,
+                            row.name,
+                            f"enabled={bool(enabled)}",
+                            environment_key=env_row.key if env_row is not None else None,
+                        )
                     )
                 env_row = await session.get(EnvironmentRow, row.environment_id)
                 if env_row is None:
@@ -296,8 +343,17 @@ class SqlConfigStore:
             async with self._session_factory() as session, session.begin():
                 row = await self._require_row(session, target_id)
                 name = row.name
+                env_row = await session.get(EnvironmentRow, row.environment_id)
                 await session.delete(row)
-                session.add(self._audit_row(actor, "target.delete", name, "deleted"))
+                session.add(
+                    self._audit_row(
+                        actor,
+                        "target.delete",
+                        name,
+                        "deleted",
+                        environment_key=env_row.key if env_row is not None else None,
+                    )
+                )
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
 
@@ -308,12 +364,21 @@ class SqlConfigStore:
             async with self._session_factory() as session:
                 async with session.begin():
                     row = await self._require_row(session, target_id)
+                    env_row = await session.get(EnvironmentRow, row.environment_id)
                     row.last_test_at = utc_now()
                     row.last_test_ok = bool(ok)
                     row.last_test_error = _truncate(error, 512)
                     row.updated_at = utc_now()
                     summary = "ok" if ok else f"failed: {_truncate(error or '', 200)}"
-                    session.add(self._audit_row(actor, "target.test", row.name, summary))
+                    session.add(
+                        self._audit_row(
+                            actor,
+                            "target.test",
+                            row.name,
+                            summary,
+                            environment_key=env_row.key if env_row is not None else None,
+                        )
+                    )
                 env_row = await session.get(EnvironmentRow, row.environment_id)
                 if env_row is None:
                     raise StorageUnavailable("目标缺少所属环境")
@@ -329,12 +394,58 @@ class SqlConfigStore:
                         created_at=utc_now(),
                         actor=entry.actor,
                         action=entry.action,
+                        environment_key=entry.environment_key or None,
                         target_name=entry.target_name,
                         summary=_truncate(entry.summary, 1024),
                     )
                 )
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
+
+    async def list_audit(
+        self,
+        *,
+        since: datetime,
+        action: str | None = None,
+        environment_key: str | None = None,
+        target_name: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[AuditRecord], int]:
+        filters = [AuditRow.created_at >= since]
+        if action:
+            filters.append(AuditRow.action == action)
+        if environment_key:
+            filters.append(AuditRow.environment_key == environment_key)
+        if target_name:
+            filters.append(_contains(AuditRow.target_name, target_name))
+        async with self._session_factory() as session:
+            total = int(
+                await session.scalar(
+                    select(func.count()).select_from(AuditRow).where(*filters)
+                )
+                or 0
+            )
+            rows = (
+                await session.execute(
+                    select(AuditRow)
+                    .where(*filters)
+                    .order_by(AuditRow.created_at.desc(), AuditRow.id.desc())
+                    .offset(max(offset, 0))
+                    .limit(limit)
+                )
+            ).scalars().all()
+        return [
+            AuditRecord(
+                created_at=row.created_at,
+                actor=row.actor,
+                action=row.action,
+                environment_key=row.environment_key,
+                target_name=row.target_name,
+                summary=row.summary,
+            )
+            for row in rows
+        ], total
 
     async def cleanup_audit(
         self,
@@ -528,11 +639,13 @@ class SqlConfigStore:
         action: str,
         target_name: str | None,
         summary: str | None,
+        environment_key: str | None = None,
     ) -> AuditRow:
         return AuditRow(
             created_at=utc_now(),
             actor=actor,
             action=action,
+            environment_key=environment_key or None,
             target_name=target_name,
             summary=_truncate(summary, 1024),
         )

@@ -27,6 +27,7 @@ from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import ConfigStore, Target
 from dr_panda_mcp.web import assets, async_api, forms, i18n, render, theme, views
+from dr_panda_mcp.web.audit_page import register_audit_routes
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ _FLASH_MESSAGES = {
 
 
 def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
+    register_audit_routes(server, runtime)
     store = runtime.store
 
     async def _record_probe_success(target_id: int) -> None:

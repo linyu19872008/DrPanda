@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dr_panda_mcp.masking import redact
+from dr_panda_mcp.tools.base import mask_params
 
 
 def test_redact_secret_literal() -> None:
@@ -32,3 +33,18 @@ def test_redact_empty() -> None:
 
 def test_redact_ignores_empty_secret() -> None:
     assert redact("hello", ["", None]) == "hello"  # type: ignore[list-item]
+
+
+def test_mask_params_redacts_before_cutting() -> None:
+    secret = "SECRETVALUE" * 6
+    params = {"query": ("a" * 180) + secret}
+
+    class _Target:
+        def __init__(self) -> None:
+            self.secret = {"password": secret}
+
+    text = mask_params(params, _Target())  # type: ignore[arg-type]
+
+    assert secret not in text
+    assert len(text) <= 200
+    assert "***" in text

@@ -63,7 +63,48 @@ def code_for(exc: errors.DrPandaError) -> str:
 def mask_params(params: dict[str, Any], target: Target | None) -> str:
     raw = json.dumps(params, ensure_ascii=False, default=str)
     secrets = list(target.secret.values()) if target else []
-    return redact(raw[:200], secrets)
+    return redact(raw, secrets)[:200]
+
+
+def _client_prefix() -> str:
+    client = auth.current_client()
+    if client is None:
+        return ""
+    return f"client={client.name or '-'} prefix={client.prefix or '-'} "
+
+
+async def write_tool_audit(
+    runtime: Runtime,
+    *,
+    tool: str,
+    name: str,
+    environment_key: str | None,
+    params: dict[str, Any],
+    target: Target | None,
+    returned: int,
+    started: float,
+    error_code: str | None,
+) -> None:
+    """工具调用结束后追加一条审计。写失败不影响工具结果。"""
+    env_label = environment_key or "-"
+    summary = (
+        f"{_client_prefix()}{tool} env={env_label} target={name or '-'} "
+        f"params={mask_params(params, target)} returned={returned} "
+        f"elapsed_ms={int((time.monotonic() - started) * 1000)} "
+        f"error={error_code or '-'}"
+    )
+    try:
+        await runtime.store.append_audit(
+            AuditEntry(
+                actor=auth.current_actor(),
+                action="tool.call",
+                target_name=name or None,
+                summary=summary[:1024],
+                environment_key=environment_key or None,
+            )
+        )
+    except Exception:
+        logger.warning("工具审计写入失败：%s", tool, exc_info=True)
 
 
 async def run_tool(
@@ -110,27 +151,22 @@ async def run_tool(
         logger.exception("工具执行失败：%s", tool)
         raise ToolError(f"{errors.INTERNAL}: 工具执行失败（{type(exc).__name__}）") from exc
     finally:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        env_label = (
+        environment_key = (
             target.environment_key
             if target is not None and target.environment_key
-            else (environment or "-")
+            else (environment or None)
         )
-        summary = (
-            f"{tool} env={env_label} target={name} params={mask_params(params, target)} "
-            f"returned={returned} elapsed_ms={elapsed_ms} error={error_code or '-'}"
+        await write_tool_audit(
+            runtime,
+            tool=tool,
+            name=name,
+            environment_key=environment_key,
+            params=params,
+            target=target,
+            returned=returned,
+            started=started,
+            error_code=error_code,
         )
-        try:
-            await runtime.store.append_audit(
-                AuditEntry(
-                    actor=auth.current_actor(),
-                    action="tool.call",
-                    target_name=name,
-                    summary=summary[:1024],
-                )
-            )
-        except Exception:
-            logger.warning("工具审计写入失败：%s", tool, exc_info=True)
 
 
 def finish(

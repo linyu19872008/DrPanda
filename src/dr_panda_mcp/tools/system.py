@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastmcp import FastMCP
@@ -10,7 +11,7 @@ from fastmcp.exceptions import ToolError
 from dr_panda_mcp import errors
 from dr_panda_mcp.connectors import base
 from dr_panda_mcp.runtime import Runtime
-from dr_panda_mcp.tools.base import EnvironmentParam, code_for
+from dr_panda_mcp.tools.base import EnvironmentParam, code_for, write_tool_audit
 
 
 def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
@@ -22,6 +23,9 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
         传入后只返回该环境的目标。同一种类型有多台时，后续调用必须点名 target。
         """
         key = environment.strip()
+        started = time.monotonic()
+        returned = 0
+        error_code: str | None = None
         try:
             with base.Stopwatch() as watch:
                 payload = (
@@ -30,9 +34,26 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
                     else await _targets(runtime, key)
                 )
                 payload["elapsed_ms"] = watch.elapsed_ms
-                return payload
+            returned = int(payload.get("returned", 0))
+            return payload
         except errors.DrPandaError as exc:
-            raise ToolError(f"{code_for(exc)}: {exc}") from exc
+            error_code = code_for(exc)
+            raise ToolError(f"{error_code}: {exc}") from exc
+        except Exception:
+            error_code = errors.INTERNAL
+            raise
+        finally:
+            await write_tool_audit(
+                runtime,
+                tool="systems_status",
+                name="",
+                environment_key=key or None,
+                params={"environment": key},
+                target=None,
+                returned=returned,
+                started=started,
+                error_code=error_code,
+            )
 
 
 async def _environments(runtime: Runtime) -> dict[str, Any]:

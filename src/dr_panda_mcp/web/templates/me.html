@@ -4,9 +4,17 @@
 <div class="page-header">
   <div>
     <h1>{{ t('我的') }}</h1>
-    <p class="page-subtitle">{{ t('管理账号密码和 MCP 客户端访问凭证。') }}</p>
   </div>
 </div>
+
+<nav class="subnav" aria-label="{{ t('我的') }}">
+  <a class="subnav__link{% if tab == 'mcp' %} is-active{% endif %}" href="/me"
+     {% if tab == 'mcp' %}aria-current="page"{% endif %}>{{ t('MCP 访问') }}</a>
+  <a class="subnav__link{% if tab == 'account' %} is-active{% endif %}" href="/me?tab=account"
+     {% if tab == 'account' %}aria-current="page"{% endif %}>{{ t('账号') }}</a>
+  <a class="subnav__link{% if tab == 'password' %} is-active{% endif %}" href="/me?tab=password"
+     {% if tab == 'password' %}aria-current="page"{% endif %}>{{ t('修改密码') }}</a>
+</nav>
 
 {% if notice %}
 <div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(notice) }}</strong></div></div>
@@ -15,20 +23,17 @@
 <div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>
 {% endif %}
 
-<div class="profile-grid">
-  <aside class="profile-side">
-    <section class="card profile-card">
-      <h2>{{ t('账号') }}</h2>
-      <dl class="summary">
-        <div><dt>{{ t('用户名') }}</dt><dd class="mono">{{ profile.user.username }}</dd></div>
-        <div><dt>{{ t('角色') }}</dt><dd>{{ t('管理员') }}</dd></div>
-        <div><dt>{{ t('最近登录') }}</dt><dd>{{ last_login or t('未记录') }}</dd></div>
-      </dl>
-    </section>
-
-    <section class="card profile-card">
-      <h2>{{ t('修改密码') }}</h2>
-      {% if password_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(password_error) }}</strong></div></div>{% endif %}
+{% if tab == 'account' %}
+<section class="card profile-card profile-panel">
+  <dl class="summary">
+    <div><dt>{{ t('用户名') }}</dt><dd class="mono">{{ profile.user.username }}</dd></div>
+    <div><dt>{{ t('角色') }}</dt><dd>{{ t('管理员') }}</dd></div>
+    <div><dt>{{ t('最近登录') }}</dt><dd>{{ last_login or t('未记录') }}</dd></div>
+  </dl>
+</section>
+{% elif tab == 'password' %}
+<section class="card profile-card profile-panel">
+  {% if password_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(password_error) }}</strong></div></div>{% endif %}
       <div class="alert alert--danger" data-password-error role="alert" hidden>
         <div class="alert__body"><strong data-notice-text></strong></div>
       </div>
@@ -49,17 +54,15 @@
         </div>
         <button class="btn btn--primary" type="submit" data-loading-label="{{ t('保存中…') }}">{{ t('保存新密码') }}</button>
       </form>
-    </section>
-  </aside>
-
-  <section class="profile-main" id="token-list">
+</section>
+{% else %}
+<section class="profile-main" id="token-list">
     <div class="card profile-card">
       <div class="profile-card__head">
-        <div>
-          <h2>{{ t('MCP 访问') }}</h2>
-          <p class="field__hint">{{ t('每个 Token 独立有效，删除后立即失效。') }}</p>
-        </div>
+        <p class="field__hint">{{ t('每个 Token 独立有效，删除后立即失效。') }}</p>
+        {% if tokens %}
         <a class="btn btn--primary btn--sm" href="/me/tokens/new" data-dialog-open="token-create">{{ t('+ 生成新 Token') }}</a>
+        {% endif %}
       </div>
       <p class="field__label">{{ t('MCP 地址') }}</p>
       <pre class="mono profile-endpoint">{{ mcp_url }}</pre>
@@ -100,9 +103,10 @@
       </div>
       {% endif %}
     </div>
-  </section>
-</div>
+</section>
+{% endif %}
 
+{% if tab == 'mcp' %}
 {% for token in tokens %}
 <dialog id="delete-token-{{ token.id }}" class="modal" aria-labelledby="delete-token-title-{{ token.id }}">
   <div class="modal__panel">
@@ -125,6 +129,7 @@
   </div>
 </dialog>
 {% endfor %}
+{% endif %}
 
 <dialog id="token-create" class="modal{% if modal_open %} is-open{% endif %}" aria-labelledby="token-create-title"{% if modal_open %} open data-open-on-load="true"{% endif %}>
   <div class="modal__panel">

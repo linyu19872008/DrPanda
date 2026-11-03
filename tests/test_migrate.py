@@ -256,6 +256,7 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
             )
             connection.execute("DROP TABLE targets_v7")
             connection.execute("CREATE INDEX ix_targets_type ON targets (type)")
+            connection.execute("ALTER TABLE audit DROP COLUMN environment_key")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0003_backup_keep'"
             )

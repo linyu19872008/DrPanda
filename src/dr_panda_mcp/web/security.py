@@ -113,11 +113,18 @@ class AuthMiddleware:
             return
 
         if path == "/mcp" or path.startswith("/mcp/"):
-            user = await self._bearer_user(request)
-            if user is None:
+            principal = await self._bearer_user(request)
+            if principal is None:
                 await _unauthorized()(scope, receive, send)
                 return
-            with auth.use_actor(user.username, user):
+            with auth.use_actor(
+                principal.user.username,
+                principal.user,
+                client=auth.ClientIdentity(
+                    name=principal.token_name,
+                    prefix=principal.token_prefix,
+                ),
+            ):
                 await self.app(scope, receive, send)
             return
 
@@ -162,7 +169,7 @@ class AuthMiddleware:
             )
         except Exception:  # 元数据更新失败不影响已认证的工具调用
             logger.warning("更新 MCP Token 最近使用时间失败", exc_info=True)
-        return principal.user
+        return principal
 
     async def _session_user(self, request: Request):
         raw = request.cookies.get(auth.SESSION_COOKIE)

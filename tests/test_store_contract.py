@@ -155,6 +155,14 @@ async def test_secret_patch_semantics(runtime: Runtime) -> None:
     assert updated.secret_fields == frozenset({"token", "api_key"})
     assert updated.secret == {"token": "keep-me", "api_key": "new-key"}
     assert updated.secret_ok is True
+    summary, environment_key = _raw(
+        runtime,
+        "SELECT summary, environment_key FROM audit WHERE action = 'target.update'",
+    )[-1]
+    assert environment_key == "default"
+    assert "secret:set=api_key clear=password" in summary
+    assert "old-pass" not in summary
+    assert "new-key" not in summary
 
 
 async def test_name_and_type_are_immutable(runtime: Runtime) -> None:

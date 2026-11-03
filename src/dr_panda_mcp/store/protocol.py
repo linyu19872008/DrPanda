@@ -80,6 +80,17 @@ class AuditEntry:
     action: str
     target_name: str | None = None
     summary: str | None = None
+    environment_key: str | None = None
+
+
+@dataclass(frozen=True)
+class AuditRecord:
+    created_at: datetime
+    actor: str
+    action: str
+    environment_key: str | None
+    target_name: str | None
+    summary: str | None
 
 
 @dataclass(frozen=True)
@@ -137,6 +148,16 @@ class ConfigStore(Protocol):
         self, target_id: int, ok: bool, error: str | None, actor: str
     ) -> Target: ...
     async def append_audit(self, entry: AuditEntry) -> None: ...
+    async def list_audit(
+        self,
+        *,
+        since: datetime,
+        action: str | None = None,
+        environment_key: str | None = None,
+        target_name: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[AuditRecord], int]: ...
 
     async def get_settings(self) -> dict[str, str]: ...
     async def update_settings(self, patch: Mapping[str, str], actor: str) -> dict[str, str]: ...

@@ -44,6 +44,7 @@ SESSION_MAX_AGE_DEFAULT = 720 * 60
 
 _current_actor: ContextVar[str] = ContextVar("drpanda_actor", default="anonymous")
 _current_user: ContextVar[User | None] = ContextVar("drpanda_user", default=None)
+_current_client: ContextVar[ClientIdentity | None] = ContextVar("drpanda_client", default=None)
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,16 @@ class McpToken:
 class TokenPrincipal:
     user: User
     token_id: int
+    token_name: str | None = None
+    token_prefix: str | None = None
+
+
+@dataclass(frozen=True)
+class ClientIdentity:
+    """当前 MCP 调用使用的 Token。只保留名称和前缀，不含完整 Token。"""
+
+    name: str | None
+    prefix: str | None
 
 
 def current_actor() -> str:
@@ -85,15 +96,25 @@ def current_user() -> User | None:
     return _current_user.get()
 
 
+def current_client() -> ClientIdentity | None:
+    return _current_client.get()
+
+
 @contextmanager
-def use_actor(actor: str, user: User | None = None) -> Iterator[None]:
+def use_actor(
+    actor: str,
+    user: User | None = None,
+    client: ClientIdentity | None = None,
+) -> Iterator[None]:
     actor_token = _current_actor.set(actor or "anonymous")
     user_token = _current_user.set(user)
+    client_token = _current_client.set(client)
     try:
         yield
     finally:
         _current_actor.reset(actor_token)
         _current_user.reset(user_token)
+        _current_client.reset(client_token)
 
 
 def new_csrf_token() -> str:
@@ -277,7 +298,12 @@ async def authenticate_mcp_token(
         user = user_from_row(user_row)
         if not user.is_enabled or user.role != "admin":
             return None
-        return TokenPrincipal(user=user, token_id=token_row.id)
+        return TokenPrincipal(
+            user=user,
+            token_id=token_row.id,
+            token_name=token_row.name,
+            token_prefix=token_row.token_prefix,
+        )
 
 
 async def create_admin(
