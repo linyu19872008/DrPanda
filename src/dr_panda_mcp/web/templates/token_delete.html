@@ -1,15 +1,17 @@
 {% extends "base.html" %}
-{% block title %}{{ t('删除 Token') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('删除 Token') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/me">{{ t('我的') }}</a><span aria-hidden="true">/</span><span>{{ t('删除 Token') }}</span></nav>
-<div class="page-header"><div><span class="badge badge--danger">{{ t('不可撤销') }}</span><h1>{{ t('删除 Token') }}</h1><p class="page-subtitle">{{ t('删除后该 Token 立即失效，且无法恢复；其他 Token 不受影响。') }}</p></div></div>
+<div class="page-header"><div><h1>{{ t('删除 Token') }}</h1><p class="page-subtitle">{{ t('删除后立即失效，不能恢复。') }}</p></div></div>
 <div class="card profile-card profile-card--form">
   <dl class="summary">
     <div><dt>{{ t('名称') }}</dt><dd>{{ token.name or '—' }}</dd></div>
     <div><dt>{{ t('Token 前缀') }}</dt><dd class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</dd></div>
     <div><dt>{{ t('创建时间') }}</dt><dd>{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd></div>
   </dl>
-  <div class="alert alert--danger"><div class="alert__body"><strong>{{ t('这会立即断开使用该 Token 的客户端') }}</strong><span class="alert__detail">{{ t('如果这是最后一个 Token，MCP 将暂时不可用，直到重新生成。') }}</span></div></div>
+  {% if last_token %}
+  <div class="alert alert--danger"><div class="alert__body"><span class="alert__detail">{{ t('MCP 会暂时不能访问，直到重新生成。') }}</span></div></div>
+  {% endif %}
   <form method="post" action="/me/tokens/{{ token.id }}/delete" class="form-actions form-actions--inline">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <a class="btn btn--secondary" href="/me">{{ t('取消') }}</a>

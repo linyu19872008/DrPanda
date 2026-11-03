@@ -1,5 +1,5 @@
 {% extends "setup_base.html" %}
-{% block title %}{{ t('安装完成') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('安装完成') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <div class="setup-head">
   <span class="badge badge--success">{{ t('安装完成') }}</span>
@@ -20,7 +20,6 @@
               data-selected="{{ t('已选中，请按 ⌘C / Ctrl+C 复制') }}">{{ t('复制') }}</button>
       <span id="copy-mcp-token-status" class="field__hint" role="status" aria-live="polite"></span>
     </div>
-    <p class="field__hint">{{ t('无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。') }}</p>
   </div>
   <a class="btn btn--primary btn--block" href="/">{{ t('进入首页') }}</a>
 </div>

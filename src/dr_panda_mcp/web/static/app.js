@@ -1,5 +1,5 @@
 /*
- * Dr Panda MCP 配置台脚本（无依赖、自托管、同源）。
+ * DrPanda MCP 配置台脚本（无依赖、自托管、同源）。
  *
  * 约束（docs/verify/frontend-js-policy.md v3）：
  * 配置台交互需要 JavaScript。认证、CSRF、Host/Origin、字段校验、只读闸门仍只在服务端执行。

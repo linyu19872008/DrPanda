@@ -1,4 +1,4 @@
-# Dr Panda MCP 规划
+# DrPanda MCP 规划
 
 > 线上排查用的 MCP 服务。Cursor、Codex、DeepSeek Harness 通过 Streamable HTTP 调用它，查日志、代码、数据库和消息堆积。连接信息在网页上配置，首次启动完成安装后登录使用。
 >

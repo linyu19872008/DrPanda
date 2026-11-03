@@ -1,4 +1,4 @@
-"""Dr Panda MCP 进程入口（planning 3.2 启动序列）。
+"""DrPanda MCP 进程入口（planning 3.2 启动序列）。
 
 读环境变量 → 预检端口 → 创建运行时（引擎、迁移、密钥、仓储）→ 启动 uvicorn。
 配置或启动失败返回退出码 2，并在 stderr 给出可操作的原因。

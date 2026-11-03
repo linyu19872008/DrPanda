@@ -86,7 +86,7 @@ async def test_setup_wizard_creates_admin_and_install_state(tmp_path: Path) -> N
         assert "MCP token" in finished.text
         assert 'id="copy-mcp-token"' in finished.text
         assert 'src="/static/copy-token.js' in finished.text
-        assert "无 JS 时可点击 Token 全选" in finished.text or "Without JS, click the token" in finished.text
+        assert 'data-selected="' in finished.text
         home = await client.get("/")
         assert home.status_code == 200
         assert "Targets" in home.text
@@ -416,7 +416,7 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
             assert 'id="token-create"' in created.text
             assert 'data-open-on-load="true"' in created.text
             assert '<a class="modal__close" href="/me"' in created.text
-            assert "无 JS 时可点击 Token 全选" in created.text or "Without JS, click the token" in created.text
+            assert 'data-selected="' in created.text
             import re
             match = re.search(r'<pre id="mcp-token-value" class="mono setup-secret">([^<]+)</pre>', created.text)
             assert match is not None

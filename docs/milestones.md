@@ -1,4 +1,4 @@
-# Dr Panda MCP 任务里程碑
+# DrPanda MCP 任务里程碑
 
 > 把 [planning.md](planning.md)（v0.4）的方案拆成可独立验证的检查点。每个里程碑都给出目标、前置、任务、交付物、验证目标与退出条件。
 >

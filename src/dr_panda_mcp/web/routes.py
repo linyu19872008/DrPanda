@@ -82,7 +82,6 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             has_any_targets=bool(all_views),
             environments=environments,
             current_env=current,
-            show_default_hint=_show_default_hint(environments),
         )
 
     @server.custom_route("/targets/new", methods=["GET"])
@@ -719,10 +718,7 @@ def _flash(request: Request) -> dict[str, str] | None:
     if message is None:
         return None
     tone, title = message
-    detail = ""
-    if code == "env_created":
-        detail = "现在可以在这个环境里登记目标。调用标识创建后不能修改。"
-    return {"tone": tone, "title": title, "detail": detail}
+    return {"tone": tone, "title": title, "detail": ""}
 
 
 def _redirect_target(path: str, **params: str) -> str:
@@ -1145,10 +1141,6 @@ def _current_environment(environments: list, requested: str):
         if match is not None:
             return match
     return environments[0] if environments else None
-
-
-def _show_default_hint(environments: list) -> bool:
-    return len(environments) == 1 and environments[0].key == "default"
 
 
 def _query_env(request: Request) -> str:

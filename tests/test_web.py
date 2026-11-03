@@ -493,6 +493,8 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert "/static/app.css?v=" in text
     assert "还没有登记任何目标" in text
     assert text.count("<h1") == 1
+    assert 'class="brand__name">DrPanda<' in text
+    assert "<title>排查目标 · DrPanda MCP</title>" in text
 
 
 async def test_theme_cookie_roundtrip(runtime: Runtime) -> None:

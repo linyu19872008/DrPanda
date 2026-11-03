@@ -22,6 +22,7 @@ from dr_panda_mcp.prompts import register_prompts
 from dr_panda_mcp.tools import register_tools
 from dr_panda_mcp.web.auth_routes import register_auth_routes
 from dr_panda_mcp.web.profile import register_profile_routes
+from dr_panda_mcp.web.render import PRODUCT_NAME
 from dr_panda_mcp.web.routes import register_web_routes
 from dr_panda_mcp.web.security import (
     AuthMiddleware,
@@ -42,7 +43,7 @@ SERVER_NAME = "dr-panda-mcp"
 
 # 服务器说明与 planning 8.8 的纪律一致；M3 起注册 tools 后仍复用这段文本。
 SERVER_INSTRUCTIONS = (
-    "Dr Panda MCP 是线上排查用的只读工具集。调用只接受 environment（环境调用标识）"
+    f"{PRODUCT_NAME} 是线上排查用的只读工具集。调用只接受 environment（环境调用标识）"
     "和 target 名，不接受主机、DSN、账号或密码。目标按环境隔离，不同环境可以有同名目标。"
     "登记了多个环境时必须传入 environment；只有一个环境时可以省略。"
     "同一种类型有多台时必须传入 target，不会自动挑选。"

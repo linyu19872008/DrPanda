@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import env_label %}
-{% block title %}{{ t('新建目标') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('新建目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/{% if env %}?env={{ env }}{% endif %}">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
 <div class="page-header">
@@ -14,7 +14,7 @@
 <div class="alert alert--info" role="status">
   <div class="alert__body">
     <strong>{{ env_label(current_env) }} <span class="mono">{{ current_env.key }}</span></strong>
-    <span class="alert__detail">{{ t('目标会登记到这个环境，保存后不能更换。不同环境可以有同名目标。') }}</span>
+    <span class="alert__detail">{{ t('目标会登记到这里，保存后不能换环境。') }}</span>
   </div>
 </div>
 {% endif %}
@@ -25,7 +25,6 @@
       <span class="badge badge--type">{{ t(card.label) }}</span>
       <span class="type-card__arrow" aria-hidden="true">→</span>
     </span>
-    <span class="type-card__note">{{ t(card.note) }}</span>
   </a>
   {% endfor %}
 </div>

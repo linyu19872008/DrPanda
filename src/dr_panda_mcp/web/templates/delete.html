@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import env_label_existing %}
-{% block title %}{{ t('删除目标') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('删除目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
   <a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('删除') }} {{ target.name }}</span>
 </nav>
 
 <div class="card card--danger">
-  <span class="badge badge--danger">{{ t('不可撤销') }}</span>
   <h1>{{ t('删除目标') }}</h1>
   <p>{{ t('确认删除') }} <strong class="mono">{{ target.name }}</strong>（{{ t(target.type_label) }}）？</p>
 
@@ -23,7 +22,7 @@
     </dd></div>
   </dl>
 
-  <p class="muted">{{ t('删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。') }}</p>
+  <p class="muted">{{ t('删除后，这个目标的连接和密钥都会去掉，排查时不能再使用，也无法恢复。') }}</p>
   <form method="post" action="/targets/{{ target.id }}/delete" class="form-actions form-actions--inline">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>

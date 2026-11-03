@@ -17,6 +17,8 @@ from dr_panda_mcp import auth
 from dr_panda_mcp.web import assets, i18n, theme
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+BRAND_NAME = "DrPanda"
+PRODUCT_NAME = "DrPanda MCP"
 
 _environment = Environment(
     loader=FileSystemLoader(str(TEMPLATES_DIR)),
@@ -26,6 +28,8 @@ _environment = Environment(
 )
 _environment.globals["t"] = i18n.t
 _environment.globals["plural"] = i18n.plural
+_environment.globals["brand_name"] = BRAND_NAME
+_environment.globals["product_name"] = PRODUCT_NAME
 
 
 def _app_version() -> str:

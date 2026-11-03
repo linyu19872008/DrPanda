@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import option_field, secret_field, number_field, env_label, env_label_existing %}
-{% block title %}{{ t("新建目标") if mode == "create" else t("编辑目标") }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t("新建目标") if mode == "create" else t("编辑目标") }} · {{ product_name }}{% endblock %}
 {% block content %}
 {% set connection_rows = option_rows | selectattr("section", "equalto", "connection") | list %}
 {% set connection_secrets = secret_rows | selectattr("section", "equalto", "connection") | list %}
@@ -81,7 +81,7 @@
         </select>
         {% endif %}
         {% if errors.get('environment') %}<p class="field__error" id="err-environment" role="alert">{{ t(errors.get('environment')) }}</p>{% endif %}
-        <p class="field__hint">{{ t('目标会登记到这个环境，保存后不能更换。不同环境可以有同名目标。') }}{% if environments|length <= 1 %} <a href="/environments/new">{{ t('新建环境') }}</a>{% endif %}</p>
+        <p class="field__hint">{{ t('保存后不能更换环境。') }}{% if environments|length <= 1 %} <a href="/environments/new">{{ t('新建环境') }}</a>{% endif %}</p>
       </div>
       {% else %}
       <div class="field">
@@ -96,7 +96,7 @@
         <input class="input" type="text" id="field-name" name="name" value="{{ values.get('name', '') }}"
                placeholder="{{ t('例如 order-mysql') }}" autocomplete="off" spellcheck="false"
                required aria-required="true" data-gate="off">
-        <p class="field__hint">{{ t('小写字母、数字与连字符，创建后不可修改；模型调用时传这个名字。') }}</p>
+        <p class="field__hint">{{ t('小写字母、数字与连字符，创建后不可修改；排查时传这个名字。') }}</p>
       </div>
       {% else %}
       <div class="field">
@@ -111,7 +111,7 @@
           <input class="switch__input" type="checkbox" id="enabled" name="enabled"{% if values.get('enabled') %} checked{% endif %} data-gate="off">
           <span class="switch__track" aria-hidden="true"></span>
         </label>
-        <p class="field__hint">{{ t('停用后模型无法使用该目标，配置会保留。') }}</p>
+        <p class="field__hint">{{ t('停用后不能使用该目标，配置会保留。') }}</p>
       </div>
     </section>
 
@@ -127,7 +127,7 @@
     {% if scope_rows %}
     <section class="card form-section">
       <h2 class="form-section__title">{{ t('授权范围') }}</h2>
-      <p class="form-section__desc">{{ t('只读闸门只会访问这里列出的范围；留空时按该类型的默认语义处理。') }}</p>
+      <p class="form-section__desc">{{ t('只会查询这里列出的范围。留空时按该项自己的默认处理。') }}</p>
       <div class="form-grid">
         {% for row in scope_rows %}{{ option_field(row) }}{% endfor %}
       </div>
@@ -188,14 +188,9 @@
     <section class="card card--aside">
       <h3>{{ t('填写说明') }}</h3>
       <p>{{ t(spec.note) }}</p>
-      <p class="muted small">{{ t('服务对八个组件绝对只读；账号即使有写权限也不会被使用。') }}</p>
-      <details class="details">
-        <summary>{{ t('命名规则') }}</summary>
-        <p class="details__body">{{ t('只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64 个字符。同一个环境里不能重名，不同环境可以。') }}</p>
-      </details>
       <details class="details">
         <summary>{{ t('密钥与证书') }}</summary>
-        <p class="details__body">{{ t('新建时必填项不能为空；编辑时留空沿用、勾选清除或填新值替换，三者互斥。保存后加密落盘，不回显。') }}</p>
+        <p class="details__body">{{ t('编辑时留空表示不改；要更换就填新值。') }}</p>
       </details>
     </section>
   </aside>

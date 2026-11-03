@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ t('我的') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('我的') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
@@ -107,15 +107,16 @@
 <dialog id="delete-token-{{ token.id }}" class="modal" aria-labelledby="delete-token-title-{{ token.id }}">
   <div class="modal__panel">
     <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
-    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
     <h2 id="delete-token-title-{{ token.id }}">{{ t('删除 Token') }}</h2>
-    <p class="field__hint">{{ t('删除后该 Token 立即失效，且无法恢复；其他 Token 不受影响。') }}</p>
+    <p class="field__hint">{{ t('删除后立即失效，不能恢复。') }}</p>
     <dl class="summary">
       <div><dt>{{ t('名称') }}</dt><dd>{{ token.name or '—' }}</dd></div>
       <div><dt>{{ t('Token 前缀') }}</dt><dd class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</dd></div>
       <div><dt>{{ t('创建时间') }}</dt><dd>{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd></div>
     </dl>
-    <div class="alert alert--danger"><div class="alert__body"><strong>{{ t('这会立即断开使用该 Token 的客户端') }}</strong><span class="alert__detail">{{ t('如果这是最后一个 Token，MCP 将暂时不可用，直到重新生成。') }}</span></div></div>
+    {% if total == 1 %}
+    <div class="alert alert--danger"><div class="alert__body"><span class="alert__detail">{{ t('MCP 会暂时不能访问，直到重新生成。') }}</span></div></div>
+    {% endif %}
     <form method="post" action="/me/tokens/{{ token.id }}/delete" class="form-actions form-actions--inline">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
@@ -141,7 +142,6 @@
                 data-selected="{{ t('已选中，请按 ⌘C / Ctrl+C 复制') }}">{{ t('复制') }}</button>
         <span id="copy-mcp-token-status" class="field__hint" role="status" aria-live="polite"></span>
       </div>
-      <p class="field__hint">{{ t('无 JS 时可点击 Token 全选，然后按 ⌘C / Ctrl+C 复制。') }}</p>
     </div>
     <div class="alert alert--warning"><div class="alert__body"><strong>{{ t('只显示一次') }}</strong><span class="alert__detail">{{ t('请把它配置到对应客户端；丢失后只能删除并重新生成。') }}</span></div></div>
     {% else %}

@@ -2,12 +2,11 @@
 {% macro env_label(env) -%}
 {%- if env.key == 'default' and env.title == '默认' -%}{{ t('默认') }}{%- else -%}{{ env.title }}{%- endif -%}
 {%- endmacro %}
-{% block title %}{{ t('排查目标') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('排查目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
     <h1>{{ t('排查目标') }}</h1>
-    <p class="page-subtitle">{{ t('先选定环境，再登记这个环境里的目标。模型调用时要带上环境的调用标识。') }}</p>
   </div>
   <div class="page-header__actions">
     <a class="btn btn--secondary" href="/environments">{{ t('管理环境') }}</a>
@@ -31,29 +30,18 @@
   {% endfor %}
   <a class="env-switch__item env-switch__item--new" href="/environments/new">
     <span class="env-switch__title">{{ t('新建环境') }}</span>
-    <span class="env-switch__meta">{{ t('例如乐畅生产、测试') }}</span>
   </a>
 </nav>
 {% endif %}
 
-{% if show_default_hint %}
-<div class="alert alert--info" role="status">
-  <span class="alert__icon" aria-hidden="true">
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
-  </span>
-  <div class="alert__body">
-    <strong>{{ t('现在只有「默认」环境') }}</strong>
-    <span class="alert__detail">{{ t('已有目标都在这里。展示名可以改，但模型调用时仍要传 default。要按乐畅生产、测试分开排查，请新建环境，再在新环境里登记目标。') }}</span>
-  </div>
-</div>
-{% elif current_env and not current_env.enabled %}
+{% if current_env and not current_env.enabled %}
 <div class="alert alert--warning" role="status">
   <span class="alert__icon" aria-hidden="true">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17v.5"/></svg>
   </span>
   <div class="alert__body">
     <strong>{{ t('这个环境已停用') }}</strong>
-    <span class="alert__detail">{{ t('模型不能查询其中的目标。配置仍保留，可以随时重新启用。') }}</span>
+    <span class="alert__detail">{{ t('排查时不能查询其中的目标。配置仍保留，可以随时重新启用。') }}</span>
   </div>
 </div>
 {% endif %}
@@ -95,18 +83,17 @@
 {% if not environments %}
 <section class="empty">
   <h2>{{ t('还没有环境') }}</h2>
-  <p>{{ t('先新建环境，例如乐畅生产或测试，再在里面登记目标。') }}</p>
+  <p>{{ t('先新建环境，再在里面登记目标。') }}</p>
   <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
 </section>
 {% elif not has_targets %}
 <section class="empty">
   <h2>{% if has_any_targets or environments|length > 1 %}{{ t('这个环境还没有目标') }}{% else %}{{ t('还没有登记任何目标') }}{% endif %}</h2>
-  <p>{{ t('先选一个类型登记连接与只读范围。同一个环境里可以有多台相同类型的目标，用不同名称区分。') }}</p>
+  <p>{{ t('选一个类型，填写连接和允许访问的范围。') }}</p>
   <div class="type-grid type-grid--compact">
     {% for card in type_cards %}
     <a class="type-card type-card--sm" href="/targets/new?type={{ card.type }}{% if current_env %}&env={{ current_env.key }}{% endif %}">
       <span class="type-card__title">{{ t(card.label) }}</span>
-      <span class="type-card__note">{{ t(card.note) }}</span>
     </a>
     {% endfor %}
   </div>
@@ -219,9 +206,8 @@
 <dialog id="delete-target-{{ target.id }}" class="modal" aria-labelledby="delete-target-title-{{ target.id }}">
   <div class="modal__panel">
     <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
-    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
     <h2 id="delete-target-title-{{ target.id }}">{{ t('删除目标') }}</h2>
-    <p class="field__hint">{{ t('删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。') }}</p>
+    <p class="field__hint">{{ t('删除后，这个目标的连接和密钥都会去掉，排查时不能再使用，也无法恢复。') }}</p>
     <dl class="summary">
       <div><dt>{{ t('所属环境') }}</dt><dd>{{ env_label(current_env) if current_env else '' }} <span class="mono">{{ target.environment_key }}</span></dd></div>
       <div><dt>{{ t('名称') }}</dt><dd class="mono">{{ target.name }}</dd></div>

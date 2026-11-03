@@ -1,24 +1,14 @@
 {% extends "base.html" %}
 {% from "_macros.html" import env_label %}
-{% block title %}{{ t('环境') }} · Dr Panda MCP{% endblock %}
+{% block title %}{{ t('环境') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
     <h1>{{ t('环境') }}</h1>
-    <p class="page-subtitle">{{ t('乐畅生产、畅聊生产和测试各是一个环境。模型先选环境，再查这个环境里的目标。') }}</p>
+    <p class="page-subtitle">{{ t('展示名可以改，调用标识创建后不能改。') }}</p>
   </div>
   <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
 </div>
-
-<section class="card form-section">
-  <h2 class="form-section__title">{{ t('展示名和调用标识') }}</h2>
-  <p class="form-section__desc">{{ t('展示名是你和模型对话时用的名字，例如乐畅生产。调用标识是模型传入的 environment，例如 lechang-prod。调用标识创建后不能修改。') }}</p>
-  <ul class="env-examples">
-    <li><span>{{ t('乐畅生产') }}</span><span class="mono" aria-hidden="true">→</span><span class="mono">lechang-prod</span></li>
-    <li><span>{{ t('畅聊生产') }}</span><span class="mono" aria-hidden="true">→</span><span class="mono">changliao-prod</span></li>
-    <li><span>{{ t('测试') }}</span><span class="mono" aria-hidden="true">→</span><span class="mono">test</span></li>
-  </ul>
-</section>
 
 {% if not environments %}
 <section class="empty">

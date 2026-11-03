@@ -172,7 +172,10 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         )
         if token is None:
             return await _render_me_with_tokens(request, profile, error="Token 不存在", status_code=404)
-        response = render.render("token_delete.html", request=request, token=token)
+        total = await auth.count_mcp_tokens(runtime.session_factory, profile.user.id)
+        response = render.render(
+            "token_delete.html", request=request, token=token, last_token=total == 1
+        )
         response.headers["Cache-Control"] = "no-store"
         return response
 

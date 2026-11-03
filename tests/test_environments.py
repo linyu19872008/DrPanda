@@ -136,9 +136,8 @@ async def test_web_environment_flow_stays_in_the_chosen_environment(
         blocked = await client.post("/environments/1/delete")
 
     assert "管理环境" in home.text
-    assert "现在只有「默认」环境" in home.text
     assert "调用标识" in form.text
-    assert "lechang-prod" in form.text
+    assert 'placeholder="prod"' in form.text
     assert created.status_code == 303
     assert "flash=env_created" in created.headers["location"]
     assert "env=lechang-prod" in created.headers["location"]
