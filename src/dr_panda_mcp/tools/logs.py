@@ -18,6 +18,7 @@ from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import Target
 from dr_panda_mcp.tools.base import (
     TOOL_ANNOTATIONS,
+    EnvironmentParam,
     allowed_projects,
     clamp_limit,
     ensure_project,
@@ -42,6 +43,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         to: Annotated[str, Field(alias="to")],
         limit: int = 0,
         offset: int = 0,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """按条件检索 CLS 日志；必须带时间窗，单次不超过 24 小时。"""
         params = {
@@ -98,7 +100,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         return await run_tool(
             runtime,
             tool="cls_search",
-            name=target,
+            name=target, environment=environment,
             target_type="cls",
             params=params,
             handler=handler,
@@ -113,6 +115,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         pkg_log_id: int,
         before: int = 10,
         after: int = 10,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """读取一条日志前后的上下文（PkgId + BTime + PkgLogId）。"""
         params = {
@@ -164,7 +167,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         return await run_tool(
             runtime,
             tool="cls_context",
-            name=target,
+            name=target, environment=environment,
             target_type="cls",
             params=params,
             handler=handler,
@@ -178,6 +181,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         ref: str = "",
         limit: int = 20,
         page: int = 1,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """在 GitLab 项目里搜索代码；project 省略时只在授权项目内搜索。"""
         params = {
@@ -237,7 +241,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         return await run_tool(
             runtime,
             tool="gitlab_search_code",
-            name=target,
+            name=target, environment=environment,
             target_type="gitlab",
             params=params,
             handler=handler,
@@ -245,7 +249,11 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
     async def gitlab_get_file(
-        target: str, project: str, path: str, ref: str = ""
+        target: str,
+        project: str,
+        path: str,
+        ref: str = "",
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """读取 GitLab 项目里的一个文件（按字节上限截断）。"""
         params = {"project": project, "path": path, "ref": ref or None}
@@ -282,7 +290,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         return await run_tool(
             runtime,
             tool="gitlab_get_file",
-            name=target,
+            name=target, environment=environment,
             target_type="gitlab",
             params=params,
             handler=handler,
@@ -296,6 +304,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         ref: str = "",
         line_from: int = 0,
         line_to: int = 0,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """查看文件最近的改动（可按行号范围）。"""
         params = {
@@ -352,7 +361,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         return await run_tool(
             runtime,
             tool="gitlab_blame",
-            name=target,
+            name=target, environment=environment,
             target_type="gitlab",
             params=params,
             handler=handler,

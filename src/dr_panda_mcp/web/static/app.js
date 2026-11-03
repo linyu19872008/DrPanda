@@ -23,13 +23,13 @@
     return true;
   };
 
-  document.querySelectorAll("[data-dialog-open]").forEach((trigger) => {
-    trigger.addEventListener("click", (event) => {
-      const id = trigger.dataset.dialogOpen;
-      if (!id) return;
-      // JS 不可用/不支持 dialog 时保留 href，走无 JS 回退页面。
-      if (openDialog(id)) event.preventDefault();
-    });
+  document.addEventListener("click", (event) => {
+    const trigger = event.target instanceof Element ? event.target.closest("[data-dialog-open]") : null;
+    if (!(trigger instanceof HTMLElement)) return;
+    const id = trigger.dataset.dialogOpen;
+    if (!id) return;
+    // JS 不可用/不支持 dialog 时保留 href，走无 JS 回退页面。
+    if (openDialog(id)) event.preventDefault();
   });
 
   document.querySelectorAll("[data-dialog-close]").forEach((control) => {
@@ -222,12 +222,18 @@
   // 按钮加载态：只有带 loading-label 的按钮才替换文案，且恢复时还原原始 child，
   // 避免把开关这类“图标 + 文字”按钮的内部结构写成纯文本。
   const busyStates = new WeakMap();
+  const setButtonLabel = (button, text) => {
+    const label = button.querySelector(".btn__label");
+    if (label) label.textContent = text;
+    else button.textContent = text;
+  };
+
   const busyButton = (button, on) => {
     if (!button) return;
     if (on) {
       busyStates.set(button, { html: button.innerHTML, disabled: button.disabled });
       button.disabled = true;
-      if (button.dataset.loadingLabel) button.textContent = button.dataset.loadingLabel;
+      if (button.dataset.loadingLabel) setButtonLabel(button, button.dataset.loadingLabel);
       return;
     }
     const previous = busyStates.get(button);
@@ -429,7 +435,6 @@
     const label = cell.querySelector("[data-test-label]");
     const time = cell.querySelector("[data-test-time]");
     const details = cell.querySelector("[data-test-details]");
-    const errorText = cell.querySelector("[data-test-error]");
     const failed = data.test_ok === false;
     if (status) status.className = `status status--${failed ? "error" : "ok"}`;
     if (label) {
@@ -439,8 +444,50 @@
       time.textContent = data.test_time || "";
       time.hidden = !data.test_time;
     }
-    if (details) details.hidden = !data.test_error;
-    if (errorText) errorText.textContent = data.test_error || "";
+    if (details) renderTestError(details, data.test_error, data.test_command);
+  };
+
+  const renderTestError = (details, message, command) => {
+    const box = details.querySelector("[data-test-error-box]");
+    if (!box) return;
+    const show = Boolean(message || command);
+    details.hidden = !show;
+    box.replaceChildren();
+    if (!show) return;
+    if (message) {
+      const paragraph = document.createElement("p");
+      paragraph.className = "details__message";
+      paragraph.dataset.testMessage = "";
+      paragraph.textContent = message;
+      box.appendChild(paragraph);
+    }
+    const installId = command && details.dataset.installDialog;
+    if (!installId) return;
+    const line = document.createElement("div");
+    line.className = "install-line";
+    const install = document.createElement("button");
+    install.type = "button";
+    install.className = "btn btn--secondary btn--sm btn--stable";
+    install.dataset.dialogOpen = installId;
+    const installLabel = document.createElement("span");
+    installLabel.className = "btn__label";
+    installLabel.textContent = details.dataset.installLabel || "安装";
+    install.append(installLabel);
+    line.append(install);
+    box.appendChild(line);
+  };
+
+  const rowFor = (form) => {
+    const row = form.closest("tr");
+    if (row) return row;
+    const id = form.dataset.targetId;
+    if (!id || typeof CSS === "undefined" || !CSS.escape) return null;
+    return document.querySelector(`tr[data-target-id="${CSS.escape(id)}"]`);
+  };
+
+  const closeDialog = (form) => {
+    const dialog = form.closest("dialog");
+    if (dialog && dialog.open) dialog.close();
   };
 
   const updateToggle = (form, data) => {
@@ -448,7 +495,7 @@
     if (!button) return;
     button.classList.toggle("is-on", Boolean(data.enabled));
     button.setAttribute("aria-pressed", data.enabled ? "true" : "false");
-    const label = button.querySelector(".switch__label");
+    const label = button.querySelector(".switch__label-text");
     if (label) label.textContent = data.label || "";
     const title = data.enabled ? button.dataset.onTitle : button.dataset.offTitle;
     if (title) button.title = title;
@@ -461,16 +508,25 @@
         if (form.dataset.busy) return;
         const button = form.querySelector('button[type="submit"]');
         if (!button) return;
-        const row = form.closest("tr");
+        const row = rowFor(form);
         form.dataset.busy = "1";
         busyButton(button, true);
+        const timeoutMs = Number(form.dataset.timeoutMs);
+        const options = Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeoutMs } : {};
         try {
-          const data = await postForm(form, form.getAttribute("action"));
+          const data = await postForm(form, form.getAttribute("action"), options);
           updateStats(data.stats);
-          if (form.dataset.rowAction === "test") updateTestCell(row, data);
-          else if (form.dataset.rowAction === "toggle") updateToggle(form, data);
+          if (form.dataset.rowAction === "test" || form.dataset.rowAction === "install") {
+            updateTestCell(row, data);
+          } else if (form.dataset.rowAction === "toggle") updateToggle(form, data);
+          if (form.dataset.rowAction === "install") closeDialog(form);
           hideNotice(pageError());
         } catch (error) {
+          if (error.data && (error.data.test_error || error.data.test_command)) {
+            updateTestCell(row, error.data);
+            updateStats(error.data.stats);
+          }
+          if (form.dataset.rowAction === "install") closeDialog(form);
           handleApiError(form, error);
         } finally {
           delete form.dataset.busy;

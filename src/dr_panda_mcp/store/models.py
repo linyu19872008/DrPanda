@@ -55,14 +55,30 @@ class UTCDateTime(TypeDecorator):
         return value.astimezone(UTC)
 
 
+class EnvironmentRow(Base):
+    __tablename__ = "environments"
+    __table_args__ = (UniqueConstraint("key", name="uq_environments_key"),)
+
+    id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(64), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+
+
 class TargetRow(Base):
     __tablename__ = "targets"
     __table_args__ = (
-        UniqueConstraint("name", name="uq_targets_name"),
+        UniqueConstraint("environment_id", "name", name="uq_targets_environment_name"),
         Index("ix_targets_type", "type"),
+        Index("ix_targets_environment_id", "environment_id"),
     )
 
     id: Mapped[int] = mapped_column(_pk_type(), primary_key=True, autoincrement=True)
+    environment_id: Mapped[int] = mapped_column(
+        _pk_type(), ForeignKey("environments.id"), nullable=False
+    )
     type: Mapped[str] = mapped_column(String(32), nullable=False)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)

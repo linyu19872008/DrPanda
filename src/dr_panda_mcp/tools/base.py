@@ -7,9 +7,10 @@ import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Annotated, Any
 
 from fastmcp.exceptions import ToolError
+from pydantic import Field
 
 from dr_panda_mcp import auth, errors
 from dr_panda_mcp.connectors import base as connectors_base
@@ -21,10 +22,25 @@ logger = logging.getLogger(__name__)
 
 TOOL_ANNOTATIONS = {"readOnlyHint": True}
 
+EnvironmentParam = Annotated[
+    str,
+    Field(
+        description=(
+            "环境调用标识 key，不是展示名。"
+            "用户说乐畅生产这类名字时，先用 systems_status 对照 title 得到 key。"
+            "登记了多个环境时必填；只有一个环境时可以省略。"
+            "同一种类型有多台时仍必须另传 target，不会自动挑选。"
+        )
+    ),
+]
+
 _ERROR_CODES: tuple[tuple[type[errors.DrPandaError], str], ...] = (
     (errors.TargetNotFound, errors.TARGET_NOT_FOUND),
     (errors.TargetDisabled, errors.TARGET_DISABLED),
     (errors.TargetTypeMismatch, errors.TARGET_TYPE_MISMATCH),
+    (errors.EnvironmentRequired, errors.ENVIRONMENT_REQUIRED),
+    (errors.EnvironmentNotFound, errors.ENVIRONMENT_NOT_FOUND),
+    (errors.EnvironmentDisabled, errors.ENVIRONMENT_DISABLED),
     (errors.SecretUnavailable, errors.SECRET_UNAVAILABLE),
     (errors.ScopeDenied, errors.SCOPE_DENIED),
     (errors.InvalidArgument, errors.INVALID_ARGUMENT),
@@ -58,15 +74,19 @@ async def run_tool(
     target_type: str,
     params: dict[str, Any],
     handler: Callable[[Target], Awaitable[dict[str, Any]]],
+    environment: str = "",
 ) -> dict[str, Any]:
     """解析目标 → 执行 → 统一错误码与审计（审计失败不影响结果）。"""
     started = time.monotonic()
+    environment = (environment or str(params.get("environment") or "")).strip()
     target: Target | None = None
     returned = 0
     error_code: str | None = None
     timeout = connectors_base.DEFAULT_TIMEOUT_SECONDS
     try:
-        target = await runtime.catalog.resolve(name, expected_type=target_type)
+        target = await runtime.catalog.resolve(
+            name, environment=environment, expected_type=target_type
+        )
         timeout = connectors_base.timeout_seconds(target)
         # 整个调用（含排队）共用同一个 deadline；排队时间计入超时（planning 8.3/9.3）。
         async with asyncio.timeout(timeout):
@@ -91,8 +111,13 @@ async def run_tool(
         raise ToolError(f"{errors.INTERNAL}: 工具执行失败（{type(exc).__name__}）") from exc
     finally:
         elapsed_ms = int((time.monotonic() - started) * 1000)
+        env_label = (
+            target.environment_key
+            if target is not None and target.environment_key
+            else (environment or "-")
+        )
         summary = (
-            f"{tool} target={name} params={mask_params(params, target)} "
+            f"{tool} env={env_label} target={name} params={mask_params(params, target)} "
             f"returned={returned} elapsed_ms={elapsed_ms} error={error_code or '-'}"
         )
         try:
@@ -127,6 +152,9 @@ def finish(
     )
     effective = truncation or auto_truncation
     notes = ["结果已截断，请缩小查询范围、时间窗或返回条数。"] if effective else []
+    if target.environment_key:
+        label = target.environment_title or target.environment_key
+        notes.insert(0, f"环境 {target.environment_key}（{label}）。")
     stats, stats_truncated = _cap_stats(stats, connectors_base.max_bytes(target))
     if stats_truncated:
         notes.append("统计信息已因目标字节上限被截断。")

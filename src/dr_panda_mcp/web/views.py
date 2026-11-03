@@ -2,14 +2,32 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from dr_panda_mcp.client_install import INSTALL_EXTRAS
+from dr_panda_mcp.errors import sync_extra_command
 from dr_panda_mcp.store.protocol import Target
 from dr_panda_mcp.web.forms import TYPE_SPECS
 
 EMPTY = "—"
+_INSTALL_COMMAND = re.compile(r"uv sync --extra [A-Za-z0-9_-]+(?: --inexact)?")
+
+
+def split_install_command(text: str | None) -> tuple[str | None, str | None]:
+    """把失败说明里的安装命令拆出来。原文不改，只给页面用。"""
+    if not text:
+        return None, None
+    match = _INSTALL_COMMAND.search(text)
+    if not match:
+        return text, None
+    command = match.group(0)
+    lead = text[: match.start()].rstrip(" ：:，,\n")
+    tail = text[match.end() :].lstrip(" ：:，,\n")
+    message = " ".join(part for part in (lead, tail) if part) or None
+    return message, command
 
 
 @dataclass(frozen=True)
@@ -29,6 +47,12 @@ class TargetView:
     last_test_at_display: str | None
     last_test_ok: bool | None
     last_test_error: str | None
+    last_test_message: str | None
+    last_test_command: str | None
+    client_extra: str | None
+    environment_key: str = ""
+    environment_title: str = ""
+    environment_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -114,9 +138,29 @@ def _scope(target: Target) -> tuple[str, dict[str, Any]]:
     return ("—", {})
 
 
+def client_extra(target_type: str) -> str | None:
+    """这个目标类型对应的可选依赖名。没有可选客户端时返回 None。"""
+    if target_type in INSTALL_EXTRAS:
+        return target_type
+    return None
+
+
+def requested_install_extra(target: Target) -> str | None:
+    """只有「客户端未安装」才允许安装，并且只装这个目标类型自己的 extra。"""
+    extra = client_extra(target.type)
+    if extra is None:
+        return None
+    _, command = split_install_command(target.last_test_error)
+    allowed = {f"uv sync --extra {extra}", sync_extra_command(extra)}
+    if command not in allowed:
+        return None
+    return extra
+
+
 def to_view(target: Target) -> TargetView:
     spec = TYPE_SPECS.get(target.type)
     scope_source, scope_params = _scope(target)
+    message, command = split_install_command(target.last_test_error)
     return TargetView(
         id=target.id,
         type=target.type,
@@ -133,6 +177,12 @@ def to_view(target: Target) -> TargetView:
         last_test_at_display=_display_time(target.last_test_at),
         last_test_ok=target.last_test_ok,
         last_test_error=target.last_test_error,
+        last_test_message=message,
+        last_test_command=command,
+        client_extra=client_extra(target.type),
+        environment_key=target.environment_key,
+        environment_title=target.environment_title,
+        environment_enabled=target.environment_enabled,
     )
 
 
@@ -141,10 +191,16 @@ def list_views(targets: list[Target]) -> list[TargetView]:
 
 
 def filter_views(
-    views: list[TargetView], *, q: str = "", type_: str | None = None
+    views: list[TargetView],
+    *,
+    q: str = "",
+    type_: str | None = None,
+    environment: str | None = None,
 ) -> list[TargetView]:
     needle = q.strip().lower()
     filtered = views
+    if environment:
+        filtered = [view for view in filtered if view.environment_key == environment]
     if type_:
         filtered = [view for view in filtered if view.type == type_]
     if needle:

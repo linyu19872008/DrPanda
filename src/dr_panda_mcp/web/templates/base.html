@@ -30,6 +30,8 @@
       <nav class="tabs" aria-label="{{ t('主导航') }}">
         <a class="tab{% if nav_active == 'targets' %} is-active{% endif %}" href="/"
            {% if nav_active == 'targets' %}aria-current="page"{% endif %}>{{ t('排查目标') }}</a>
+        <a class="tab{% if nav_active == 'environments' %} is-active{% endif %}" href="/environments"
+           {% if nav_active == 'environments' %}aria-current="page"{% endif %}>{{ t('环境') }}</a>
         <a class="tab{% if nav_active == 'settings' %} is-active{% endif %}" href="/settings"
            {% if nav_active == 'settings' %}aria-current="page"{% endif %}>{{ t('系统配置') }}</a>
         <a class="tab{% if nav_active == 'me' %} is-active{% endif %}" href="/me"

@@ -70,7 +70,7 @@
 所有里程碑共用这些命令与环境，不重复解释：
 
 ```
-uv sync                          # 安装依赖（含已声明的 extras 可按需加）
+uv sync                          # 默认依赖。补单个 extra 加 --inexact；一次装齐用 uv sync --all-extras
 uv run pytest -q                 # 全部测试
 uv run python scripts/smoke.py   # 冒烟：启动 → healthz → （M3 起）MCP 客户端调工具
 uv run dr-panda-mcp              # 启动服务，默认 127.0.0.1:8111

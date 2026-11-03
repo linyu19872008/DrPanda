@@ -86,24 +86,26 @@ curl -fsS http://127.0.0.1:8111/healthz
 # {"ok":true,"version":"0.1.0","db":"ok"}
 ```
 
-### 配置库额外依赖
+### 可选依赖
+
+`uv sync --extra <name>` 会把环境收成「默认依赖 + 这一个 extra」，已经装好的其他客户端会被卸掉。补一个时加上 `--inexact`。一次装齐用 `--all-extras`。命令要在运行 `uv run dr-panda-mcp` 的项目目录执行。
+
+列表里出现「客户端未安装」时，可以点「安装」。服务会在当前项目执行带 `--inexact` 的命令，然后立刻再测一次。装好的新客户端不用先重启。
 
 ```bash
-uv sync --extra mysql       # MySQL 配置库：asyncmy
-uv sync --extra postgres    # PostgreSQL 配置库：asyncpg
-uv sync --all-extras        # 同时安装排查组件可选依赖
+# 配置库
+uv sync --extra mysql --inexact       # asyncmy
+uv sync --extra postgres --inexact    # asyncpg
+
+# 排查组件（GitLab、RabbitMQ 不需要 extra）
+uv sync --extra mongo --inexact
+uv sync --extra redis --inexact
+uv sync --extra kafka --inexact
+uv sync --extra cls --inexact
+
+# 配置库和排查组件一次装齐
+uv sync --all-extras
 ```
-
-排查组件 extras：
-
-```bash
-uv sync --extra mongo
-uv sync --extra redis
-uv sync --extra kafka
-uv sync --extra cls
-```
-
-GitLab 使用 `httpx`，不需要额外 extra；RabbitMQ 使用 HTTP 管理接口。
 
 ---
 
@@ -177,7 +179,11 @@ mcp__drpanda__systems_status
 
 ## 登记目标与工具
 
-网页里每个目标登记一次，工具调用时只传 `target` 名称。
+目标属于一个环境。环境有给人看的展示名（例如乐畅生产）和给模型传的调用标识（例如 `lechang-prod`）。调用标识创建后不能改。不同环境可以有同名目标；同一个环境里同一种类型可以有多台，靠名称区分，模型不会自动挑一台。
+
+只有一个环境时，工具可以省略 `environment`，迁移种下的就是 `default`（展示名「默认」）。登记了多个环境之后，每次调用都要传 `environment`。先调用不带参数的 `systems_status` 看环境，再带上调用标识看这个环境里的目标。网页「排查目标」按环境切换；停用的环境模型不能查，配置仍保留。
+
+工具调用时只传 `environment` 和 `target` 名称，不能传主机、账号或密码。
 
 | 类型 | 工具 |
 |---|---|

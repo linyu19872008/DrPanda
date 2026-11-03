@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import option_field, secret_field, number_field %}
+{% from "_macros.html" import option_field, secret_field, number_field, env_label, env_label_existing %}
 {% block title %}{{ t("新建目标") if mode == "create" else t("编辑目标") }} · Dr Panda MCP{% endblock %}
 {% block content %}
 {% set connection_rows = option_rows | selectattr("section", "equalto", "connection") | list %}
@@ -65,6 +65,31 @@
 
     <section class="card form-section">
       <h2 class="form-section__title">{{ t('基本信息') }}</h2>
+      {% if mode == "create" %}
+      <div class="field{% if errors.get('environment') %} field--invalid{% endif %}">
+        {% if environments|length <= 1 %}
+        <span class="field__label">{{ t('所属环境') }}</span>
+        <div class="readonly">{{ env_label(environments[0]) if environments else t('还没有环境') }}{% if environments %} <span class="mono">{{ environments[0].key }}</span>{% endif %}</div>
+        <input type="hidden" name="environment" value="{{ values.get('environment', '') }}">
+        {% else %}
+        <label class="field__label" for="field-environment">{{ t('所属环境') }}<span class="required" aria-hidden="true">*</span></label>
+        <select class="input select" id="field-environment" name="environment" required aria-required="true" data-gate="off"
+                {% if errors.get('environment') %}aria-invalid="true" aria-describedby="err-environment"{% endif %}>
+          {% for env in environments %}
+          <option value="{{ env.key }}"{% if values.get('environment') == env.key %} selected{% endif %}>{{ env_label(env) }} · {{ env.key }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+        {% if errors.get('environment') %}<p class="field__error" id="err-environment" role="alert">{{ t(errors.get('environment')) }}</p>{% endif %}
+        <p class="field__hint">{{ t('目标会登记到这个环境，保存后不能更换。不同环境可以有同名目标。') }}{% if environments|length <= 1 %} <a href="/environments/new">{{ t('新建环境') }}</a>{% endif %}</p>
+      </div>
+      {% else %}
+      <div class="field">
+        <span class="field__label">{{ t('所属环境') }}</span>
+        <div class="readonly">{{ env_label_existing(existing) }} <span class="mono">{{ existing.environment_key }}</span></div>
+        <p class="field__hint">{{ t('创建后不能更换环境。') }}</p>
+      </div>
+      {% endif %}
       {% if mode == "create" %}
       <div class="field">
         <label class="field__label" for="field-name">{{ t('名称') }}<span class="required" aria-hidden="true">*</span></label>
@@ -166,7 +191,7 @@
       <p class="muted small">{{ t('服务对八个组件绝对只读；账号即使有写权限也不会被使用。') }}</p>
       <details class="details">
         <summary>{{ t('命名规则') }}</summary>
-        <p class="details__body">{{ t('只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64 个字符，全局唯一。') }}</p>
+        <p class="details__body">{{ t('只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64 个字符。同一个环境里不能重名，不同环境可以。') }}</p>
       </details>
       <details class="details">
         <summary>{{ t('密钥与证书') }}</summary>

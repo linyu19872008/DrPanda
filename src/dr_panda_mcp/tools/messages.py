@@ -18,6 +18,7 @@ from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import Target
 from dr_panda_mcp.tools.base import (
     TOOL_ANNOTATIONS,
+    EnvironmentParam,
     clamp_limit,
     finish,
     run_tool,
@@ -55,7 +56,9 @@ def ensure_topic(target: Target, topic: str) -> str:
 
 def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def rabbit_queues(target: str, vhost: str = "") -> dict[str, Any]:
+    async def rabbit_queues(
+        target: str, vhost: str = "", environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """列出授权 vhost 的队列（消息数、未确认、消费者）。"""
         params = {"vhost": vhost or None}
 
@@ -99,12 +102,14 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="rabbit_queues", name=target, target_type="rabbitmq",
+            runtime, tool="rabbit_queues", name=target, environment=environment, target_type="rabbitmq",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def rabbit_queue(target: str, vhost: str, queue: str) -> dict[str, Any]:
+    async def rabbit_queue(
+        target: str, vhost: str, queue: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看单个队列的详情。"""
         params = {"vhost": vhost, "queue": queue}
 
@@ -137,13 +142,13 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="rabbit_queue", name=target, target_type="rabbitmq",
+            runtime, tool="rabbit_queue", name=target, environment=environment, target_type="rabbitmq",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
     async def kafka_lag(
-        target: str, group: str, topic: str = ""
+        target: str, group: str, topic: str = "", environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
         """查看消费组在各分区的位点与滞后。"""
         params = {"group": group, "topic": topic or None}
@@ -177,12 +182,14 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="kafka_lag", name=target, target_type="kafka",
+            runtime, tool="kafka_lag", name=target, environment=environment, target_type="kafka",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def kafka_offsets(target: str, topic: str) -> dict[str, Any]:
+    async def kafka_offsets(
+        target: str, topic: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看 topic 各分区的 low / high watermark。"""
         params = {"topic": topic}
 
@@ -202,7 +209,7 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="kafka_offsets", name=target, target_type="kafka",
+            runtime, tool="kafka_offsets", name=target, environment=environment, target_type="kafka",
             params=params, handler=handler,
         )
 
@@ -213,6 +220,7 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
         partition: int,
         offset: int,
         limit: int = 10,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """从指定分区与 offset 起有限拉取消息（不加入消费组、不提交 offset）。"""
         params = {
@@ -258,6 +266,6 @@ def register_message_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="kafka_peek", name=target, target_type="kafka",
+            runtime, tool="kafka_peek", name=target, environment=environment, target_type="kafka",
             params=params, handler=handler,
         )

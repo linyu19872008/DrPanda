@@ -50,11 +50,24 @@ class Catalog:
         self._limits: dict[int, int] = {}
         self._pool_lock = asyncio.Lock()
 
-    async def resolve(self, name: str, *, expected_type: str | None = None) -> Target:
-        """按名字取目标并校验：存在、启用、类型匹配、密钥可解密。"""
-        target = await self._store.get(name)
+    async def resolve(
+        self,
+        name: str,
+        *,
+        environment: str = "",
+        expected_type: str | None = None,
+        allow_disabled_environment: bool = False,
+    ) -> Target:
+        """按环境与名字取目标并校验：存在、启用、类型匹配、密钥可解密。"""
+        getter = self._store.find if allow_disabled_environment else self._store.get
+        target = await getter(name, environment=environment)
         if target is None:
+            if environment:
+                raise errors.TargetNotFound(f"环境 {environment} 中没有目标 {name}")
             raise errors.TargetNotFound(f"目标 {name} 未登记")
+        if not target.environment_enabled and not allow_disabled_environment:
+            label = target.environment_title or target.environment_key
+            raise errors.EnvironmentDisabled(f"环境 {target.environment_key}（{label}）已停用")
         if not target.enabled:
             raise errors.TargetDisabled(f"目标 {name} 已停用")
         if expected_type is not None and target.type != expected_type:
@@ -109,9 +122,21 @@ class Catalog:
         async with semaphore:
             yield
 
-    async def test_connection(self, name: str, connector: Any) -> None:
+    async def test_connection(
+        self,
+        name: str,
+        connector: Any,
+        *,
+        environment: str = "",
+        allow_disabled_environment: bool = False,
+    ) -> None:
         """测试连接：解析目标 → 探测操作先过闸门 → 限并发 → 超时探测。"""
-        target = await self.resolve(name, expected_type=connector.name)
+        target = await self.resolve(
+            name,
+            environment=environment,
+            expected_type=connector.name,
+            allow_disabled_environment=allow_disabled_environment,
+        )
         require(connector.probe_guard())
         client = await self.client(target, connector)
         timeout = connectors_base.timeout_seconds(target)

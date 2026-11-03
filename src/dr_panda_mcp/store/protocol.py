@@ -16,6 +16,20 @@ TARGET_TYPES = frozenset(
 
 
 @dataclass(frozen=True)
+class Environment:
+    """一组排查目标所属的环境。``key`` 是模型传入的调用标识，``title`` 是展示名。"""
+
+    id: int
+    key: str
+    title: str
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    target_count: int = 0
+    enabled_target_count: int = 0
+
+
+@dataclass(frozen=True)
 class Target:
     """配置库里的一个排查目标。``secret`` 是解密后的值，只在进程内使用。"""
 
@@ -32,6 +46,9 @@ class Target:
     last_test_at: datetime | None
     last_test_ok: bool | None
     last_test_error: str | None
+    environment_key: str = ""
+    environment_title: str = ""
+    environment_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -54,6 +71,7 @@ class TargetDraft:
     enabled: bool
     options: dict[str, Any]
     secret_patch: SecretPatch = field(default_factory=SecretPatch)
+    environment_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -96,9 +114,19 @@ class ConfigStore(Protocol):
     """配置库接口。所有写方法都在同一事务里追加审计。"""
 
     async def ping(self) -> None: ...
+    async def list_environments(self) -> list[Environment]: ...
+    async def create_environment(
+        self, key: str, title: str, actor: str, *, enabled: bool = True
+    ) -> Environment: ...
+    async def update_environment(
+        self, environment_id: int, *, title: str, enabled: bool, actor: str
+    ) -> Environment: ...
+    async def delete_environment(self, environment_id: int, actor: str) -> None: ...
     async def list_all(self) -> list[Target]: ...
     async def list_by_type(self, type: str) -> list[Target]: ...
-    async def get(self, name: str) -> Target | None: ...
+    async def list_by_environment(self, key: str) -> list[Target]: ...
+    async def get(self, name: str, *, environment: str = "") -> Target | None: ...
+    async def find(self, name: str, *, environment: str = "") -> Target | None: ...
     async def get_by_id(self, target_id: int) -> Target | None: ...
 
     async def create(self, draft: TargetDraft, actor: str) -> Target: ...

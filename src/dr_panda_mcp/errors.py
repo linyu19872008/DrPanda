@@ -6,11 +6,16 @@
 
 from __future__ import annotations
 
+import re
+
 # 目标相关
 TARGET_NOT_FOUND = "TARGET_NOT_FOUND"
 TARGET_DISABLED = "TARGET_DISABLED"
 TARGET_TYPE_MISMATCH = "TARGET_TYPE_MISMATCH"
 NO_ENABLED_TARGET = "NO_ENABLED_TARGET"
+ENVIRONMENT_REQUIRED = "ENVIRONMENT_REQUIRED"
+ENVIRONMENT_NOT_FOUND = "ENVIRONMENT_NOT_FOUND"
+ENVIRONMENT_DISABLED = "ENVIRONMENT_DISABLED"
 
 # 参数与闸门
 INVALID_ARGUMENT = "INVALID_ARGUMENT"
@@ -34,6 +39,9 @@ ALL_CODES = frozenset(
         TARGET_DISABLED,
         TARGET_TYPE_MISMATCH,
         NO_ENABLED_TARGET,
+        ENVIRONMENT_REQUIRED,
+        ENVIRONMENT_NOT_FOUND,
+        ENVIRONMENT_DISABLED,
         INVALID_ARGUMENT,
         GUARD_REJECTED,
         DANGEROUS_OPERATION,
@@ -104,6 +112,26 @@ class TargetTypeMismatch(DrPandaError):
     """目标的类型与调用的工具不一致。"""
 
 
+class EnvironmentRequired(DrPandaError):
+    """登记了多个环境，调用却没有指定 environment。"""
+
+
+class EnvironmentNotFound(DrPandaError):
+    """按调用标识找不到环境。"""
+
+
+class EnvironmentDisabled(DrPandaError):
+    """环境已停用，工具拒绝使用其中的目标。"""
+
+
+class EnvironmentKeyTaken(DrPandaError):
+    """环境调用标识已被占用。"""
+
+
+class EnvironmentNotEmpty(DrPandaError):
+    """环境里还有目标，不能删除。"""
+
+
 class GuardRejected(DrPandaError):
     """只读白名单或危险清单拒绝了请求（code 取 ``GUARD_REJECTED`` / ``DANGEROUS_OPERATION``）。"""
 
@@ -122,3 +150,32 @@ class UpstreamUnavailable(UpstreamError):
 
 class UpstreamNotFound(UpstreamError):
     """上游返回 404（库、索引、文件不存在）。"""
+
+
+def sync_extra_command(extra: str) -> str:
+    """补装一个 extra，并保留环境里已经装好的其他包。
+
+    ``uv sync --extra`` 默认是精确同步，未点名的 extra 会被卸掉。
+    ``--inexact`` 只把这一个装进当前项目环境。
+    """
+    return f"uv sync --extra {extra} --inexact"
+
+
+def missing_client_message(extra: str) -> str:
+    """排查客户端不在当前服务环境时的说明。命令留在句末，页面只用来判断能否安装。"""
+    return f"{extra} 客户端未安装：{sync_extra_command(extra)}"
+
+
+_SYNC_EXTRA = re.compile(r"uv sync --extra [A-Za-z0-9_-]+(?: --inexact)?")
+
+
+def install_failed_message(extra: str, reason: str) -> str:
+    """安装失败后仍保留句末命令，页面据此继续显示安装按钮。"""
+    cleaned = " ".join(reason.split())
+    cleaned = _SYNC_EXTRA.sub("", cleaned)
+    cleaned = cleaned.strip(" ：:，,.")
+    if len(cleaned) > 300:
+        cleaned = cleaned[:300].rstrip() + "…"
+    if not cleaned:
+        cleaned = "uv sync 没有成功"
+    return f"{extra} 客户端未安装。安装没有完成：{cleaned}：{sync_extra_command(extra)}"

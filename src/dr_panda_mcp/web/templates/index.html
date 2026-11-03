@@ -1,13 +1,62 @@
 {% extends "base.html" %}
+{% macro env_label(env) -%}
+{%- if env.key == 'default' and env.title == '默认' -%}{{ t('默认') }}{%- else -%}{{ env.title }}{%- endif -%}
+{%- endmacro %}
 {% block title %}{{ t('排查目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
     <h1>{{ t('排查目标') }}</h1>
-    <p class="page-subtitle">{{ t('登记线上系统并授权只读范围，模型按名称调用排查工具。') }}</p>
+    <p class="page-subtitle">{{ t('先选定环境，再登记这个环境里的目标。模型调用时要带上环境的调用标识。') }}</p>
   </div>
-  <a class="btn btn--primary" href="/targets/new">{{ t('＋ 新建目标') }}</a>
+  <div class="page-header__actions">
+    <a class="btn btn--secondary" href="/environments">{{ t('管理环境') }}</a>
+    <a class="btn btn--primary" href="/targets/new{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('＋ 新建目标') }}</a>
+  </div>
 </div>
+
+{% if environments %}
+<nav class="env-switch" aria-label="{{ t('选择环境') }}">
+  {% for env in environments %}
+  <a class="env-switch__item{% if current_env and env.key == current_env.key %} is-active{% endif %}{% if not env.enabled %} is-disabled{% endif %}"
+     href="/?env={{ env.key }}"
+     {% if current_env and env.key == current_env.key %}aria-current="true"{% endif %}>
+    <span class="env-switch__title">{{ env_label(env) }}</span>
+    <span class="env-switch__meta">
+      <span class="mono">{{ env.key }}</span>
+      <span class="env-switch__count">{{ t('{count} 个目标', count=env.target_count) }}</span>
+      {% if not env.enabled %}<span class="badge badge--muted">{{ t('已停用') }}</span>{% endif %}
+    </span>
+  </a>
+  {% endfor %}
+  <a class="env-switch__item env-switch__item--new" href="/environments/new">
+    <span class="env-switch__title">{{ t('新建环境') }}</span>
+    <span class="env-switch__meta">{{ t('例如乐畅生产、测试') }}</span>
+  </a>
+</nav>
+{% endif %}
+
+{% if show_default_hint %}
+<div class="alert alert--info" role="status">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+  </span>
+  <div class="alert__body">
+    <strong>{{ t('现在只有「默认」环境') }}</strong>
+    <span class="alert__detail">{{ t('已有目标都在这里。展示名可以改，但模型调用时仍要传 default。要按乐畅生产、测试分开排查，请新建环境，再在新环境里登记目标。') }}</span>
+  </div>
+</div>
+{% elif current_env and not current_env.enabled %}
+<div class="alert alert--warning" role="status">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17v.5"/></svg>
+  </span>
+  <div class="alert__body">
+    <strong>{{ t('这个环境已停用') }}</strong>
+    <span class="alert__detail">{{ t('模型不能查询其中的目标。配置仍保留，可以随时重新启用。') }}</span>
+  </div>
+</div>
+{% endif %}
 
 <div class="stats" aria-label="{{ t('概览') }}">
   <div class="stat"><span class="stat__label">{{ t('目标总数') }}</span><span class="stat__value" data-stat="total">{{ stats.total }}</span></div>
@@ -29,6 +78,7 @@
 <form class="toolbar" method="get" action="/" role="search">
   <div class="toolbar__search">
     <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
+    {% if current_env %}<input type="hidden" name="env" value="{{ current_env.key }}">{% endif %}
     {% if active_type %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
     <button class="btn btn--secondary" type="submit">{{ t('搜索') }}</button>
   </div>
@@ -38,17 +88,23 @@
        {% if item.active %}aria-current="true"{% endif %}>{{ t(item.label) }}<span class="chip-link__count">{{ item.count }}</span></a>
     {% endfor %}
   </div>
-  {% if q or active_type %}<a class="link-reset" href="/">{{ t('清除筛选') }}</a>{% endif %}
+  {% if q or active_type %}<a class="link-reset" href="/{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('清除筛选') }}</a>{% endif %}
 </form>
 {% endif %}
 
-{% if not has_targets %}
+{% if not environments %}
 <section class="empty">
-  <h2>{{ t('还没有登记任何目标') }}</h2>
-  <p>{{ t('先选一个类型登记连接与只读范围，三个客户端随后就能按名称调用它。') }}</p>
+  <h2>{{ t('还没有环境') }}</h2>
+  <p>{{ t('先新建环境，例如乐畅生产或测试，再在里面登记目标。') }}</p>
+  <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
+</section>
+{% elif not has_targets %}
+<section class="empty">
+  <h2>{% if has_any_targets or environments|length > 1 %}{{ t('这个环境还没有目标') }}{% else %}{{ t('还没有登记任何目标') }}{% endif %}</h2>
+  <p>{{ t('先选一个类型登记连接与只读范围。同一个环境里可以有多台相同类型的目标，用不同名称区分。') }}</p>
   <div class="type-grid type-grid--compact">
     {% for card in type_cards %}
-    <a class="type-card type-card--sm" href="/targets/new?type={{ card.type }}">
+    <a class="type-card type-card--sm" href="/targets/new?type={{ card.type }}{% if current_env %}&env={{ current_env.key }}{% endif %}">
       <span class="type-card__title">{{ t(card.label) }}</span>
       <span class="type-card__note">{{ t(card.note) }}</span>
     </a>
@@ -59,11 +115,20 @@
 <section class="empty empty--sm">
   <h2>{{ t('没有匹配的目标') }}</h2>
   <p>{{ t('调整搜索词或类型筛选后再试。') }}</p>
-  <a class="btn btn--secondary" href="/">{{ t('清除筛选') }}</a>
+  <a class="btn btn--secondary" href="/{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('清除筛选') }}</a>
 </section>
 {% else %}
 <div class="table-card">
-  <table class="table table--responsive">
+  <table class="table table--responsive table--targets">
+    <colgroup>
+      <col class="col-name">
+      <col class="col-type">
+      <col class="col-endpoint">
+      <col class="col-scope">
+      <col class="col-status">
+      <col class="col-test">
+      <col class="col-actions">
+    </colgroup>
     <thead>
       <tr>
         <th scope="col">{{ t('名称') }}</th>
@@ -77,13 +142,13 @@
     </thead>
     <tbody>
       {% for target in rows %}
-      <tr>
+      <tr data-target-id="{{ target.id }}">
         <td data-label="{{ t('名称') }}" class="cell-name">
           <a class="mono link-strong" href="/targets/{{ target.id }}/edit">{{ target.name }}</a>
           {% if target.secret_fields and not target.secret_ok %}<span class="badge badge--warning">{{ t('密钥异常') }}</span>{% endif %}
         </td>
         <td data-label="{{ t('类型') }}"><span class="badge badge--type">{{ t(target.type_label) }}</span></td>
-        <td data-label="{{ t('端点') }}"><span class="mono truncate" title="{{ target.endpoint }}">{{ t(target.endpoint) }}</span></td>
+        <td data-label="{{ t('端点') }}" class="cell-endpoint"><span class="mono truncate" title="{{ target.endpoint }}">{{ t(target.endpoint) }}</span></td>
         <td data-label="{{ t('授权范围') }}"><span class="muted">{{ t(target.scope_source, **target.scope_params) }}</span></td>
         <td data-label="{{ t('状态') }}">
           <form method="post" action="/targets/{{ target.id }}/toggle" class="inline-form"
@@ -94,11 +159,15 @@
                     data-on-title="{{ t('点击停用') }}" data-off-title="{{ t('点击启用') }}"
                     title="{{ t('点击停用') if target.enabled else t('点击启用') }}">
               <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
-              <span class="switch__label">{{ t('已启用') if target.enabled else t('已停用') }}</span>
+              <span class="switch__label">
+                <span class="switch__label-text">{{ t('已启用') if target.enabled else t('已停用') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('已启用') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('已停用') }}</span>
+              </span>
             </button>
           </form>
         </td>
-        <td data-label="{{ t('最近测试') }}" data-test-cell>
+        <td data-label="{{ t('最近测试') }}" class="cell-test" data-test-cell>
           <div class="test-line">
             <span class="status status--{{ 'ok' if target.last_test_ok else ('error' if target.last_test_at_display else 'none') }}" data-test-status>
               <span class="status__dot"></span>
@@ -106,9 +175,23 @@
             </span>
             <span class="muted small" data-test-time{% if not target.last_test_at_display %} hidden{% endif %}>{{ target.last_test_at_display or '' }}</span>
           </div>
-          <details class="details" data-test-details{% if not target.last_test_error %} hidden{% endif %}>
+          <details class="details" data-test-details
+                   {% if target.client_extra %}data-install-dialog="install-client-{{ target.id }}" data-install-label="{{ t('安装') }}"{% endif %}
+                   {% if not target.last_test_error %}hidden{% endif %}>
             <summary>{{ t('失败详情') }}</summary>
-            <p class="details__body mono" data-test-error>{{ target.last_test_error or '' }}</p>
+            <div class="details__body" data-test-error-box>
+              {% if target.last_test_message %}
+              <p class="details__message" data-test-message>{{ target.last_test_message }}</p>
+              {% endif %}
+              {% if target.last_test_command and target.client_extra %}
+              <div class="install-line">
+                <button class="btn btn--secondary btn--sm btn--stable" type="button"
+                        data-dialog-open="install-client-{{ target.id }}">
+                  <span class="btn__label">{{ t('安装') }}</span>
+                </button>
+              </div>
+              {% endif %}
+            </div>
           </details>
         </td>
         <td data-label="{{ t('操作') }}" class="cell-actions">
@@ -116,7 +199,11 @@
             <form method="post" action="/targets/{{ target.id }}/test" class="inline-form"
                   data-submit-loading data-async-form data-row-action="test">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-              <button class="btn btn--secondary btn--sm" type="submit" data-loading-label="{{ t('测试中…') }}">{{ t('测试') }}</button>
+              <button class="btn btn--secondary btn--sm btn--stable" type="submit" data-loading-label="{{ t('测试中…') }}">
+                <span class="btn__label">{{ t('测试') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('测试') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('测试中…') }}</span>
+              </button>
             </form>
             <a class="btn btn--ghost btn--sm" href="/targets/{{ target.id }}/edit">{{ t('编辑') }}</a>
             <a class="btn btn--danger-ghost btn--sm" href="/targets/{{ target.id }}/delete" data-dialog-open="delete-target-{{ target.id }}">{{ t('删除') }}</a>
@@ -136,6 +223,7 @@
     <h2 id="delete-target-title-{{ target.id }}">{{ t('删除目标') }}</h2>
     <p class="field__hint">{{ t('删除会一并移除该目标的密钥与配置；模型将立即无法调用它，且无法恢复。') }}</p>
     <dl class="summary">
+      <div><dt>{{ t('所属环境') }}</dt><dd>{{ env_label(current_env) if current_env else '' }} <span class="mono">{{ target.environment_key }}</span></dd></div>
       <div><dt>{{ t('名称') }}</dt><dd class="mono">{{ target.name }}</dd></div>
       <div><dt>{{ t('类型') }}</dt><dd>{{ t(target.type_label) }}</dd></div>
       <div><dt>{{ t('端点') }}</dt><dd class="mono">{{ target.endpoint }}</dd></div>
@@ -154,6 +242,26 @@
     </form>
   </div>
 </dialog>
+{% if target.client_extra %}
+<dialog id="install-client-{{ target.id }}" class="modal" aria-labelledby="install-client-title-{{ target.id }}">
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <h2 id="install-client-title-{{ target.id }}">{{ t('安装客户端') }}</h2>
+    <p class="field__hint">{{ t('将在当前服务所在项目安装 {name} 客户端，不会卸载已经装好的其他客户端。', name=t(target.type_label)) }}</p>
+    <form method="post" action="/targets/{{ target.id }}/install-client" class="form-actions form-actions--inline"
+          data-submit-loading data-async-form data-row-action="install"
+          data-target-id="{{ target.id }}" data-timeout-ms="130000">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+      <button class="btn btn--primary btn--stable" type="submit" data-loading-label="{{ t('安装中…') }}">
+        <span class="btn__label">{{ t('确认安装') }}</span>
+        <span class="btn__sizer" aria-hidden="true">{{ t('确认安装') }}</span>
+        <span class="btn__sizer" aria-hidden="true">{{ t('安装中…') }}</span>
+      </button>
+    </form>
+  </div>
+</dialog>
+{% endif %}
 {% endfor %}
 {% endif %}
 {% endblock %}

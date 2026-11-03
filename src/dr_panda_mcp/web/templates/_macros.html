@@ -1,3 +1,11 @@
+{% macro env_label(env) -%}
+{%- if env.key == 'default' and env.title == '默认' -%}{{ t('默认') }}{%- else -%}{{ env.title }}{%- endif -%}
+{%- endmacro %}
+
+{% macro env_label_existing(target) -%}
+{%- if target.environment_key == 'default' and target.environment_title == '默认' -%}{{ t('默认') }}{%- else -%}{{ target.environment_title or target.environment_key }}{%- endif -%}
+{%- endmacro %}
+
 {% macro control(row, field_id) -%}
   {%- set invalid = ' aria-invalid="true" aria-describedby="err-' ~ row.key ~ '"' if row.error else '' -%}
   {%- set required = ' required aria-required="true"' if row.required else '' -%}

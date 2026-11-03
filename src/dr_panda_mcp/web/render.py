@@ -68,6 +68,8 @@ def render(
                 if path.startswith("/me")
                 else "settings"
                 if path.startswith("/settings")
+                else "environments"
+                if path.startswith("/environments")
                 else "targets"
             ),
             "app_version": _app_version(),

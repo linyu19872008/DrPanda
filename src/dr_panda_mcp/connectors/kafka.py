@@ -69,9 +69,7 @@ class _KafkaClient:
         try:
             from aiokafka import AIOKafkaConsumer
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "kafka 客户端未安装：uv sync --extra kafka"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("kafka")) from exc
         return AIOKafkaConsumer(
             group_id=None,
             enable_auto_commit=False,
@@ -83,9 +81,7 @@ class _KafkaClient:
         try:
             from aiokafka.admin import AIOKafkaAdminClient
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "kafka 客户端未安装：uv sync --extra kafka"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("kafka")) from exc
         return AIOKafkaAdminClient(**self._kwargs())
 
     async def ping(self) -> None:

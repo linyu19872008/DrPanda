@@ -11,25 +11,38 @@ import logging
 import re
 import time
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from dr_panda_mcp.crypto import SecretBox
 from dr_panda_mcp.errors import (
+    EnvironmentDisabled,
+    EnvironmentKeyTaken,
+    EnvironmentNotEmpty,
+    EnvironmentNotFound,
+    EnvironmentRequired,
     InvalidTarget,
     SecretUnavailable,
     StorageUnavailable,
     TargetNameTaken,
     TargetNotFound,
 )
-from dr_panda_mcp.store.models import AuditRow, SettingRow, SettingsHistoryRow, TargetRow
+from dr_panda_mcp.store.models import (
+    AuditRow,
+    EnvironmentRow,
+    SettingRow,
+    SettingsHistoryRow,
+    TargetRow,
+)
 from dr_panda_mcp.store.protocol import (
     TARGET_TYPES,
     AuditEntry,
+    Environment,
     SecretPatch,
     SettingsChange,
     Target,
@@ -39,6 +52,14 @@ from dr_panda_mcp.store.protocol import (
 logger = logging.getLogger(__name__)
 
 _NAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
+
+
+@dataclass(frozen=True)
+class _EnvRef:
+    id: int
+    key: str
+    title: str
+    enabled: bool
 
 
 def utc_now() -> datetime:
@@ -60,29 +81,144 @@ class SqlConfigStore:
         async with self._session_factory() as session:
             await session.execute(text("SELECT 1"))
 
+    async def list_environments(self) -> list[Environment]:
+        async with self._session_factory() as session:
+            envs = (
+                await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id))
+            ).scalars().all()
+            counts = (
+                await session.execute(
+                    select(TargetRow.environment_id, TargetRow.enabled, func.count())
+                    .group_by(TargetRow.environment_id, TargetRow.enabled)
+                )
+            ).all()
+            tally: dict[int, dict[str, int]] = {}
+            for environment_id, enabled, count in counts:
+                bucket = tally.setdefault(int(environment_id), {"all": 0, "enabled": 0})
+                bucket["all"] += int(count)
+                if enabled:
+                    bucket["enabled"] += int(count)
+            return [_environment(row, tally.get(row.id, {})) for row in envs]
+
+    async def create_environment(
+        self, key: str, title: str, actor: str, *, enabled: bool = True
+    ) -> Environment:
+        key = _valid_key(key, "调用标识")
+        title = _valid_title(title)
+        now = utc_now()
+        row = EnvironmentRow(
+            key=key,
+            title=title,
+            enabled=bool(enabled),
+            created_at=now,
+            updated_at=now,
+        )
+        try:
+            async with self._session_factory() as session, session.begin():
+                session.add(row)
+                session.add(
+                    self._audit_row(actor, "environment.create", key, f"title={title}")
+                )
+                await session.flush()
+                return _environment(row, {})
+        except IntegrityError as exc:
+            raise EnvironmentKeyTaken(f"调用标识 {key} 已存在") from exc
+        except SQLAlchemyError as exc:
+            raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
+
+    async def update_environment(
+        self, environment_id: int, *, title: str, enabled: bool, actor: str
+    ) -> Environment:
+        title = _valid_title(title)
+        enabled = bool(enabled)
+        try:
+            async with self._session_factory() as session, session.begin():
+                row = await session.get(EnvironmentRow, environment_id)
+                if row is None:
+                    raise EnvironmentNotFound(f"环境 id={environment_id} 不存在")
+                changed = row.title != title or row.enabled != enabled
+                if row.enabled != enabled:
+                    action = "environment.enable" if enabled else "environment.disable"
+                else:
+                    action = "environment.update"
+                row.title = title
+                row.enabled = enabled
+                row.updated_at = utc_now()
+                if changed:
+                    session.add(
+                        self._audit_row(
+                            actor,
+                            action,
+                            row.key,
+                            f"title={title} enabled={enabled}",
+                        )
+                    )
+                counts = await self._environment_counts(session, row.id)
+                return _environment(row, counts)
+        except EnvironmentNotFound:
+            raise
+        except SQLAlchemyError as exc:
+            raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
+
+    async def delete_environment(self, environment_id: int, actor: str) -> None:
+        try:
+            async with self._session_factory() as session, session.begin():
+                row = await session.get(EnvironmentRow, environment_id)
+                if row is None:
+                    raise EnvironmentNotFound(f"环境 id={environment_id} 不存在")
+                count = await session.scalar(
+                    select(func.count())
+                    .select_from(TargetRow)
+                    .where(TargetRow.environment_id == row.id)
+                )
+                if count:
+                    raise EnvironmentNotEmpty(
+                        f"环境 {row.title} 里还有 {int(count)} 个目标，先删除这些目标才能删除环境"
+                    )
+                key = row.key
+                title = row.title
+                await session.delete(row)
+                session.add(
+                    self._audit_row(actor, "environment.delete", key, f"title={title}")
+                )
+        except (EnvironmentNotFound, EnvironmentNotEmpty):
+            raise
+        except SQLAlchemyError as exc:
+            raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
+
     async def list_all(self) -> list[Target]:
         return await self._select_targets()
 
     async def list_by_type(self, type: str) -> list[Target]:
         return await self._select_targets(type=type)
 
-    async def get(self, name: str) -> Target | None:
-        row = await self._one_target(select(TargetRow).where(TargetRow.name == name))
-        return None if row is None else self._to_target(row)
+    async def list_by_environment(self, key: str) -> list[Target]:
+        env = await self._resolve_environment(key, require_enabled=False)
+        return await self._select_targets(environment_id=env.id)
+
+    async def get(self, name: str, *, environment: str = "") -> Target | None:
+        return await self._get(name, environment, require_enabled=True)
+
+    async def find(self, name: str, *, environment: str = "") -> Target | None:
+        """按环境查找目标，不拒绝已停用的环境。网页保存前查重用这个方法。"""
+        return await self._get(name, environment, require_enabled=False)
 
     async def get_by_id(self, target_id: int) -> Target | None:
-        row = await self._one_target(select(TargetRow).where(TargetRow.id == target_id))
-        return None if row is None else self._to_target(row)
+        return await self._one_target(_joined_targets().where(TargetRow.id == target_id))
 
     async def create(self, draft: TargetDraft, actor: str) -> Target:
         draft = _validated(draft)
+        env = await self._resolve_environment(draft.environment_key, require_enabled=False)
         now = utc_now()
         row = TargetRow(
+            environment_id=env.id,
             type=draft.type,
             name=draft.name,
             enabled=draft.enabled,
             options_json=dict(draft.options),
-            secret_json=self._box.encrypt(draft.name, draft.secret_patch.set),
+            secret_json=self._box.encrypt(
+                draft.name, draft.secret_patch.set, environment=env.key
+            ),
             created_at=now,
             updated_at=now,
             last_test_at=None,
@@ -95,10 +231,14 @@ class SqlConfigStore:
                     session.add(row)
                     session.add(
                         self._audit_row(
-                            actor, "target.create", draft.name, f"type={draft.type}"
+                            actor,
+                            "target.create",
+                            draft.name,
+                            f"env={env.key} type={draft.type}",
                         )
                     )
-                return self._to_target(row)
+                    await session.flush()
+                return self._to_target(row, env)
         except IntegrityError as exc:
             raise TargetNameTaken(f"目标名 {draft.name} 已存在") from exc
         except SQLAlchemyError as exc:
@@ -110,19 +250,26 @@ class SqlConfigStore:
             async with self._session_factory() as session:
                 async with session.begin():
                     row = await self._require_row(session, target_id)
+                    env_row = await session.get(EnvironmentRow, row.environment_id)
+                    if env_row is None:
+                        raise StorageUnavailable("目标缺少所属环境")
                     if draft.name != row.name or draft.type != row.type:
                         raise InvalidTarget("target 的名称与类型创建后不可修改")
+                    if draft.environment_key and draft.environment_key != env_row.key:
+                        raise InvalidTarget("环境创建后不可修改")
                     envelope = dict(row.secret_json or {})
                     for field in draft.secret_patch.clear:
                         envelope.pop(field, None)
                     envelope.update(
-                        self._box.encrypt(row.name, draft.secret_patch.set)
+                        self._box.encrypt(
+                            row.name, draft.secret_patch.set, environment=env_row.key
+                        )
                     )
                     row.options_json = dict(draft.options)
                     row.secret_json = envelope
                     row.updated_at = utc_now()
                     session.add(self._audit_row(actor, "target.update", row.name, "options/secret"))
-                return self._to_target(row)
+                return self._to_target(row, env_row)
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
 
@@ -137,7 +284,10 @@ class SqlConfigStore:
                     session.add(
                         self._audit_row(actor, action, row.name, f"enabled={bool(enabled)}")
                     )
-                return self._to_target(row)
+                env_row = await session.get(EnvironmentRow, row.environment_id)
+                if env_row is None:
+                    raise StorageUnavailable("目标缺少所属环境")
+                return self._to_target(row, env_row)
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
 
@@ -164,7 +314,10 @@ class SqlConfigStore:
                     row.updated_at = utc_now()
                     summary = "ok" if ok else f"failed: {_truncate(error or '', 200)}"
                     session.add(self._audit_row(actor, "target.test", row.name, summary))
-                return self._to_target(row)
+                env_row = await session.get(EnvironmentRow, row.environment_id)
+                if env_row is None:
+                    raise StorageUnavailable("目标缺少所属环境")
+                return self._to_target(row, env_row)
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
 
@@ -287,17 +440,81 @@ class SqlConfigStore:
             for row in rows
         ]
 
-    async def _select_targets(self, *, type: str | None = None) -> list[Target]:
-        query = select(TargetRow).order_by(TargetRow.type, TargetRow.name)
+    async def _get(
+        self, name: str, environment: str, *, require_enabled: bool
+    ) -> Target | None:
+        env = await self._resolve_environment(environment, require_enabled=require_enabled)
+        return await self._one_target(
+            _joined_targets().where(
+                TargetRow.environment_id == env.id, TargetRow.name == name
+            )
+        )
+
+    async def _resolve_environment(self, key: str, *, require_enabled: bool) -> _EnvRef:
+        key = (key or "").strip()
+        async with self._session_factory() as session:
+            if key:
+                row = (
+                    await session.execute(
+                        select(EnvironmentRow).where(EnvironmentRow.key == key)
+                    )
+                ).scalar_one_or_none()
+                if row is None:
+                    choices = await _environment_choices(session)
+                    suffix = f"。可选：{choices}" if choices else ""
+                    raise EnvironmentNotFound(f"环境 {key} 未登记{suffix}")
+            else:
+                rows = (
+                    await session.execute(
+                        select(EnvironmentRow).order_by(EnvironmentRow.id)
+                    )
+                ).scalars().all()
+                if len(rows) == 1:
+                    row = rows[0]
+                elif not rows:
+                    raise EnvironmentNotFound("还没有登记任何环境")
+                else:
+                    choices = "、".join(f"{item.key}（{item.title}）" for item in rows)
+                    raise EnvironmentRequired(
+                        f"登记了多个环境，调用时必须传入 environment。可选：{choices}"
+                    )
+            if require_enabled and not row.enabled:
+                raise EnvironmentDisabled(f"环境 {row.key}（{row.title}）已停用")
+            return _EnvRef(row.id, row.key, row.title, bool(row.enabled))
+
+    async def _environment_counts(self, session: AsyncSession, environment_id: int) -> dict[str, int]:
+        counts = (
+            await session.execute(
+                select(TargetRow.enabled, func.count())
+                .where(TargetRow.environment_id == environment_id)
+                .group_by(TargetRow.enabled)
+            )
+        ).all()
+        tally = {"all": 0, "enabled": 0}
+        for enabled, count in counts:
+            tally["all"] += int(count)
+            if enabled:
+                tally["enabled"] += int(count)
+        return tally
+
+    async def _select_targets(
+        self, *, type: str | None = None, environment_id: int | None = None
+    ) -> list[Target]:
+        query = _joined_targets().order_by(TargetRow.type, TargetRow.name)
         if type is not None:
             query = query.where(TargetRow.type == type)
+        if environment_id is not None:
+            query = query.where(TargetRow.environment_id == environment_id)
         async with self._session_factory() as session:
-            rows = (await session.execute(query)).scalars().all()
-        return [self._to_target(row) for row in rows]
+            rows = (await session.execute(query)).all()
+            return [self._to_target(target, env) for target, env in rows]
 
-    async def _one_target(self, query) -> TargetRow | None:
+    async def _one_target(self, query) -> Target | None:
         async with self._session_factory() as session:
-            return (await session.execute(query)).scalar_one_or_none()
+            row = (await session.execute(query)).one_or_none()
+            if row is None:
+                return None
+            return self._to_target(row[0], row[1])
 
     async def _require_row(self, session: AsyncSession, target_id: int) -> TargetRow:
         row = await session.get(TargetRow, target_id)
@@ -320,13 +537,15 @@ class SqlConfigStore:
             summary=_truncate(summary, 1024),
         )
 
-    def _to_target(self, row: TargetRow) -> Target:
+    def _to_target(self, row: TargetRow, env: EnvironmentRow | _EnvRef) -> Target:
         envelopes: dict[str, Any] = row.secret_json or {}
         secret: dict[str, str] = {}
         secret_ok = True
         for field, envelope in envelopes.items():
             try:
-                secret[field] = self._box.decrypt_field(row.name, field, envelope)
+                secret[field] = self._box.decrypt_field(
+                    row.name, field, envelope, environment=env.key
+                )
             except SecretUnavailable as exc:
                 logger.warning("目标 %s 的密钥无法解密：%s", row.name, exc)
                 secret_ok = False
@@ -346,6 +565,9 @@ class SqlConfigStore:
             last_test_at=row.last_test_at,
             last_test_ok=row.last_test_ok,
             last_test_error=row.last_test_error,
+            environment_key=env.key,
+            environment_title=env.title,
+            environment_enabled=env.enabled,
         )
 
 
@@ -367,13 +589,63 @@ def _validated(draft: TargetDraft) -> TargetDraft:
     for field in draft.secret_patch.clear:
         if not field:
             raise InvalidTarget("要清除的密钥字段名不能为空")
+    environment_key = (draft.environment_key or "").strip()
+    if environment_key and not _NAME_RE.match(environment_key):
+        raise InvalidTarget(
+            "调用标识只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
+        )
     return TargetDraft(
         name=name,
         type=draft.type,
         enabled=bool(draft.enabled),
         options=dict(draft.options),
         secret_patch=draft.secret_patch,
+        environment_key=environment_key,
     )
+
+
+def _joined_targets():
+    return select(TargetRow, EnvironmentRow).join(
+        EnvironmentRow, TargetRow.environment_id == EnvironmentRow.id
+    )
+
+
+def _environment(row: EnvironmentRow, counts: dict[str, int]) -> Environment:
+    return Environment(
+        id=row.id,
+        key=row.key,
+        title=row.title,
+        enabled=row.enabled,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        target_count=int(counts.get("all", 0)),
+        enabled_target_count=int(counts.get("enabled", 0)),
+    )
+
+
+def _valid_key(value: str, label: str) -> str:
+    key = (value or "").strip()
+    if not _NAME_RE.match(key):
+        raise InvalidTarget(
+            f"{label}只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
+        )
+    return key
+
+
+def _valid_title(value: str) -> str:
+    title = " ".join((value or "").split())
+    if not title:
+        raise InvalidTarget("展示名不能为空")
+    if len(title) > 64:
+        raise InvalidTarget("展示名最长 64 个字符")
+    return title
+
+
+async def _environment_choices(session: AsyncSession) -> str:
+    rows = (
+        await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id))
+    ).scalars().all()
+    return "、".join(f"{row.key}（{row.title}）" for row in rows)
 
 
 def _truncate(value: str | None, limit: int) -> str | None:

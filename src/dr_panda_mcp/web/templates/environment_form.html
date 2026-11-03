@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ t('新建环境') if mode == 'create' else t('编辑环境') }} · Dr Panda MCP{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
+  <a href="/environments">{{ t('环境') }}</a><span aria-hidden="true">/</span>
+  <span>{{ t('新建环境') if mode == 'create' else values.key }}</span>
+</nav>
+<div class="page-header">
+  <div>
+    <h1>{{ t('新建环境') if mode == 'create' else t('编辑环境') }}</h1>
+    <p class="page-subtitle">{{ t('展示名给人看，调用标识给模型用。同一个环境里可以登记多台相同类型的目标。') }}</p>
+  </div>
+</div>
+
+{% if errors.get('_form') %}
+<div class="alert alert--danger" role="alert">
+  <div class="alert__body"><strong>{{ t('保存失败') }}</strong><span class="alert__detail">{{ t(errors['_form']) }}</span></div>
+</div>
+{% endif %}
+
+<div class="form-layout">
+  <form class="form-main" method="post" action="{{ '/environments' if mode == 'create' else '/environments/' ~ environment.id }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <section class="card form-section">
+      <div class="field{% if errors.get('title') %} field--invalid{% endif %}">
+        <label class="field__label" for="field-title">{{ t('展示名') }}<span class="required" aria-hidden="true">*</span></label>
+        <input class="input" id="field-title" name="title" value="{{ values.title }}" required aria-required="true"
+               placeholder="{{ t('例如乐畅生产') }}" autocomplete="off"
+               {% if errors.get('title') %}aria-invalid="true" aria-describedby="err-title"{% endif %}>
+        {% if errors.get('title') %}<p class="field__error" id="err-title" role="alert">{{ t(errors.get('title')) }}</p>{% endif %}
+        <p class="field__hint">{{ t('对话里怎么称呼这个环境。以后可以修改。') }}</p>
+      </div>
+      <div class="field{% if errors.get('key') %} field--invalid{% endif %}">
+        {% if mode == 'create' %}
+        <label class="field__label" for="field-key">{{ t('调用标识') }}<span class="required" aria-hidden="true">*</span></label>
+        <input class="input mono" id="field-key" name="key" value="{{ values.key }}" required aria-required="true"
+               placeholder="lechang-prod" autocomplete="off" spellcheck="false"
+               {% if errors.get('key') %}aria-invalid="true" aria-describedby="err-key"{% endif %}>
+        {% else %}
+        <span class="field__label">{{ t('调用标识') }}</span>
+        <div class="readonly mono">{{ values.key }}</div>
+        {% endif %}
+        {% if errors.get('key') %}<p class="field__error" id="err-key" role="alert">{{ t(errors.get('key')) }}</p>{% endif %}
+        <p class="field__hint">{{ t('小写字母、数字与连字符。模型调用工具时传这个值，创建后不能修改。') }}</p>
+      </div>
+      <div class="field">
+        <label class="switch-row" for="enabled">
+          <span class="field__label">{{ t('启用') }}</span>
+          <input class="switch__input" type="checkbox" id="enabled" name="enabled"{% if values.enabled %} checked{% endif %}>
+          <span class="switch__track" aria-hidden="true"></span>
+        </label>
+        <p class="field__hint">{{ t('停用后模型不能查询这个环境，目标配置仍保留。') }}</p>
+      </div>
+    </section>
+    {% if mode == 'create' %}
+    <section class="card form-section">
+      <h2 class="form-section__title">{{ t('可以这样填') }}</h2>
+      <ul class="env-examples">
+        <li><span>{{ t('乐畅生产') }}</span><span class="mono">lechang-prod</span></li>
+        <li><span>{{ t('畅聊生产') }}</span><span class="mono">changliao-prod</span></li>
+        <li><span>{{ t('测试') }}</span><span class="mono">test</span></li>
+      </ul>
+    </section>
+    {% endif %}
+    <div class="form-actions">
+      <a class="btn btn--secondary" href="/environments">{{ t('取消') }}</a>
+      <button class="btn btn--primary" type="submit">{{ t('保存环境') if mode == 'create' else t('保存修改') }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

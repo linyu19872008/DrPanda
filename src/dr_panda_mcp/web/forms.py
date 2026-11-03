@@ -339,6 +339,7 @@ def parse_form(
     mode: str,
     existing: Target | None = None,
     defaults: Mapping[str, int] | None = None,
+    environments: list[Any] | None = None,
 ) -> tuple[TargetDraft | None, dict[str, str], dict[str, str]]:
     """解析并校验表单。返回 ``(draft, errors, values)``；有错误时 draft 为 None。"""
     errors: dict[str, str] = {}
@@ -349,6 +350,8 @@ def parse_form(
     values["enabled"] = "on" if _checked(form, "enabled") else ""
     if not existing and not name:
         errors["name"] = "名称不能为空"
+    environment_key = _environment_key(form, existing, environments or [], errors)
+    values["environment"] = environment_key
 
     options: dict[str, Any] = {}
     for field in spec.options:
@@ -396,8 +399,30 @@ def parse_form(
         enabled=values["enabled"] == "on",
         options=options,
         secret_patch=SecretPatch(set=secrets_set, clear=frozenset(secrets_clear)),
+        environment_key=environment_key,
     )
     return draft, {}, values
+
+
+def _environment_key(
+    form: Mapping[str, Any],
+    existing: Target | None,
+    environments: list[Any],
+    errors: dict[str, str],
+) -> str:
+    """新建时选定环境；编辑时环境不可改。只有一个环境时可以不提交。"""
+    if existing is not None:
+        submitted = _text(form, "environment")
+        if submitted and submitted != existing.environment_key:
+            errors["environment"] = "环境创建后不可修改"
+        return existing.environment_key
+    keys = [str(getattr(item, "key", "")) for item in environments]
+    chosen = _text(form, "environment")
+    if not chosen and len(keys) == 1:
+        chosen = keys[0]
+    if keys and chosen not in keys or not chosen and len(keys) > 1:
+        errors["environment"] = "请选择环境"
+    return chosen
 
 
 def _cross_validate(

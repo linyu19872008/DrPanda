@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import Counter
 from datetime import UTC, datetime
@@ -16,7 +17,7 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
-from dr_panda_mcp import auth
+from dr_panda_mcp import auth, client_install
 from dr_panda_mcp import errors as app_errors
 from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.connectors import base as connector_base
@@ -36,6 +37,10 @@ _FLASH_MESSAGES = {
     "deleted": ("success", "目标已删除"),
     "saved": ("success", "系统配置已保存"),
     "reset": ("success", "系统配置已恢复默认值"),
+    "env_created": ("success", "环境已创建"),
+    "env_updated": ("success", "环境已保存"),
+    "env_toggled": ("success", "环境状态已切换"),
+    "env_deleted": ("success", "环境已删除"),
 }
 
 
@@ -51,33 +56,47 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
 
     @server.custom_route("/", methods=["GET"])
     async def index(request: Request) -> HTMLResponse:
+        environments = await store.list_environments()
+        current = _current_environment(
+            environments, request.query_params.get("env", "")
+        )
+        env_key = current.key if current is not None else ""
         all_views = views.list_views(await store.list_all())
+        env_views = views.filter_views(all_views, environment=env_key or None)
         q = request.query_params.get("q", "").strip()
         type_ = request.query_params.get("type", "").strip() or None
         if type_ is not None and type_ not in forms.TYPE_SPECS:
             type_ = None
-        rows = views.filter_views(all_views, q=q, type_=type_)
+        rows = views.filter_views(env_views, q=q, type_=type_)
         return render.render(
             "index.html",
             request=request,
             flash=_flash(request),
             rows=rows,
-            stats=views.stats(all_views),
+            stats=views.stats(env_views),
             q=q,
             active_type=type_,
-            type_filters=_type_filters(q, type_, all_views),
+            type_filters=_type_filters(q, type_, env_views, env_key),
             type_cards=forms.type_cards(),
-            has_targets=bool(all_views),
+            has_targets=bool(env_views),
+            has_any_targets=bool(all_views),
+            environments=environments,
+            current_env=current,
+            show_default_hint=_show_default_hint(environments),
         )
 
     @server.custom_route("/targets/new", methods=["GET"])
     async def new_target(request: Request) -> Response:
         type_ = request.query_params.get("type", "").strip()
         if not type_:
+            environments = await store.list_environments()
+            current = _current_environment(environments, _query_env(request))
             return render.render(
                 "targets_new.html",
                 request=request,
                 type_cards=forms.type_cards(),
+                env=current.key if current is not None else "",
+                current_env=current,
             )
         spec = forms.spec_for(type_)
         if spec is None:
@@ -85,7 +104,8 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         current = await settings_module.load(store)
         defaults = settings_module.target_form_defaults(current)
         values = forms.initial_values(spec, defaults=defaults)
-        return _form_page(
+        values["environment"] = await _selected_environment(store, request)
+        return await _form_page(
             request,
             spec,
             values=values,
@@ -93,6 +113,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             mode="create",
             existing=None,
             common_defaults=defaults,
+            store=store,
         )
 
     @server.custom_route("/targets", methods=["POST"])
@@ -103,51 +124,61 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             return _bad_type(request)
         current = await settings_module.load(store)
         defaults = settings_module.target_form_defaults(current)
+        environments = await store.list_environments()
         draft, errors, values = forms.parse_form(
-            form, spec=spec, mode="create", defaults=defaults
+            form, spec=spec, mode="create", defaults=defaults, environments=environments
         )
         if draft is None:
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="create",
-                existing=None, common_defaults=defaults,
+                existing=None, common_defaults=defaults, store=store,
             )
         if str(form.get("action", "")) == "test":
             # 兼容旧表单（HTML 回退）：只探测、不保存；新交互走 /targets/probe。
             result = await _test_draft_target(draft, None)
-            return _probe_render(
+            return await _probe_render(
                 request, spec, values=values, mode="create", existing=None,
-                result=result, common_defaults=defaults,
+                result=result, common_defaults=defaults, store=store,
             )
-        # 重名先报错，避免“名冲突”被探测失败掩盖。
-        if await store.get(draft.name) is not None:
+        # 重名先报错，避免“名冲突”被探测失败掩盖。同一环境内唯一，不同环境可以同名。
+        try:
+            taken = await store.find(draft.name, environment=draft.environment_key)
+        except app_errors.DrPandaError as exc:
+            return await _invalid_form(
+                request, spec, values=values, errors={"environment": str(exc)},
+                mode="create", existing=None, common_defaults=defaults,
+                message=str(exc), store=store,
+            )
+        if taken is not None:
             message = f"目标名 {draft.name} 已存在"
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors={"_form": message},
                 mode="create", existing=None, common_defaults=defaults,
-                message=message,
+                message=message, store=store,
             )
         result = await _test_draft_target(draft, None)
         if not result.get("ok"):
-            return _probe_render(
+            return await _probe_render(
                 request, spec, values=values, mode="create", existing=None,
-                result=result, common_defaults=defaults, status=400,
+                result=result, common_defaults=defaults, status=400, store=store,
             )
         try:
             created = await store.create(draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="create",
-                existing=None, common_defaults=defaults, message=str(exc),
+                existing=None, common_defaults=defaults, message=str(exc), store=store,
             )
         await _record_probe_success(created.id)
+        location = _redirect_target("/", flash="created", env=created.environment_key)
         if async_api.wants_json(request):
             return async_api.ok(
                 request,
                 message="目标已创建",
-                data={"redirect": _redirect_target("/", flash="created")},
+                data={"redirect": location},
             )
-        return _redirect("/", flash="created")
+        return _redirect(location)
 
     @server.custom_route("/targets/probe", methods=["POST"])
     async def probe_new_target(request: Request) -> Response:
@@ -158,18 +189,19 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             return _bad_type(request)
         current = await settings_module.load(store)
         defaults = settings_module.target_form_defaults(current)
+        environments = await store.list_environments()
         draft, errors, values = forms.parse_form(
-            form, spec=spec, mode="create", defaults=defaults
+            form, spec=spec, mode="create", defaults=defaults, environments=environments
         )
         if draft is None:
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="create",
-                existing=None, common_defaults=defaults,
+                existing=None, common_defaults=defaults, store=store,
             )
         result = await _test_draft_target(draft, None)
-        return _probe_render(
+        return await _probe_render(
             request, spec, values=values, mode="create", existing=None,
-            result=result, common_defaults=defaults,
+            result=result, common_defaults=defaults, store=store,
         )
 
     @server.custom_route("/targets/{target_id:int}/probe", methods=["POST"])
@@ -180,18 +212,19 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             return _not_found(request, "目标不存在或已被删除")
         spec = _spec(target)
         form = await request.form()
+        environments = await store.list_environments()
         draft, errors, values = forms.parse_form(
-            form, spec=spec, mode="edit", existing=target
+            form, spec=spec, mode="edit", existing=target, environments=environments
         )
         if draft is None:
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="edit",
-                existing=target,
+                existing=target, store=store,
             )
         result = await _test_draft_target(draft, target)
-        return _probe_render(
+        return await _probe_render(
             request, spec, values=values, mode="edit", existing=target,
-            result=result,
+            result=result, store=store,
         )
 
     @server.custom_route("/targets/{target_id:int}/edit", methods=["GET"])
@@ -199,8 +232,9 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
             return _error(request, "目标不存在或已被删除", 404, "找不到目标")
-        return _edit_page(
-            request, target, values=forms.initial_values(_spec(target), target), errors={}
+        return await _edit_page(
+            request, target, values=forms.initial_values(_spec(target), target),
+            errors={}, store=store,
         )
 
     @server.custom_route("/targets/{target_id:int}", methods=["POST"])
@@ -210,46 +244,48 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             return _not_found(request, "目标不存在或已被删除")
         spec = _spec(target)
         form = await request.form()
+        environments = await store.list_environments()
         draft, errors, values = forms.parse_form(
-            form, spec=spec, mode="edit", existing=target
+            form, spec=spec, mode="edit", existing=target, environments=environments
         )
         if draft is None:
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="edit",
-                existing=target,
+                existing=target, store=store,
             )
         if str(form.get("action", "")) == "test":
             result = await _test_draft_target(draft, target)
-            return _probe_render(
+            return await _probe_render(
                 request, spec, values=values, mode="edit", existing=target,
-                result=result,
+                result=result, store=store,
             )
         probed = False
         if forms.connection_changed(target, draft):
             result = await _test_draft_target(draft, target)
             if not result.get("ok"):
-                return _probe_render(
+                return await _probe_render(
                     request, spec, values=values, mode="edit", existing=target,
-                    result=result, status=400,
+                    result=result, status=400, store=store,
                 )
             probed = True
         try:
             await store.update(target.id, draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
-            return _invalid_form(
+            return await _invalid_form(
                 request, spec, values=values, errors=errors, mode="edit",
-                existing=target, message=str(exc),
+                existing=target, message=str(exc), store=store,
             )
         if probed:
             await _record_probe_success(target.id)
+        location = _redirect_target("/", flash="updated", env=target.environment_key)
         if async_api.wants_json(request):
             return async_api.ok(
                 request,
                 message="修改已保存",
-                data={"redirect": _redirect_target("/", flash="updated")},
+                data={"redirect": location},
             )
-        return _redirect("/", flash="updated")
+        return _redirect(location)
 
     @server.custom_route("/targets/{target_id:int}/toggle", methods=["POST"])
     async def toggle_target(request: Request) -> Response:
@@ -268,10 +304,10 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 data={
                     "enabled": updated.enabled,
                     "label": label,
-                    "stats": _stats_payload(await store.list_all()),
+                    "stats": _stats_payload(await _targets_in_environment(store, updated.environment_key)),
                 },
             )
-        return _redirect("/", flash="toggled")
+        return _redirect("/", flash="toggled", env=updated.environment_key)
 
     @server.custom_route("/targets/{target_id:int}/delete", methods=["GET"])
     async def delete_confirm(request: Request) -> Response:
@@ -287,39 +323,192 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
             return _error(request, "目标不存在或已被删除", 404, "找不到目标")
+        env_key = target.environment_key
         await store.delete(target.id, auth.current_actor())
-        return _redirect("/", flash="deleted")
+        return _redirect("/", flash="deleted", env=env_key)
+
+    async def _probe_saved_target(target: Target) -> tuple[bool, str | None]:
+        try:
+            await runtime.catalog.test_connection(
+                target.name,
+                get_connector(target.type),
+                environment=target.environment_key,
+                allow_disabled_environment=True,
+            )
+        except app_errors.DrPandaError as exc:
+            return False, redact(str(exc), target.secret.values())
+        except Exception as exc:
+            logger.warning("测试连接失败：%s", target.name, exc_info=True)
+            return False, redact(f"未预期错误：{exc}", target.secret.values())
+        return True, None
+
+    async def _test_response(request: Request, target: Target, ok: bool, message: str | None) -> Response:
+        updated = await store.record_test(target.id, ok, message, auth.current_actor())
+        if async_api.wants_json(request):
+            return async_api.ok(
+                request,
+                data={
+                    **_row_test_payload(updated),
+                    "stats": _stats_payload(
+                        await _targets_in_environment(store, updated.environment_key)
+                    ),
+                },
+            )
+        return _redirect(
+            "/",
+            flash="tested",
+            result="ok" if ok else "fail",
+            name=target.name,
+            env=updated.environment_key,
+        )
 
     @server.custom_route("/targets/{target_id:int}/test", methods=["POST"])
     async def test_target(request: Request) -> Response:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
             return _not_found(request, "目标不存在或已被删除")
-        ok = True
-        message: str | None = None
+        ok, message = await _probe_saved_target(target)
+        return await _test_response(request, target, ok, message)
+
+    @server.custom_route("/targets/{target_id:int}/install-client", methods=["POST"])
+    async def install_client(request: Request) -> Response:
+        target = await _target(store, request.path_params["target_id"])
+        if target is None:
+            return _not_found(request, "目标不存在或已被删除")
+        extra = views.requested_install_extra(target)
+        if extra is None:
+            message = "当前失败不是缺少客户端，无需安装"
+            if async_api.wants_json(request):
+                return async_api.fail(request, async_api.CODE_BAD_REQUEST, message, status=400)
+            return _error(request, message, 400)
         try:
-            await runtime.catalog.test_connection(target.name, get_connector(target.type))
-        except app_errors.DrPandaError as exc:
-            ok = False
-            message = redact(str(exc), target.secret.values())
-        except Exception as exc:
-            ok = False
-            message = redact(f"未预期错误：{exc}", target.secret.values())
-            logger.warning("测试连接失败：%s", target.name, exc_info=True)
-        updated = await store.record_test(
-            target.id, ok, message, auth.current_actor()
-        )
-        if async_api.wants_json(request):
-            return async_api.ok(
-                request,
-                data={
-                    **_row_test_payload(updated),
-                    "stats": _stats_payload(await store.list_all()),
-                },
+            await client_install.install_extra(extra)
+        except client_install.InstallBusy:
+            message = "已有客户端正在安装，请稍后再试"
+            if async_api.wants_json(request):
+                return async_api.fail(request, async_api.CODE_CONFLICT, message, status=409)
+            return _error(request, message, 409)
+        except client_install.InstallError as exc:
+            message = redact(
+                app_errors.install_failed_message(extra, exc.reason),
+                target.secret.values(),
             )
-        return _redirect(
-            "/", flash="tested", result="ok" if ok else "fail", name=target.name
+            updated = await store.record_test(
+                target.id, False, message, auth.current_actor()
+            )
+            if async_api.wants_json(request):
+                return async_api.fail(
+                    request,
+                    async_api.CODE_UNAVAILABLE,
+                    "安装没有完成",
+                    status=400,
+                    data={
+                        **_row_test_payload(updated),
+                        "stats": _stats_payload(await store.list_all()),
+                    },
+                )
+            return _redirect("/", flash="tested", result="fail", name=target.name)
+        ok, message = await _probe_saved_target(target)
+        return await _test_response(request, target, ok, message)
+
+    @server.custom_route("/environments", methods=["GET"])
+    async def environments_index(request: Request) -> HTMLResponse:
+        return render.render(
+            "environments.html",
+            request=request,
+            flash=_flash(request),
+            environments=await store.list_environments(),
         )
+
+    @server.custom_route("/environments/new", methods=["GET"])
+    async def new_environment(request: Request) -> HTMLResponse:
+        return _environment_form(request, mode="create", values={"key": "", "title": "", "enabled": "on"}, errors={})
+
+    @server.custom_route("/environments", methods=["POST"])
+    async def create_environment(request: Request) -> Response:
+        form = await request.form()
+        values, errors = _environment_values(form)
+        if errors:
+            return _environment_form(request, mode="create", values=values, errors=errors, status=400)
+        try:
+            created = await store.create_environment(
+                values["key"],
+                values["title"],
+                auth.current_actor(),
+                enabled=values["enabled"] == "on",
+            )
+        except app_errors.EnvironmentKeyTaken as exc:
+            errors["key"] = str(exc)
+            return _environment_form(request, mode="create", values=values, errors=errors, status=400)
+        except app_errors.InvalidTarget as exc:
+            errors["_form"] = str(exc)
+            return _environment_form(request, mode="create", values=values, errors=errors, status=400)
+        return _redirect("/", flash="env_created", env=created.key)
+
+    @server.custom_route("/environments/{environment_id:int}/edit", methods=["GET"])
+    async def edit_environment(request: Request) -> Response:
+        env = await _environment(store, request.path_params["environment_id"])
+        if env is None:
+            return _error(request, "环境不存在或已被删除", 404, "找不到环境")
+        return _environment_form(
+            request,
+            mode="edit",
+            values={"key": env.key, "title": env.title, "enabled": "on" if env.enabled else ""},
+            errors={},
+            environment=env,
+        )
+
+    @server.custom_route("/environments/{environment_id:int}", methods=["POST"])
+    async def update_environment(request: Request) -> Response:
+        env = await _environment(store, request.path_params["environment_id"])
+        if env is None:
+            return _error(request, "环境不存在或已被删除", 404, "找不到环境")
+        form = await request.form()
+        values, errors = _environment_values(form, existing_key=env.key)
+        if errors:
+            return _environment_form(
+                request, mode="edit", values=values, errors=errors, environment=env, status=400
+            )
+        try:
+            await store.update_environment(
+                env.id,
+                title=values["title"],
+                enabled=values["enabled"] == "on",
+                actor=auth.current_actor(),
+            )
+        except app_errors.DrPandaError as exc:
+            errors["_form"] = str(exc)
+            return _environment_form(
+                request, mode="edit", values=values, errors=errors, environment=env, status=400
+            )
+        return _redirect("/environments", flash="env_updated")
+
+    @server.custom_route("/environments/{environment_id:int}/toggle", methods=["POST"])
+    async def toggle_environment(request: Request) -> Response:
+        env = await _environment(store, request.path_params["environment_id"])
+        if env is None:
+            return _error(request, "环境不存在或已被删除", 404, "找不到环境")
+        await store.update_environment(
+            env.id, title=env.title, enabled=not env.enabled, actor=auth.current_actor()
+        )
+        return _redirect("/environments", flash="env_toggled")
+
+    @server.custom_route("/environments/{environment_id:int}/delete", methods=["POST"])
+    async def delete_environment(request: Request) -> Response:
+        env = await _environment(store, request.path_params["environment_id"])
+        if env is None:
+            return _error(request, "环境不存在或已被删除", 404, "找不到环境")
+        try:
+            await store.delete_environment(env.id, auth.current_actor())
+        except app_errors.EnvironmentNotEmpty as exc:
+            return render.render(
+                "environments.html",
+                request=request,
+                environments=await store.list_environments(),
+                flash={"tone": "danger", "title": "还不能删除这个环境", "detail": str(exc)},
+                status_code=400,
+            )
+        return _redirect("/environments", flash="env_deleted")
 
     @server.custom_route("/settings", methods=["GET"])
     async def settings_view(request: Request) -> HTMLResponse:
@@ -470,7 +659,10 @@ def _spec(target: Target) -> forms.TypeSpec:
 
 
 def _type_filters(
-    q: str, active_type: str | None, all_views: list[views.TargetView]
+    q: str,
+    active_type: str | None,
+    all_views: list[views.TargetView],
+    environment: str = "",
 ) -> list[dict]:
     counts = Counter(view.type for view in all_views)
     items = [
@@ -478,7 +670,7 @@ def _type_filters(
             "type": "",
             "label": "全部",
             "count": len(all_views),
-            "href": _list_href(q, None),
+            "href": _list_href(q, None, environment),
             "active": active_type is None,
         }
     ]
@@ -488,15 +680,17 @@ def _type_filters(
                 "type": type_,
                 "label": spec.label,
                 "count": counts.get(type_, 0),
-                "href": _list_href(q, type_),
+                "href": _list_href(q, type_, environment),
                 "active": active_type == type_,
             }
         )
     return items
 
 
-def _list_href(q: str, type_: str | None) -> str:
+def _list_href(q: str, type_: str | None, environment: str = "") -> str:
     params: dict[str, str] = {}
+    if environment:
+        params["env"] = environment
     if q:
         params["q"] = q
     if type_:
@@ -525,7 +719,10 @@ def _flash(request: Request) -> dict[str, str] | None:
     if message is None:
         return None
     tone, title = message
-    return {"tone": tone, "title": title, "detail": ""}
+    detail = ""
+    if code == "env_created":
+        detail = "现在可以在这个环境里登记目标。调用标识创建后不能修改。"
+    return {"tone": tone, "title": title, "detail": detail}
 
 
 def _redirect_target(path: str, **params: str) -> str:
@@ -548,7 +745,7 @@ def _probe_timeout_ms(values: dict[str, str]) -> int:
     return int((seconds + 10) * 1000)
 
 
-def _form_page(
+async def _form_page(
     request: Request,
     spec: forms.TypeSpec,
     *,
@@ -556,10 +753,16 @@ def _form_page(
     errors: dict[str, str],
     mode: str,
     existing: Target | None,
+    store: ConfigStore,
     status: int = 200,
     common_defaults: dict[str, int] | None = None,
     test_result: dict[str, object] | None = None,
 ) -> HTMLResponse:
+    environments = await store.list_environments()
+    if existing is not None:
+        values["environment"] = existing.environment_key
+    elif not values.get("environment") and len(environments) == 1:
+        values["environment"] = environments[0].key
     return render.render(
         "form.html",
         request=request,
@@ -568,6 +771,7 @@ def _form_page(
         existing=existing,
         values=values,
         errors=errors,
+        environments=environments,
         option_rows=forms.option_rows(spec, values, errors),
         secret_rows=forms.secret_rows(spec, errors, existing),
         common_rows=forms.common_rows(
@@ -584,23 +788,25 @@ def _form_page(
     )
 
 
-def _edit_page(
+async def _edit_page(
     request: Request,
     target: Target,
     *,
     values: dict[str, str],
     errors: dict[str, str],
+    store: ConfigStore,
     status: int = 200,
     test_result: dict[str, object] | None = None,
 ) -> HTMLResponse:
     spec = _spec(target)
-    return _form_page(
+    return await _form_page(
         request,
         spec,
         values=values,
         errors=errors,
         mode="edit",
         existing=target,
+        store=store,
         status=status,
         test_result=test_result,
     )
@@ -620,7 +826,7 @@ def _not_found(request: Request, message: str) -> Response:
     return _error(request, message, 404, "找不到目标")
 
 
-def _invalid_form(
+async def _invalid_form(
     request: Request,
     spec: forms.TypeSpec,
     *,
@@ -628,6 +834,7 @@ def _invalid_form(
     errors: dict[str, str],
     mode: str,
     existing: Target | None,
+    store: ConfigStore,
     common_defaults: dict[str, int] | None = None,
     message: str | None = None,
 ) -> Response:
@@ -643,19 +850,20 @@ def _invalid_form(
             errors=errors or None,
             data={"count": len(field_errors)},
         )
-    return _form_page(
+    return await _form_page(
         request,
         spec,
         values=values,
         errors=errors,
         mode=mode,
         existing=existing,
+        store=store,
         status=400,
         common_defaults=common_defaults,
     )
 
 
-def _probe_render(
+async def _probe_render(
     request: Request,
     spec: forms.TypeSpec,
     *,
@@ -663,19 +871,21 @@ def _probe_render(
     mode: str,
     existing: Target | None,
     result: dict[str, object],
+    store: ConfigStore,
     common_defaults: dict[str, int] | None = None,
     status: int = 200,
 ) -> Response:
     """探测结果：JSON 直接返回，HTML 重渲染表单并展示结果（不写库）。"""
     if async_api.wants_json(request):
         return _probe_json(request, result)
-    return _form_page(
+    return await _form_page(
         request,
         spec,
         values=values,
         errors={},
         mode=mode,
         existing=existing,
+        store=store,
         status=status,
         common_defaults=common_defaults,
         test_result=result,
@@ -718,7 +928,8 @@ def _row_test_payload(target: Target) -> dict[str, object]:
     return {
         "test_ok": view.last_test_ok,
         "test_time": view.last_test_at_display,
-        "test_error": view.last_test_error,
+        "test_error": view.last_test_message,
+        "test_command": view.last_test_command,
     }
 
 
@@ -925,6 +1136,84 @@ async def _test_draft_target(
         "checked_at": _now_display(),
         "duration_ms": _elapsed_ms(started),
     }
+
+
+def _current_environment(environments: list, requested: str):
+    key = (requested or "").strip()
+    if key:
+        match = next((item for item in environments if item.key == key), None)
+        if match is not None:
+            return match
+    return environments[0] if environments else None
+
+
+def _show_default_hint(environments: list) -> bool:
+    return len(environments) == 1 and environments[0].key == "default"
+
+
+def _query_env(request: Request) -> str:
+    return request.query_params.get("env", "").strip()
+
+
+async def _selected_environment(store: ConfigStore, request: Request) -> str:
+    environments = await store.list_environments()
+    current = _current_environment(environments, _query_env(request))
+    return current.key if current is not None else ""
+
+
+async def _targets_in_environment(store: ConfigStore, key: str) -> list[Target]:
+    targets = await store.list_all()
+    return [target for target in targets if target.environment_key == key]
+
+
+async def _environment(store: ConfigStore, environment_id: int):
+    environments = await store.list_environments()
+    return next((item for item in environments if item.id == environment_id), None)
+
+
+_ENV_KEY_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
+
+
+def _environment_values(
+    form, *, existing_key: str = ""
+) -> tuple[dict[str, str], dict[str, str]]:
+    title = " ".join(str(form.get("title", "")).split())
+    key = existing_key or str(form.get("key", "")).strip()
+    enabled = "on" if form.get("enabled") else ""
+    values = {"title": title, "key": key, "enabled": enabled}
+    errors: dict[str, str] = {}
+    if not title:
+        errors["title"] = "展示名不能为空"
+    elif len(title) > 64:
+        errors["title"] = "展示名最长 64 个字符"
+    if not existing_key:
+        if not key:
+            errors["key"] = "调用标识不能为空"
+        elif not _ENV_KEY_RE.match(key):
+            errors["key"] = (
+                "调用标识只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
+            )
+    return values, errors
+
+
+def _environment_form(
+    request: Request,
+    *,
+    mode: str,
+    values: dict[str, str],
+    errors: dict[str, str],
+    environment=None,
+    status: int = 200,
+) -> HTMLResponse:
+    return render.render(
+        "environment_form.html",
+        request=request,
+        mode=mode,
+        values=values,
+        errors=errors,
+        environment=environment,
+        status_code=status,
+    )
 
 
 def _error(

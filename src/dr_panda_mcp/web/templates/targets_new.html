@@ -1,17 +1,26 @@
 {% extends "base.html" %}
+{% from "_macros.html" import env_label %}
 {% block title %}{{ t('新建目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/{% if env %}?env={{ env }}{% endif %}">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
 <div class="page-header">
   <div>
     <h1>{{ t('选择目标类型') }}</h1>
     <p class="page-subtitle">{{ t('不同系统的连接方式、授权范围和只读规则不同，先选类型再填连接。') }}</p>
   </div>
-  <a class="btn btn--secondary" href="/">{{ t('返回列表') }}</a>
+  <a class="btn btn--secondary" href="/{% if env %}?env={{ env }}{% endif %}">{{ t('返回列表') }}</a>
 </div>
+{% if current_env %}
+<div class="alert alert--info" role="status">
+  <div class="alert__body">
+    <strong>{{ env_label(current_env) }} <span class="mono">{{ current_env.key }}</span></strong>
+    <span class="alert__detail">{{ t('目标会登记到这个环境，保存后不能更换。不同环境可以有同名目标。') }}</span>
+  </div>
+</div>
+{% endif %}
 <div class="type-grid">
   {% for card in type_cards %}
-  <a class="type-card" href="/targets/new?type={{ card.type }}">
+  <a class="type-card" href="/targets/new?type={{ card.type }}{% if env %}&env={{ env }}{% endif %}">
     <span class="type-card__head">
       <span class="badge badge--type">{{ t(card.label) }}</span>
       <span class="type-card__arrow" aria-hidden="true">→</span>

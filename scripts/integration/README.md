@@ -11,8 +11,8 @@ bash scripts/integration/mysql-tls/gen-certs.sh
 # 1. 起 15 个上游（MySQL TLS/mTLS + 4 个 ES + Mongo 无认证/TLS/mTLS/X.509/RS + Redis ACL/TLS；Kafka 暂不启动）
 docker compose -f scripts/integration/compose.yaml up -d
 
-# 2. 安装驱动
-uv sync --extra mysql --extra mongo --extra redis --extra kafka
+# 2. 安装驱动。--inexact 保留已经装好的其他 extra；一次装齐也可以用 uv sync --all-extras
+uv sync --extra mysql --extra mongo --extra redis --extra kafka --inexact
 
 # 3. 起服务（默认 8111）
 uv run dr-panda-mcp

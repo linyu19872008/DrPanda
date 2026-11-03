@@ -38,9 +38,7 @@ class _MySQLClient:
         try:
             import asyncmy
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "mysql 客户端未安装：uv sync --extra mysql"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("mysql")) from exc
 
         connection = await _connect(asyncmy, self.target)
         try:
@@ -59,9 +57,7 @@ class _MySQLClient:
         try:
             import asyncmy
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "mysql 客户端未安装：uv sync --extra mysql"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("mysql")) from exc
 
         async def _fetch() -> list[dict[str, Any]]:
             connection = await _connect(asyncmy, self.target)

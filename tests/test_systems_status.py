@@ -40,5 +40,15 @@ async def test_systems_status_returns_envelope(runtime: Runtime) -> None:
     }
     assert payload["target"] == "*"
     assert payload["type"] == "all"
-    assert payload["rows"] == []
-    assert payload["stats"] == {"targets": 0, "enabled": 0}
+    assert payload["rows"] == [
+        {
+            "key": "default",
+            "title": "默认",
+            "enabled": True,
+            "targets": 0,
+            "enabled_targets": 0,
+        }
+    ]
+    assert payload["stats"]["environments"] == 1
+    assert payload["stats"]["targets"] == 0
+    assert payload["notes"]

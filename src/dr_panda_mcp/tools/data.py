@@ -23,6 +23,7 @@ from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import Target
 from dr_panda_mcp.tools.base import (
     TOOL_ANNOTATIONS,
+    EnvironmentParam,
     clamp_limit,
     finish,
     run_tool,
@@ -173,7 +174,9 @@ def _pick(row: dict[str, Any], *names: str) -> Any:
 def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     # ------------------------------------------------------------------ MySQL
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mysql_tables(target: str, db: str = "") -> dict[str, Any]:
+    async def mysql_tables(
+        target: str, db: str = "", environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """列出授权库的表（名称、类型、行数估算、注释）。"""
         params = {"db": db or None}
 
@@ -205,12 +208,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mysql_tables", name=target, target_type="mysql",
+            runtime, tool="mysql_tables", name=target, environment=environment, target_type="mysql",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mysql_describe(target: str, table: str, db: str = "") -> dict[str, Any]:
+    async def mysql_describe(
+        target: str, table: str, db: str = "", environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看表结构（字段与索引）。"""
         params = {"table": table, "db": db or None}
 
@@ -256,12 +261,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mysql_describe", name=target, target_type="mysql",
+            runtime, tool="mysql_describe", name=target, environment=environment, target_type="mysql",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mysql_query(target: str, sql: str, limit: int = 0) -> dict[str, Any]:
+    async def mysql_query(
+        target: str, sql: str, limit: int = 0, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """执行单条只读 SQL（自动补 LIMIT）。"""
         params = {"sql": sql, "limit": limit or None}
 
@@ -288,12 +295,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mysql_query", name=target, target_type="mysql",
+            runtime, tool="mysql_query", name=target, environment=environment, target_type="mysql",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mysql_explain(target: str, sql: str) -> dict[str, Any]:
+    async def mysql_explain(
+        target: str, sql: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看 SELECT 的执行计划（不使用 EXPLAIN ANALYZE）。"""
         params = {"sql": sql}
 
@@ -316,12 +325,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mysql_explain", name=target, target_type="mysql",
+            runtime, tool="mysql_explain", name=target, environment=environment, target_type="mysql",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mysql_processlist(target: str) -> dict[str, Any]:
+    async def mysql_processlist(
+        target: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看当前会话列表（SHOW PROCESSLIST）。"""
         params: dict[str, Any] = {}
 
@@ -338,13 +349,15 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mysql_processlist", name=target, target_type="mysql",
+            runtime, tool="mysql_processlist", name=target, environment=environment, target_type="mysql",
             params=params, handler=handler,
         )
 
     # ------------------------------------------------------------------ Mongo
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def mongo_collections(target: str, db: str) -> dict[str, Any]:
+    async def mongo_collections(
+        target: str, db: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """列出库里的集合（文档数估算与索引数）。"""
         params = {"db": db}
 
@@ -372,7 +385,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mongo_collections", name=target, target_type="mongo",
+            runtime, tool="mongo_collections", name=target, environment=environment, target_type="mongo",
             params=params, handler=handler,
         )
 
@@ -386,6 +399,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         sort: str = "",
         limit: int = 0,
         skip: int = 0,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """按过滤条件查询文档（filter 必填）。"""
         params = {
@@ -449,7 +463,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mongo_find", name=target, target_type="mongo",
+            runtime, tool="mongo_find", name=target, environment=environment, target_type="mongo",
             params=params, handler=handler,
         )
 
@@ -460,6 +474,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         collection: str,
         pipeline: str,
         limit: int = 0,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """执行聚合管道（阶段白名单；自动补 $limit）。"""
         params = {"db": db, "collection": collection, "pipeline": pipeline, "limit": limit or None}
@@ -487,13 +502,16 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mongo_aggregate", name=target, target_type="mongo",
+            runtime, tool="mongo_aggregate", name=target, environment=environment, target_type="mongo",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
     async def mongo_stats(
-        target: str, db: str, collection: str = ""
+        target: str,
+        db: str,
+        collection: str = "",
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """查看集合或库的统计信息。"""
         params = {"db": db, "collection": collection or None}
@@ -521,13 +539,15 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="mongo_stats", name=target, target_type="mongo",
+            runtime, tool="mongo_stats", name=target, environment=environment, target_type="mongo",
             params=params, handler=handler,
         )
 
     # ------------------------------------------------------------ Elasticsearch
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def es_mapping(target: str, index: str) -> dict[str, Any]:
+    async def es_mapping(
+        target: str, index: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看索引字段 mapping 与分片设置。"""
         params = {"index": index}
 
@@ -548,7 +568,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="es_mapping", name=target, target_type="elasticsearch",
+            runtime, tool="es_mapping", name=target, environment=environment, target_type="elasticsearch",
             params=params, handler=handler,
         )
 
@@ -561,6 +581,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         size: int = 0,
         sort: str = "",
         search_after: str = "",
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """搜索索引（script、深分页与超限 size 会被拒绝）。"""
         params = {
@@ -623,12 +644,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="es_search", name=target, target_type="elasticsearch",
+            runtime, tool="es_search", name=target, environment=environment, target_type="elasticsearch",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def es_health(target: str) -> dict[str, Any]:
+    async def es_health(
+        target: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """集群健康概览。"""
         params: dict[str, Any] = {}
 
@@ -643,12 +666,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="es_health", name=target, target_type="elasticsearch",
+            runtime, tool="es_health", name=target, environment=environment, target_type="elasticsearch",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def es_index_stats(target: str, index: str) -> dict[str, Any]:
+    async def es_index_stats(
+        target: str, index: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """索引文档数与存储统计。"""
         params = {"index": index}
 
@@ -668,13 +693,15 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="es_index_stats", name=target, target_type="elasticsearch",
+            runtime, tool="es_index_stats", name=target, environment=environment, target_type="elasticsearch",
             params=params, handler=handler,
         )
 
     # ------------------------------------------------------------------ Redis
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def redis_get(target: str, key: str) -> dict[str, Any]:
+    async def redis_get(
+        target: str, key: str, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """查看单个 key 的类型、TTL 与有限内容。"""
         params = {"key": key}
 
@@ -699,13 +726,17 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="redis_get", name=target, target_type="redis",
+            runtime, tool="redis_get", name=target, environment=environment, target_type="redis",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
     async def redis_scan(
-        target: str, pattern: str = "*", count: int = 10, cursor: int = 0
+        target: str,
+        pattern: str = "*",
+        count: int = 10,
+        cursor: int = 0,
+        environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
         """游标扫描 key（COUNT ≤ 200；pattern 受 key 前缀限制）。"""
         params = {"pattern": pattern, "count": count, "cursor": cursor}
@@ -737,12 +768,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="redis_scan", name=target, target_type="redis",
+            runtime, tool="redis_scan", name=target, environment=environment, target_type="redis",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def redis_info(target: str, section: str = "") -> dict[str, Any]:
+    async def redis_info(
+        target: str, section: str = "", environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """读取 INFO（可指定 section）。"""
         params = {"section": section or None}
 
@@ -761,12 +794,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="redis_info", name=target, target_type="redis",
+            runtime, tool="redis_info", name=target, environment=environment, target_type="redis",
             params=params, handler=handler,
         )
 
     @server.tool(annotations=TOOL_ANNOTATIONS)
-    async def redis_slowlog(target: str, count: int = 10) -> dict[str, Any]:
+    async def redis_slowlog(
+        target: str, count: int = 10, environment: EnvironmentParam = ""
+    ) -> dict[str, Any]:
         """读取慢日志（SLOWLOG GET）。"""
         params = {"count": count}
 
@@ -789,6 +824,6 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             )
 
         return await run_tool(
-            runtime, tool="redis_slowlog", name=target, target_type="redis",
+            runtime, tool="redis_slowlog", name=target, environment=environment, target_type="redis",
             params=params, handler=handler,
         )

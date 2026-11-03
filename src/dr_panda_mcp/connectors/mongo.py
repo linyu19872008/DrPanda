@@ -99,9 +99,7 @@ class _MongoClient:
         try:
             from motor.motor_asyncio import AsyncIOMotorClient
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "mongo 客户端未安装：uv sync --extra mongo"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("mongo")) from exc
 
         tls_kwargs, paths = self._tls_kwargs()
         client = None

@@ -160,7 +160,8 @@ async def test_save_json_with_probe_success_writes(runtime: Runtime, probe_ok) -
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["redirect"] == "/?flash=created"
+    assert body["redirect"].startswith("/?flash=created")
+    assert "env=" in body["redirect"]
     assert target is not None
     # 保存时的探测结果落库，列表页不再显示“未测试”
     assert target.last_test_ok is True
@@ -192,14 +193,15 @@ async def test_save_html_success_still_redirects(runtime: Runtime, probe_ok) -> 
         response = await client.post("/targets", data=MYSQL)
 
     assert response.status_code == 303
-    assert response.headers["location"] == "/?flash=created"
+    assert response.headers["location"].startswith("/?flash=created")
+    assert "env=" in response.headers["location"]
 
 
 # ---------------------------------------------------------------------------
 # 列表行内动作与设置保存的 JSON 响应
 # ---------------------------------------------------------------------------
 async def test_list_test_and_toggle_json(runtime: Runtime, probe_ok, monkeypatch) -> None:
-    async def fake_connection(name: str, connector) -> None:
+    async def fake_connection(name: str, connector, **_kwargs) -> None:
         return None
 
     monkeypatch.setattr(runtime.catalog, "test_connection", fake_connection)

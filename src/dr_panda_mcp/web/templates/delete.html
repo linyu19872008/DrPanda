@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import env_label_existing %}
 {% block title %}{{ t('删除目标') }} · Dr Panda MCP{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
@@ -11,6 +12,7 @@
   <p>{{ t('确认删除') }} <strong class="mono">{{ target.name }}</strong>（{{ t(target.type_label) }}）？</p>
 
   <dl class="summary">
+    <div><dt>{{ t('所属环境') }}</dt><dd>{{ env_label_existing(target) }} <span class="mono">{{ target.environment_key }}</span></dd></div>
     <div><dt>{{ t('端点') }}</dt><dd class="mono">{{ t(target.endpoint) }}</dd></div>
     <div><dt>{{ t('授权范围') }}</dt><dd>{{ t(target.scope_source, **target.scope_params) }}</dd></div>
     <div><dt>{{ t('最近测试') }}</dt><dd>

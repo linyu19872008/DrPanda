@@ -49,8 +49,11 @@ class FakeStore:
     def __init__(self, targets: list[Target]) -> None:
         self._targets = {target.name: target for target in targets}
 
-    async def get(self, name: str) -> Target | None:
+    async def get(self, name: str, *, environment: str = "") -> Target | None:
         return self._targets.get(name)
+
+    async def find(self, name: str, *, environment: str = "") -> Target | None:
+        return await self.get(name, environment=environment)
 
     async def get_settings(self) -> dict[str, str]:
         return {"audit_retention_days": "90", "target_max_concurrency": "10"}

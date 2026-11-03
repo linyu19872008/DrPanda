@@ -37,7 +37,19 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
             connection.execute("SELECT key, value FROM settings")
         )
 
-    assert {"targets", "audit", "settings", "settings_history", "alembic_version"} <= tables
+    assert {
+        "targets",
+        "environments",
+        "audit",
+        "settings",
+        "settings_history",
+        "alembic_version",
+    } <= tables
+    with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
+        default_env = connection.execute(
+            "SELECT key, title, enabled FROM environments"
+        ).fetchall()
+    assert default_env == [("default", "默认", 1)]
     assert settings_rows == {
         "audit_retention_days": "90",
         "target_max_concurrency": "10",
@@ -210,6 +222,40 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
                 backup_sqlite_database(url, keep=20)
             connection.execute("DROP TABLE mcp_tokens")
             connection.execute("DROP TABLE users")
+            connection.execute("DROP TABLE environments")
+            connection.execute("ALTER TABLE targets RENAME TO targets_v7")
+            connection.execute(
+                """
+                CREATE TABLE targets (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    type VARCHAR(32) NOT NULL,
+                    name VARCHAR(64) NOT NULL,
+                    enabled BOOLEAN NOT NULL,
+                    options_json JSON NOT NULL,
+                    secret_json JSON NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    last_test_at DATETIME,
+                    last_test_ok BOOLEAN,
+                    last_test_error VARCHAR(512),
+                    CONSTRAINT uq_targets_name UNIQUE (name)
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO targets (
+                    id, type, name, enabled, options_json, secret_json,
+                    created_at, updated_at, last_test_at, last_test_ok, last_test_error
+                )
+                SELECT
+                    id, type, name, enabled, options_json, secret_json,
+                    created_at, updated_at, last_test_at, last_test_ok, last_test_error
+                FROM targets_v7
+                """
+            )
+            connection.execute("DROP TABLE targets_v7")
+            connection.execute("CREATE INDEX ix_targets_type ON targets (type)")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0003_backup_keep'"
             )

@@ -191,8 +191,8 @@ ul {
 }
 
 ::selection {
-  background: var(--accent-soft);
-  color: var(--text);
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .mono {
@@ -309,6 +309,7 @@ ul {
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .tab:hover {
@@ -438,6 +439,21 @@ ul {
   height: 28px;
   padding: 0 10px;
   font-size: 12.5px;
+}
+
+.btn--stable {
+  display: inline-grid;
+  justify-items: center;
+  align-items: center;
+}
+
+.btn--stable > .btn__label,
+.btn--stable > .btn__sizer {
+  grid-area: 1 / 1;
+}
+
+.btn__sizer {
+  visibility: hidden;
 }
 
 .btn--primary {
@@ -669,6 +685,89 @@ ul {
   font-size: 12.5px;
 }
 
+.env-switch {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.env-switch__item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.env-switch__item:hover {
+  border-color: var(--border-strong);
+  text-decoration: none;
+}
+
+.env-switch__item:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.env-switch__item.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.env-switch__item.is-disabled {
+  opacity: 0.85;
+}
+
+.env-switch__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.env-switch__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.env-switch__item.is-active .env-switch__title,
+.env-switch__item.is-active .env-switch__meta {
+  color: var(--accent);
+}
+
+.env-switch__item--new {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+}
+
+.env-examples {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.env-examples li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+}
+
 /* ---------------------------------------------------------------------------
    8. Table
    --------------------------------------------------------------------------- */
@@ -717,6 +816,34 @@ ul {
 .table .cell-actions {
   text-align: right;
   white-space: nowrap;
+}
+
+.table--targets .cell-name .link-strong,
+.table--targets .cell-endpoint .truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 901px) {
+  .table--targets {
+    table-layout: fixed;
+  }
+
+  .table--targets .col-name { width: 13%; }
+  .table--targets .col-type { width: 8%; }
+  .table--targets .col-endpoint { width: 18%; }
+  .table--targets .col-scope { width: 10%; }
+  .table--targets .col-status { width: 11%; }
+  .table--targets .col-actions { width: 230px; }
+
+  .table--targets .cell-test,
+  .table--targets .cell-endpoint,
+  .table--targets .cell-name {
+    overflow: hidden;
+  }
 }
 
 .link-strong {
@@ -845,14 +972,26 @@ ul {
 .details__body {
   margin: 6px 0 0;
   padding: 8px 10px;
-  max-height: 140px;
+  max-height: 220px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-subtle);
   color: var(--text-secondary);
+}
+
+.details__message {
+  margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.install-line {
+  margin-top: var(--space-2);
+}
+
+.details__body > .install-line:first-child {
+  margin-top: 0;
 }
 
 .switch {
@@ -866,6 +1005,15 @@ ul {
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
+}
+
+.switch__label {
+  display: inline-grid;
+  justify-items: start;
+}
+
+.switch__label > span {
+  grid-area: 1 / 1;
 }
 
 .switch__track {
@@ -1383,9 +1531,30 @@ ul {
   }
 }
 
+@media (max-width: 980px) {
+  .topbar__inner {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .tabs {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .brand__sub {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table--targets colgroup {
+    display: none;
   }
 
   .table--responsive thead {
@@ -2476,3 +2645,8 @@ dialog.modal .modal__panel {
 .probe-result__meta{display:block;margin-top:4px;color:var(--text-muted);font-size:12px}
 .form-gate-hint{margin:0 0 var(--space-2)}
 .settings-actions .alert{margin:0 0 var(--space-2)}
+
+/* 组件的 display 不能盖住 HTML hidden，否则空的提示槽会画成一条色带。 */
+[hidden] {
+  display: none !important;
+}

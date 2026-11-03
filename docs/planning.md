@@ -8,7 +8,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | v0.37 |
+| 版本 | v0.41 |
 | 更新 | 2026-11-03 |
 | 状态 | M0–M7 基础认证与首次安装已实现；MySQL/PostgreSQL 安装已验证；远程 TLS 待实机 |
 | 范围 | 目标、决策、形态、网页、配置库、系统配置、密钥加密、绝对只读、危险与高开销操作、类型字段、工具、运行、结构、依赖、测试、分期、未决 |
@@ -55,6 +55,10 @@
 | v0.35 | 2026-11-02 | 目标表单重构：连接分组、高级折叠、保存前测试连接、TLS 条件显示 |
 | v0.36 | 2026-11-03 | 前端约束 v2：允许同源 fetch；探测接口与保存门槛；列表/设置/登录/安装向导异步化；CSP |
 | v0.37 | 2026-11-03 | 配置台交互需要 JavaScript；只在连接字段变化时探测；Session 最短 30 分钟并与 CSRF 同步续期 |
+| v0.38 | 2026-11-03 | 可选依赖改为 `uv sync --extra <name> --inexact`，避免精确同步卸掉其他客户端；失败详情完整显示该命令 |
+| v0.39 | 2026-11-03 | 客户端未安装时，列表提供「安装」：服务在当前项目执行 `--inexact` 同步并立刻再测 |
+| v0.40 | 2026-11-03 | 失败详情不再展示或复制安装命令，只保留「安装」 |
+| v0.41 | 2026-11-03 | 环境是一等实体。目标名在环境内唯一；工具增加可选 `environment`；`systems_status` 先列环境；新密钥信封 v2 把环境写入 AAD |
 
 ## 1. 目标
 
@@ -227,7 +231,7 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 
 | 字段 | 存储位置 | 必填 | 默认 | 校验 |
 |---|---|---|---|---|
-| 名称 | `name` | 是 | — | `^[a-z0-9][a-z0-9-]{0,63}$`，不以 `-` 结尾，全局唯一，创建后不可改 |
+| 名称 | `name` | 是 | — | `^[a-z0-9][a-z0-9-]{0,63}$`，不以 `-` 结尾；在所属环境内唯一，不同环境可同名；创建后不可改 |
 | 类型 | `type` | 是 | — | 八种之一，创建后不可改 |
 | 启用 | `enabled` | 是 | true | 复选框 |
 | 超时 | `options.timeout_s` | 否 | 15 | 整数 1–120，单位秒 |
@@ -465,13 +469,26 @@ class Settings:                  # 解析并校验后的运行时策略
 | `created_at` | DateTime(timezone=True) | NOT NULL | UTC |
 | `last_used_at` | DateTime(timezone=True) | NULL | 最近认证时间 |
 
+`environments`
+
+| 列 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | BigInteger | 主键自增 | |
+| `key` | String(64) | NOT NULL, UNIQUE | 调用标识，创建后不可改。规则同 target 名 |
+| `title` | String(64) | NOT NULL | 展示名，可改，允许中文 |
+| `enabled` | Boolean | NOT NULL | 停用后排查工具拒绝该环境，网页仍可改配置、测连接 |
+| `created_at` / `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
+
+迁移总会种下 `key=default`、`title=默认`。只有这一个环境时，工具可以省略 `environment`。
+
 `targets`
 
 | 列 | 类型 | 约束 | 说明 |
 |---|---|---|---|
 | `id` | BigInteger | 主键自增 | |
+| `environment_id` | BigInteger | NOT NULL, FK environments.id | 创建后不可改 |
 | `type` | String(32) | NOT NULL | 类型枚举在应用层校验 |
-| `name` | String(64) | NOT NULL, UNIQUE | target 名 |
+| `name` | String(64) | NOT NULL | 在所属环境内唯一；不同环境可以同名 |
 | `enabled` | Boolean | NOT NULL | 默认 true |
 | `options_json` | JSON | NOT NULL | 非密钥项，整份读写 |
 | `secret_json` | JSON | NOT NULL | 密钥项：字段名 → 密文信封（5.8），整份读写；默认 `{}` 由应用层写入 |
@@ -481,7 +498,7 @@ class Settings:                  # 解析并校验后的运行时策略
 | `last_test_ok` | Boolean | NULL | |
 | `last_test_error` | String(512) | NULL | 已打码 |
 
-索引：`uq_targets_name`（name 唯一）、`ix_targets_type`（type）。
+索引：`uq_targets_environment_name`（environment_id, name）、`ix_targets_type`（type）、`ix_targets_environment_id`。`uq_environments_key`（key 唯一）。
 
 `audit`
 
@@ -986,7 +1003,10 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 | code | 场景 | 模型侧建议 |
 |---|---|---|
-| `TARGET_NOT_FOUND` | 名称未登记 | 让用户去网页登记 |
+| `ENVIRONMENT_REQUIRED` | 登记了多个环境，但调用没传 `environment` | 先 `systems_status`，再带上 key |
+| `ENVIRONMENT_NOT_FOUND` | 调用标识未登记 | 用 `systems_status` 对照展示名 |
+| `ENVIRONMENT_DISABLED` | 环境已停用 | 让用户确认是否启用；不要改查别的环境 |
+| `TARGET_NOT_FOUND` | 该环境里没有这个名称 | 让用户去网页登记 |
 | `TARGET_DISABLED` | 目标已停用 | 让用户确认是否启用 |
 | `TARGET_TYPE_MISMATCH` | 工具与目标类型不符 | 换工具或换目标 |
 | `NO_ENABLED_TARGET` | 该类型还没有启用目标 | 提示去网页登记 |
@@ -1016,7 +1036,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 | 工具 | 参数 | 返回 | 闸门与范围 | 上限 |
 |---|---|---|---|---|
-| `systems_status` | 无 | 全局工具：包络 `target="*"`、`type="all"`；`rows`: name、type、enabled、last_test_at、last_test_ok、last_test_error；`stats`: 目标数与启用数 | 只读配置库，不外呼 | 全部目标 |
+| `systems_status` | `environment` 可空 | 不传时 `rows` 是环境：key、title、enabled、targets、enabled_targets。传入 key 时 `rows` 是该环境的目标：name、type、enabled、last_test_*。包络仍是 `target="*"`、`type="all"`，不新增顶层键 | 只读配置库，不外呼。未知 key 返回 `ENVIRONMENT_NOT_FOUND` | 全部环境，或该环境的全部目标 |
 | `cls_search` | `target`、`query`、`from`、`to`（必填）、`topic`（唯一授权时可省略）、`limit`、`offset` | `rows`: time、topic、content 等 | `SearchLog`；主题须在允许列表；时间窗必填 | 窗口默认 1h、上限 24h；条数上限 |
 | `cls_context` | `target`、`topic`、`log_id`、`btime`、`pkg_log_id`、`before=10`、`after=10` | `rows`: 同一条日志前后若干条 | `DescribeLogContext`；主题须在允许列表 | before/after 各 ≤ 20 |
 | `gitlab_search_code` | `target`、`query`、`project`（可空）、`ref`、`limit=20`、`page=1` | `rows`: project、path、line、snippet | 只发 GET；项目在允许列表 | 条数上限 |
@@ -1233,7 +1253,7 @@ scripts/smoke.py       冒烟：启动进程并探活
 | `aiokafka` | Kafka 管理客户端 | 可选 `dr-panda-mcp[kafka]` |
 | `tencentcloud-sdk-python-cls` | CLS 客户端 | 可选 `dr-panda-mcp[cls]` |
 
-组件客户端库按需安装：只登记某几类目标时，只装对应的 extras 即可；未安装时测试连接返回明确错误，不影响服务启动。审计清理用 asyncio 周期任务实现，不引入 APScheduler 等调度库。
+组件客户端库按需安装，未安装时服务仍能启动，测试连接返回明确错误。`uv sync --extra <name>` 是精确同步，会卸掉没有点名的其他 extra。补一个客户端用 `uv sync --extra <name> --inexact`，在运行服务的项目目录执行，装好后直接再测。一次装齐用 `uv sync --all-extras`。列表上的「安装」只对「客户端未安装」出现，由服务按目标类型执行这条命令，不接受页面传入的命令文本；装完立刻再测。同一时间只跑一个安装。审计清理用 asyncio 周期任务实现，不引入 APScheduler 等调度库。
 
 ### 11.2 开发依赖
 

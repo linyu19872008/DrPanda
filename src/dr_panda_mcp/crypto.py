@@ -4,7 +4,9 @@
 
     {"password": {"v": 1, "kid": "k1", "nonce": "<base64>", "ct": "<base64>"}}
 
-- 每个字段独立随机 nonce；AAD 绑定 ``target 名 + 字段名``，密文不能跨目标/字段挪用
+- 每个字段独立随机 nonce
+- 版本 1 的 AAD 绑定 ``target 名 + 字段名``（旧数据）
+- 版本 2 的 AAD 绑定 ``环境 key + target 名 + 字段名``，同名目标不能跨环境挪用密文
 - 密钥来源：``DR_PANDA_SECRET_KEY`` 优先；否则 ``data/secret.key``（0600）
 - 缺密钥且库里已有密文时拒绝启动，避免静默换钥匙导致全部目标不可用
 """
@@ -30,6 +32,7 @@ DEFAULT_KEY_FILE = Path("data/secret.key")
 KEY_BYTES = 32
 NONCE_BYTES = 12
 ENVELOPE_VERSION = 1
+ENVELOPE_VERSION_V2 = 2
 KEY_ID = "k1"
 
 
@@ -40,43 +43,71 @@ class SecretBox:
     key: bytes
     kid: str = KEY_ID
 
-    def encrypt(self, target_name: str, values: Mapping[str, str]) -> dict[str, dict]:
+    def encrypt(
+        self,
+        target_name: str,
+        values: Mapping[str, str],
+        *,
+        environment: str | None = None,
+    ) -> dict[str, dict]:
         return {
-            field: self.encrypt_field(target_name, field, value)
+            field: self.encrypt_field(target_name, field, value, environment=environment)
             for field, value in values.items()
         }
 
-    def encrypt_field(self, target_name: str, field: str, value: str) -> dict:
+    def encrypt_field(
+        self,
+        target_name: str,
+        field: str,
+        value: str,
+        *,
+        environment: str | None = None,
+    ) -> dict:
         if not isinstance(value, str):
             raise SecretUnavailable(f"字段 {field} 的密钥必须是字符串")
+        version = ENVELOPE_VERSION_V2 if environment else ENVELOPE_VERSION
         nonce = os.urandom(NONCE_BYTES)
         ciphertext = AESGCM(self.key).encrypt(
-            nonce, value.encode("utf-8"), _aad(target_name, field)
+            nonce, value.encode("utf-8"), _aad(target_name, field, environment)
         )
         return {
-            "v": ENVELOPE_VERSION,
+            "v": version,
             "kid": self.kid,
             "nonce": _b64(nonce),
             "ct": _b64(ciphertext),
         }
 
-    def decrypt_field(self, target_name: str, field: str, envelope: Mapping[str, object]) -> str:
-        if envelope.get("v") != ENVELOPE_VERSION:
+    def decrypt_field(
+        self,
+        target_name: str,
+        field: str,
+        envelope: Mapping[str, object],
+        *,
+        environment: str | None = None,
+    ) -> str:
+        version = envelope.get("v")
+        if version == ENVELOPE_VERSION:
+            aad = _aad(target_name, field, None)
+        elif version == ENVELOPE_VERSION_V2:
+            if not environment:
+                raise SecretUnavailable(f"目标 {target_name} 的密钥版本不支持")
+            aad = _aad(target_name, field, environment)
+        else:
             raise SecretUnavailable(f"目标 {target_name} 的密钥版本不支持")
         if envelope.get("kid") != self.kid:
             raise SecretUnavailable(f"目标 {target_name} 的密钥版本与当前密钥不匹配")
         nonce = _unb64(str(envelope.get("nonce", "")), target_name)
         ciphertext = _unb64(str(envelope.get("ct", "")), target_name)
         try:
-            plaintext = AESGCM(self.key).decrypt(
-                nonce, ciphertext, _aad(target_name, field)
-            )
+            plaintext = AESGCM(self.key).decrypt(nonce, ciphertext, aad)
         except InvalidTag as exc:
             raise SecretUnavailable(f"目标 {target_name} 的密钥无法解密") from exc
         return plaintext.decode("utf-8")
 
 
-def _aad(target_name: str, field: str) -> bytes:
+def _aad(target_name: str, field: str, environment: str | None = None) -> bytes:
+    if environment:
+        return f"drpanda:{environment}:{target_name}:{field}".encode()
     return f"drpanda:{target_name}:{field}".encode()
 
 

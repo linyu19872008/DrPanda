@@ -42,9 +42,7 @@ class _RedisClient:
         try:
             import redis.asyncio as redis_async
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "redis 客户端未安装：uv sync --extra redis"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("redis")) from exc
         options = self.target.options
         kwargs: dict[str, Any] = {
             "host": options.get("host", "127.0.0.1"),

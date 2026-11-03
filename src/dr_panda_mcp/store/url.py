@@ -15,7 +15,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from dr_panda_mcp.errors import ConfigError
+from dr_panda_mcp.errors import ConfigError, sync_extra_command
 
 # 协议 -> (异步驱动, 可选依赖名)
 DATABASE_DRIVERS: dict[str, tuple[str, str | None]] = {
@@ -63,7 +63,11 @@ def ensure_driver(url: str) -> None:
         return
 
     if extra:
-        hint = f'uv sync --extra {extra}（或 pip install "dr-panda-mcp[{extra}]"）'
+        hint = (
+            f"{sync_extra_command(extra)}"
+            f'（或 pip install "dr-panda-mcp[{extra}]"）。'
+            "不要省略 --inexact，否则会卸掉其他已安装的 extra"
+        )
         raise ConfigError(f"{base} 配置库需要 {driver}，当前环境没有安装；请执行：{hint}")
     raise ConfigError(f"sqlite 配置库需要 {driver}，当前环境没有安装；请执行：uv sync")
 

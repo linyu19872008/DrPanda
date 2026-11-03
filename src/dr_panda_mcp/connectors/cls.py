@@ -46,9 +46,7 @@ class _CLSClient:
             from tencentcloud.cls.v20201016 import cls_client, models
             from tencentcloud.common import credential
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
-            raise errors.UpstreamUnavailable(
-                "cls 客户端未安装：uv sync --extra cls"
-            ) from exc
+            raise errors.UpstreamUnavailable(errors.missing_client_message("cls")) from exc
         options = self.target.options
         secrets = self.target.secret
         credential_obj = credential.Credential(

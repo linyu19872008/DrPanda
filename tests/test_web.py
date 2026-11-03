@@ -4,8 +4,10 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
+from dr_panda_mcp.errors import missing_client_message
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.server import create_app
+from dr_panda_mcp.web.views import split_install_command
 
 BASE_URL = "http://127.0.0.1"
 
@@ -258,7 +260,7 @@ async def test_test_connection_failure_recorded(
 ) -> None:
     from dr_panda_mcp import errors
 
-    async def failing(name: str, connector) -> None:
+    async def failing(name: str, connector, **_kwargs) -> None:
         raise errors.UpstreamUnavailable("mysql 模拟连接失败")
 
     monkeypatch.setattr(runtime.catalog, "test_connection", failing)
@@ -277,10 +279,143 @@ async def test_test_connection_failure_recorded(
     assert "失败" in index.text
 
 
+def test_split_install_command_keeps_old_and_new_forms() -> None:
+    old_message, old_command = split_install_command(
+        "mongo 客户端未安装：uv sync --extra mongo"
+    )
+    assert old_message == "mongo 客户端未安装"
+    assert old_command == "uv sync --extra mongo"
+
+    message, command = split_install_command(missing_client_message("mongo"))
+    assert command == "uv sync --extra mongo --inexact"
+    assert message == "mongo 客户端未安装"
+    assert "uv sync" not in message
+
+
+async def test_missing_client_offers_install_without_copy(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mongo"])
+        target = await runtime.store.get("mongo-target")
+        await runtime.store.record_test(
+            target.id, False, missing_client_message("mongo"), "test"
+        )
+        page = await client.get("/")
+
+    assert "mongo 客户端未安装" in page.text
+    assert "uv sync" not in page.text
+    assert "data-copy-command" not in page.text
+    assert "data-test-command" not in page.text
+    assert 'data-dialog-open="install-client-' in page.text
+    assert "/install-client" in page.text
+    assert "确认安装" in page.text
+
+
+async def test_connection_failure_has_no_install_button(runtime: Runtime) -> None:
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mongo"])
+        target = await runtime.store.get("mongo-target")
+        await runtime.store.record_test(target.id, False, "mongo 探测失败：refused", "test")
+        page = await client.get("/")
+
+    assert "mongo 探测失败" in page.text
+    assert 'data-dialog-open="install-client-' not in page.text
+
+
+async def test_install_client_runs_inexact_then_retests(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed: list[str] = []
+
+    async def fake_install(extra: str) -> None:
+        installed.append(extra)
+
+    async def fake_test(name: str, connector, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "dr_panda_mcp.web.routes.client_install.install_extra", fake_install
+    )
+    monkeypatch.setattr(runtime.catalog, "test_connection", fake_test)
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mongo"])
+        target = await runtime.store.get("mongo-target")
+        await runtime.store.record_test(
+            target.id, False, "mongo 客户端未安装：uv sync --extra mongo", "test"
+        )
+        response = await client.post(
+            f"/targets/{target.id}/install-client",
+            headers={"accept": "application/json"},
+        )
+
+    tested = await runtime.store.get("mongo-target")
+    assert response.status_code == 200
+    assert response.json()["test_ok"] is True
+    assert installed == ["mongo"]
+    assert tested.last_test_ok is True
+
+
+async def test_install_failure_keeps_command(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dr_panda_mcp.client_install import InstallError
+
+    async def fake_install(extra: str) -> None:
+        raise InstallError("network down uv sync --extra mongo --inexact")
+
+    monkeypatch.setattr(
+        "dr_panda_mcp.web.routes.client_install.install_extra", fake_install
+    )
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mongo"])
+        target = await runtime.store.get("mongo-target")
+        await runtime.store.record_test(
+            target.id, False, missing_client_message("mongo"), "test"
+        )
+        response = await client.post(
+            f"/targets/{target.id}/install-client",
+            headers={"accept": "application/json"},
+        )
+
+    body = response.json()
+    tested = await runtime.store.get("mongo-target")
+    assert response.status_code == 400
+    assert body["ok"] is False
+    assert "network down" in body["test_error"]
+    assert body["test_command"] == "uv sync --extra mongo --inexact"
+    assert tested.last_test_ok is False
+    assert "pw" not in (tested.last_test_error or "")
+
+
+async def test_install_rejects_when_client_is_present(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = False
+
+    async def fake_install(extra: str) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(
+        "dr_panda_mcp.web.routes.client_install.install_extra", fake_install
+    )
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["elasticsearch"])
+        target = await runtime.store.get("es-target")
+        await runtime.store.record_test(target.id, False, "es 探测失败：down", "test")
+        response = await client.post(
+            f"/targets/{target.id}/install-client",
+            headers={"accept": "application/json"},
+        )
+
+    assert response.status_code == 400
+    assert called is False
+    assert "无需安装" in response.json()["message"]
+
+
 async def test_test_connection_success_recorded(
     runtime: Runtime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake(name: str, connector) -> None:
+    async def fake(name: str, connector, **_kwargs) -> None:
         return None
 
     monkeypatch.setattr(runtime.catalog, "test_connection", fake)
@@ -524,7 +659,7 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
         assert page.text.count("<script") == 1
         assert 'src="/static/app.js' in page.text
         assert "<script>" not in page.text
-    assert len(css.content) < 44_000
+    assert len(css.content) < 52_000
 
 
 async def test_required_secret_cannot_be_cleared_on_edit(runtime: Runtime) -> None:
@@ -722,7 +857,7 @@ async def test_settings_page_is_grouped(runtime: Runtime) -> None:
 async def test_new_target_uses_system_default_limits(
     runtime: Runtime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def fake_test(name: str, connector) -> None:
+    async def fake_test(name: str, connector, **_kwargs) -> None:
         return None
 
     monkeypatch.setattr(runtime.catalog, "test_connection", fake_test)
@@ -908,6 +1043,8 @@ async def test_english_pages_are_fully_translated(runtime: Runtime) -> None:
 
     urls = [
         "/",
+        "/environments",
+        "/environments/new",
         "/targets/new",
         "/targets/new?type=mysql",
         "/targets/new?type=mongo",
