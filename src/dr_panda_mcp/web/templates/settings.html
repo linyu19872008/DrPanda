@@ -48,7 +48,7 @@
   <section class="settings-main">
     {% if active_group %}
     <form class="card settings-form" method="post" action="/settings"
-          data-submit-loading data-async-form data-settings-form>
+          data-submit-loading data-async-form data-settings-form data-leave-guard>
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <input type="hidden" name="section" value="{{ active_section }}">
       <div class="settings-panel-head">
@@ -76,15 +76,19 @@
             {% endif %}
           </div>
           <div class="settings-field-control">
+            {% if row.key == "backup_keep_count" and not sqlite_config %}
+            <p class="field__hint">{{ t('仅在 SQLite 配置库上生效，当前配置库不会使用这项。') }}</p>
+            {% else %}
             <div class="input-group input-group--narrow">
               <input class="input" type="number" inputmode="numeric"
                      id="setting-{{ row.key }}" name="{{ row.key }}"
-                     value="{{ row.value }}"
+                     value="{{ row.value }}" min="{{ row.low }}" max="{{ row.high }}"
                      aria-describedby="hint-setting-{{ row.key }}{% if row.error %} err-setting-{{ row.key }}{% endif %}"
                      {% if row.error %}aria-invalid="true"{% endif %}>
               <span class="input-group__suffix">{{ t(row.unit) }}</span>
             </div>
             <a class="settings-field__reset" href="/settings/reset?key={{ row.key }}&section={{ active_section }}" data-dialog-open="reset-setting-{{ row.key }}">{{ t('恢复本项默认') }}</a>
+            {% endif %}
           </div>
         </div>
         {% endfor %}
@@ -151,7 +155,7 @@
         {% for change in history %}
         <li>
           <span class="settings-history__time">{{ change.at }}</span>
-          <span class="settings-history__summary">{{ t(change.summary) }}</span>
+          <span class="settings-history__summary">{{ change.summary }}</span>
           <span class="settings-history__actor">{{ change.actor }}</span>
         </li>
         {% endfor %}
@@ -167,9 +171,15 @@
 <dialog id="reset-all-settings" class="modal" aria-labelledby="reset-all-settings-title">
   <div class="modal__panel">
     <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
-    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
     <h2 id="reset-all-settings-title">{{ t('恢复默认配置') }}</h2>
-    <p class="field__hint">{{ t('这会把所有系统配置恢复为代码默认值，并写入审计。') }}</p>
+    <p class="field__hint">{{ t('这会把所有系统配置恢复为代码默认值，并写入审计。目标、密钥和安全边界不受影响。') }}</p>
+    <dl class="summary">
+      {% for group in groups %}
+      {% for row in group.rows %}
+      <div><dt>{{ t(row.label) }}</dt><dd>{{ row.value }} → {{ row.default }}</dd></div>
+      {% endfor %}
+      {% endfor %}
+    </dl>
     <form method="post" action="/settings/reset" class="form-actions form-actions--inline">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <input type="hidden" name="key" value="">
@@ -183,9 +193,8 @@
 <dialog id="reset-setting-{{ row.key }}" class="modal" aria-labelledby="reset-setting-title-{{ row.key }}">
   <div class="modal__panel">
     <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
-    <span class="badge badge--danger">{{ t('不可撤销') }}</span>
     <h2 id="reset-setting-title-{{ row.key }}">{{ t('恢复单项默认值') }}</h2>
-    <p class="field__hint">{{ t('这会把该项恢复为代码默认值，并写入审计。') }}</p>
+    <p class="field__hint">{{ t('这会把该项恢复为代码默认值，并写入审计。之后仍可再改。') }}</p>
     <dl class="summary">
       <div><dt>{{ t('当前') }}</dt><dd>{{ row.value }}</dd></div>
       <div><dt>{{ t('默认') }}</dt><dd>{{ row.default }}</dd></div>

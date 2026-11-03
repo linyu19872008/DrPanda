@@ -47,9 +47,10 @@
   <h2>{{ t('还没有登记任何目标') }}</h2>
   <p>{{ t('先选一个类型登记连接与只读范围，三个客户端随后就能按名称调用它。') }}</p>
   <div class="type-grid type-grid--compact">
-    {% for type, label in type_options %}
-    <a class="type-card type-card--sm" href="/targets/new?type={{ type }}">
-      <span class="type-card__title">{{ t(label) }}</span><span class="type-card__arrow" aria-hidden="true">→</span>
+    {% for card in type_cards %}
+    <a class="type-card type-card--sm" href="/targets/new?type={{ card.type }}">
+      <span class="type-card__title">{{ t(card.label) }}</span>
+      <span class="type-card__note">{{ t(card.note) }}</span>
     </a>
     {% endfor %}
   </div>
@@ -139,6 +140,12 @@
       <div><dt>{{ t('类型') }}</dt><dd>{{ t(target.type_label) }}</dd></div>
       <div><dt>{{ t('端点') }}</dt><dd class="mono">{{ target.endpoint }}</dd></div>
       <div><dt>{{ t('授权范围') }}</dt><dd>{{ t(target.scope_source, **target.scope_params) }}</dd></div>
+      <div><dt>{{ t('最近测试') }}</dt><dd>
+        {% if target.last_test_at_display %}
+          <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
+          <span class="muted small">{{ target.last_test_at_display }}</span>
+        {% else %}<span class="muted">{{ t('未测试') }}</span>{% endif %}
+      </dd></div>
     </dl>
     <form method="post" action="/targets/{{ target.id }}/delete" class="form-actions form-actions--inline">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">

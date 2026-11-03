@@ -1,11 +1,9 @@
 /*
- * Dr Panda MCP 渐进增强脚本（无依赖、自托管、同源）。
+ * Dr Panda MCP 配置台脚本（无依赖、自托管、同源）。
  *
- * 约束（docs/verify/frontend-js-policy.md v2）：
- * - 只做体验增强：加载态、内联结果、脏检查、行内更新、错误定位；
- * - 校验/权限/门槛以服务端为准，脚本不替代服务端判断；
- * - 请求只允许同源，且必须带 CSRF（表单里的 _csrf 随 FormData 一起提交）；
- * - 无 JS 或脚本失败时，所有表单仍按普通 POST 工作。
+ * 约束（docs/verify/frontend-js-policy.md v3）：
+ * 配置台交互需要 JavaScript。认证、CSRF、Host/Origin、字段校验、只读闸门仍只在服务端执行。
+ * 请求只允许同源，且必须带 CSRF。
  */
 (() => {
   "use strict";
@@ -276,14 +274,14 @@
     const hints = {
       pending: form.dataset.gateHintPending || "",
       clean: form.dataset.gateHintClean || "",
+      saved: form.dataset.gateHintSaved || "",
       dirty: form.dataset.gateHintDirty || "",
     };
     const okTitle = form.dataset.probeOkTitle || "";
     const failTitle = form.dataset.probeFailTitle || "";
     const durationLabel = form.dataset.durationLabel || "";
-    let tested = null; // 探测通过时的表单快照；null = 尚未通过
+    let tested = null;
     let busy = false;
-    let clicked = null;
 
     const gateControls = () =>
       Array.from(form.elements).filter((el) => {
@@ -301,7 +299,27 @@
         el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value,
       ]);
 
-    const isClean = () => tested !== null && JSON.stringify(snapshot()) === JSON.stringify(tested);
+    const baseline = form.dataset.gateBaseline === "saved" ? snapshot() : null;
+
+    const isClean = () => {
+      const current = JSON.stringify(snapshot());
+      if (tested !== null && current === JSON.stringify(tested)) return "tested";
+      if (baseline !== null && current === JSON.stringify(baseline)) return "saved";
+      return "";
+    };
+
+    const refreshGate = () => {
+      if (busy) return;
+      const state = isClean();
+      const clean = state !== "";
+      saveButton.disabled = !clean;
+      saveButton.setAttribute("aria-disabled", clean ? "false" : "true");
+      if (!hint) return;
+      if (state === "tested") hint.textContent = hints.clean;
+      else if (state === "saved") hint.textContent = hints.saved;
+      else if (tested !== null || baseline !== null) hint.textContent = hints.dirty;
+      else hint.textContent = hints.pending;
+    };
 
     const renderResult = (tone, title, detail, meta) => {
       if (!resultRegion || !alertBox) return;
@@ -324,16 +342,6 @@
         parts.push(`${durationLabel} ${data.duration_ms} ms`);
       }
       return parts.join(" · ");
-    };
-
-    const refreshGate = () => {
-      if (busy) return;
-      const clean = isClean();
-      saveButton.disabled = !clean;
-      saveButton.setAttribute("aria-disabled", clean ? "false" : "true");
-      if (hint) {
-        hint.textContent = tested === null ? hints.pending : clean ? hints.clean : hints.dirty;
-      }
     };
 
     const setBusy = (value) => {
@@ -397,25 +405,16 @@
       }
     };
 
-    form.addEventListener("click", (event) => {
-      const button = event.target.closest("button[type=submit]");
-      clicked = button ? (button === probeButton ? "probe" : "save") : null;
+    probeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      doProbe();
     });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const submitter = event.submitter;
-      const kind = submitter
-        ? submitter === probeButton
-          ? "probe"
-          : "save"
-        : clicked || (saveButton.disabled ? "probe" : "save");
-      if (kind === "probe") doProbe();
-      else doSave();
+      doSave();
     });
     form.addEventListener("input", refreshGate);
     form.addEventListener("change", refreshGate);
-
-    tested = null;
     refreshGate();
   };
 
@@ -495,6 +494,7 @@
       try {
         const data = await postForm(form, form.getAttribute("action"));
         clearFieldErrors(form);
+        delete form.dataset.dirty;
         setNotice(notice, "success", data.message || "");
         hideNotice(pageError());
       } catch (error) {
@@ -541,18 +541,19 @@
   const initSetupForm = (form) => {
     const result = document.querySelector("[data-setup-result]");
     const finish = form.querySelector('[data-setup-action="finish"]');
-    let clicked = null;
-    form.addEventListener("click", (event) => {
-      const button = event.target.closest("button[type=submit]");
-      clicked = button ? button.dataset.setupAction || null : null;
-    });
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    const test = form.querySelector('[data-setup-action="test"]');
+    let baseline = formBody(form).toString();
+    let tested = Boolean(finish && finish.dataset.canFinish === "true");
+
+    const refresh = () => {
+      if (!finish) return;
+      const ready = tested && formBody(form).toString() === baseline;
+      finish.disabled = !ready;
+      finish.setAttribute("aria-disabled", ready ? "false" : "true");
+    };
+
+    const run = async (button, action) => {
       if (form.dataset.busy) return;
-      const submitter = event.submitter;
-      const action = (submitter && submitter.dataset.setupAction) || clicked;
-      if (!action) return;
-      const button = submitter || (action === "finish" ? finish : null);
       form.dataset.busy = "1";
       busyButton(button, true);
       try {
@@ -562,14 +563,104 @@
           return;
         }
         setNotice(result, "success", data.message || "");
-        if (finish) finish.disabled = !data.can_finish;
+        if (action === "test" && data.can_finish) {
+          baseline = formBody(form).toString();
+          tested = true;
+        }
       } catch (error) {
         if (error.kind === "unauthorized") return;
         setNotice(result, "danger", errorMessage(form, error));
+        if (action === "test") tested = false;
       } finally {
         delete form.dataset.busy;
         busyButton(button, false);
+        refresh();
       }
+    };
+
+    test?.addEventListener("click", (event) => {
+      event.preventDefault();
+      run(test, "test");
+    });
+    form.addEventListener("input", refresh);
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (finish && finish.disabled) return;
+      run(finish, "finish");
+    });
+    refresh();
+  };
+
+  const initThemeSwitch = () => {
+    const form = document.querySelector("form.theme-switch");
+    if (!form) return;
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.submitter;
+      if (!(button instanceof HTMLButtonElement)) return;
+      const root = document.documentElement;
+      const previousTheme = root.getAttribute("data-theme");
+      const buttons = Array.from(form.querySelectorAll("button"));
+      const previousPressed = buttons.map((item) => item.getAttribute("aria-pressed"));
+      const mode = button.value;
+      if (mode === "system") root.removeAttribute("data-theme");
+      else root.setAttribute("data-theme", mode);
+      buttons.forEach((item) => {
+        const on = item === button;
+        item.classList.toggle("is-active", on);
+        item.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      try {
+        await postForm(form, form.getAttribute("action"), { extra: { mode } });
+      } catch (_) {
+        if (previousTheme) root.setAttribute("data-theme", previousTheme);
+        else root.removeAttribute("data-theme");
+        buttons.forEach((item, index) => {
+          const pressed = previousPressed[index] === "true";
+          item.classList.toggle("is-active", pressed);
+          item.setAttribute("aria-pressed", pressed ? "true" : "false");
+        });
+      }
+    });
+  };
+
+  const initLeaveGuard = () => {
+    const message = (body && body.dataset.msgDirty) || "";
+    document.querySelectorAll("[data-leave-guard]").forEach((form) => {
+      const mark = () => {
+        form.dataset.dirty = "1";
+      };
+      form.addEventListener("input", mark);
+      form.addEventListener("change", mark);
+    });
+    const dirtyForm = () => document.querySelector('[data-leave-guard][data-dirty="1"]');
+    const allow = () => {
+      const form = dirtyForm();
+      if (!form) return true;
+      if (window.confirm(message)) {
+        delete form.dataset.dirty;
+        return true;
+      }
+      return false;
+    };
+    document.addEventListener("click", (event) => {
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(link instanceof HTMLAnchorElement)) return;
+      if (link.target === "_blank" || link.hasAttribute("download")) return;
+      if (link.hasAttribute("data-dialog-open")) return;
+      const href = link.getAttribute("href") || "";
+      if (!href || href.startsWith("#")) return;
+      if (!allow()) event.preventDefault();
+    });
+    document.querySelectorAll("form.lang-switch").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (!allow()) event.preventDefault();
+      });
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (!dirtyForm()) return;
+      event.preventDefault();
+      event.returnValue = "";
     });
   };
 
@@ -590,6 +681,8 @@
     }
     const setupForm = document.querySelector("[data-setup-form]");
     if (setupForm) initSetupForm(setupForm);
+    initThemeSwitch();
+    initLeaveGuard();
   } catch (error) {
     // 脚本失败时保持普通表单可用：把被脚本禁用的按钮恢复。
     document.querySelectorAll("button[disabled][data-save-button]").forEach((button) => {
@@ -630,4 +723,33 @@
   checkbox?.addEventListener("change", apply);
   protocol?.addEventListener("change", apply);
   apply();
+})();
+
+// Mongo 只显示当前认证方式用到的字段。隐藏字段去掉 required，避免挡住提交。
+(() => {
+  const mode = document.querySelector('select[name="auth_mode"]');
+  if (!mode) return;
+  const groups = {
+    none: ["user", "auth_source", "secret_uri", "secret_password"],
+    password: ["secret_uri"],
+    uri: ["host", "port", "user", "auth_source", "secret_password"],
+  };
+  const names = ["host", "port", "user", "auth_source", "secret_uri", "secret_password"];
+  const apply = (clearHidden) => {
+    const hide = new Set(groups[mode.value] || []);
+    names.forEach((name) => {
+      const input = document.querySelector(`[name="${name}"]`);
+      const field = input && input.closest(".field");
+      if (!input || !field) return;
+      const hidden = hide.has(name);
+      field.hidden = hidden;
+      if (hidden) {
+        input.removeAttribute("required");
+        input.removeAttribute("aria-required");
+        if (clearHidden && input.type !== "checkbox") input.value = "";
+      }
+    });
+  };
+  mode.addEventListener("change", () => apply(true));
+  apply(false);
 })();

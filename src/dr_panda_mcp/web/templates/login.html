@@ -18,7 +18,8 @@
     <input type="hidden" name="next" value="{{ next_path }}">
     <div class="field">
       <label class="field__label" for="login-username">{{ t('用户名') }}</label>
-      <input class="input" id="login-username" name="username" value="admin" autocomplete="username" required>
+      <div class="readonly mono" id="login-username">admin</div>
+      <input type="hidden" name="username" value="admin">
     </div>
     <div class="field">
       <label class="field__label" for="login-password">{{ t('密码') }}</label>

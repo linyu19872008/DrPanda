@@ -652,8 +652,8 @@ def option_rows(
                 "required": field.required,
                 "help": field.help,
                 "section": section,
-                # 授权范围不影响连通性：改它不必重新测试连接。
-                "gate": section != "scope",
+                # 授权范围、风险开关和时间窗不影响连通性。
+                "gate": field.key not in PROBE_SKIP_OPTION_KEYS and section != "scope",
             }
         )
     return rows
@@ -684,6 +684,48 @@ def secret_rows(
     return rows
 
 
+# 这些字段不决定能不能连上。保存时若只有它们变化，不再打上游。
+PROBE_SKIP_OPTION_KEYS = frozenset(
+    {
+        "allow_processlist",
+        "default_window_minutes",
+        "max_window_minutes",
+        "max_rows",
+        "max_bytes",
+        "allowed_dbs",
+        "allowed_indices",
+        "allowed_projects",
+        "allowed_vhosts",
+        "allowed_topics",
+        "key_prefix",
+    }
+)
+
+
+def _option_eq(left: Any, right: Any) -> bool:
+    if left == right:
+        return True
+    empty = (None, False, "", [], ())
+    if left in empty and right in empty:
+        return True
+    if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)):
+        return list(left) == list(right)
+    return False
+
+
+def connection_changed(existing: Target, draft: TargetDraft) -> bool:
+    """主机、账号、密钥、TLS、超时等相对已保存值是否变化。"""
+    if not draft.secret_patch.is_empty():
+        return True
+    keys = set(existing.options) | set(draft.options)
+    for key in keys:
+        if key in PROBE_SKIP_OPTION_KEYS:
+            continue
+        if not _option_eq(existing.options.get(key), draft.options.get(key)):
+            return True
+    return False
+
+
 COMMON_UNITS = {"timeout_s": "秒", "max_rows": "行", "max_bytes": "字节"}
 
 
@@ -704,6 +746,7 @@ def common_rows(
             "low": low,
             "high": high,
             "unit": COMMON_UNITS[key],
+            "gate": key not in PROBE_SKIP_OPTION_KEYS,
         }
         for key, label, default, (low, high) in COMMON_FIELDS
     ]

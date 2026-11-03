@@ -39,8 +39,8 @@
       <div class="alert__body"><strong data-notice-text></strong></div>
     </div>
     <div class="form-actions form-actions--inline">
-      <button class="btn btn--secondary" type="submit" name="action" value="test"
-              data-setup-action="test" data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
+      <button class="btn btn--secondary" type="button" data-setup-action="test"
+              data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
       <button class="btn btn--primary" type="submit" name="action" value="finish"
               data-setup-action="finish" data-can-finish="{{ 'false' if state.tested_url is none else 'true' }}"
               {% if state.tested_url is none %}disabled aria-disabled="true"{% endif %}

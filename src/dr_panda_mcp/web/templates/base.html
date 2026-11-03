@@ -11,8 +11,12 @@
 <body data-msg-network="{{ t('网络异常，请检查连接后重试。') }}"
       data-msg-timeout="{{ t('请求超时，请稍后重试。') }}"
       data-msg-expired="{{ t('页面已过期，请刷新后重试。') }}"
-      data-msg-generic="{{ t('操作失败，请稍后重试。') }}">
+      data-msg-generic="{{ t('操作失败，请稍后重试。') }}"
+      data-msg-dirty="{{ t('有未保存的修改，离开后会丢失。确定离开？') }}">
   <a class="skip-link" href="#main">{{ t('跳到主要内容') }}</a>
+  <noscript>
+    <div class="alert alert--warning" role="status"><div class="alert__body"><strong>{{ t('此配置台需要启用 JavaScript。') }}</strong></div></div>
+  </noscript>
 
   <header class="topbar">
     <div class="topbar__inner">

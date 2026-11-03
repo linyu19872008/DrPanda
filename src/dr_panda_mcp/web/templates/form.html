@@ -48,11 +48,13 @@
 </div>
 {% endif %}
 <div class="form-layout">
-  <form class="form-main" method="post" data-submit-loading data-async-form data-target-form
+  <form class="form-main" method="post" data-submit-loading data-async-form data-target-form data-leave-guard
         data-probe-url="{{ probe_url }}"
         data-probe-timeout-ms="{{ probe_timeout_ms }}"
+        data-gate-baseline="{{ 'saved' if mode == 'edit' else 'none' }}"
         data-gate-hint-pending="{{ t('请先测试连接') }}"
         data-gate-hint-clean="{{ t('已通过连接测试，可以保存。') }}"
+        data-gate-hint-saved="{{ t('连接未修改，可以直接保存。') }}"
         data-gate-hint-dirty="{{ t('配置已修改，请重新测试连接。') }}"
         data-probe-ok-title="{{ t('连接测试通过') }}"
         data-probe-fail-title="{{ t('连接测试失败') }}"
@@ -90,7 +92,7 @@
 
     <section class="card form-section">
       <h2 class="form-section__title">{{ t('连接') }}</h2>
-      <p class="form-section__desc">{{ t('先填写连接信息；保存前建议先测试连接。') }}</p>
+      <p class="form-section__desc">{{ t('主机、账号、密钥、TLS 或超时变化后，需要重新测试才能保存。') }}</p>
       <div class="form-grid">
         {% for row in connection_rows %}{{ option_field(row) }}{% endfor %}
         {% for row in connection_secrets %}{{ secret_field(row) }}{% endfor %}
@@ -123,7 +125,7 @@
         </div>
         {% endif %}
         <h3 class="form-subsection__title">{{ t('运行限制') }}</h3>
-        <p class="form-section__desc">{{ t('这些上限同样作用在测试连接与后续工具调用上。') }}</p>
+        <p class="form-section__desc">{{ t('这些上限作用于之后的工具调用。') }}</p>
         <div class="form-grid form-grid--three">
           {% for row in common_rows %}{{ number_field(row) }}{% endfor %}
         </div>
@@ -146,14 +148,14 @@
         </div>
       </div>
     </div>
-    <p class="field__hint form-gate-hint" data-gate-hint>{{ t('保存前会先检查连接；测试通过后即可保存。') }}</p>
+    <p class="field__hint form-gate-hint" data-gate-hint>{% if mode == 'edit' %}{{ t('连接未修改，可以直接保存。') }}{% else %}{{ t('请先测试连接') }}{% endif %}</p>
     <div class="form-actions">
       <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>
-      <button class="btn btn--secondary" type="submit" name="action" value="test"
-              formaction="{{ probe_url }}" data-probe-button
+      <button class="btn btn--secondary" type="button" data-probe-button
               data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
       <button class="btn btn--primary" type="submit" data-save-button
-              data-loading-label="{{ t('保存中…') }}">{{ t("创建目标") if mode == "create" else t("保存修改") }}</button>
+              data-loading-label="{{ t('保存中…') }}"
+              {% if mode == 'create' %}disabled aria-disabled="true"{% endif %}>{{ t("创建目标") if mode == "create" else t("保存修改") }}</button>
     </div>
   </form>
 
@@ -170,7 +172,6 @@
         <summary>{{ t('密钥与证书') }}</summary>
         <p class="details__body">{{ t('新建时必填项不能为空；编辑时留空沿用、勾选清除或填新值替换，三者互斥。保存后加密落盘，不回显。') }}</p>
       </details>
-      <p class="muted small">{{ t('完整字段与只读规则见') }} <span class="mono">docs/planning.md</span>.</p>
     </section>
   </aside>
 </div>

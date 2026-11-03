@@ -36,10 +36,10 @@ M0–M7 已落地并通过测试：
 | M7 | 首次安装、登录、多 Token、审计到人 | 完成 |
 
 - 工具总数：**28**
-- 当前测试：**444 passed**，`ruff check .` 通过
+- 当前测试：**465 passed**，`ruff check .` 通过
 - 默认监听：`127.0.0.1:8111`
 - 首次安装支持 SQLite / MySQL / PostgreSQL 配置库
-- 前端采用服务端渲染；核心流程无 JS 可用，局部 JS 仅做渐进增强
+- 前端采用服务端渲染；配置台交互需要 JavaScript，认证与校验仍只在服务端执行
 
 真实联调覆盖：
 
@@ -77,7 +77,7 @@ http://127.0.0.1:8111/
 3. 测试连接（通过后「完成安装」才可点）；
 4. 完成安装，保存安装完成页显示的 MCP Token。
 
-登记排查目标时，必须先点「测试连接」并真实探测成功，保存按钮才会解禁；保存时服务端会再探测一次，失败不会落库。修改连接、TLS、运行限制或密钥后需要重新测试。
+登记排查目标时，新建必须先测试连接成功才能保存；编辑时如果主机、账号、密钥、TLS 或超时没有变化，可以直接保存范围和运行上限。保存时服务端只在连接字段变化后再次探测，失败不会落库。
 
 健康检查：
 
@@ -256,7 +256,7 @@ mcp__drpanda__systems_status
 | `audit_retention_days` | 90 天 | 1–3650 | 审计保留期 |
 | `audit_cleanup_interval_minutes` | 60 | 5–1440 | 审计清理间隔 |
 | `catalog_max_clients` | 32 | 4–128 | 进程内连接器缓存上限 |
-| `session_ttl_minutes` | 720 | 5–10080 | 网页 Session 有效期 |
+| `session_ttl_minutes` | 720 | 30–10080 | 网页 Session 有效期（分钟） |
 | `backup_keep_count` | 20 | 1–20 | SQLite 迁移前备份保留数量 |
 
 系统配置只能调整运行策略，**不能放宽只读规则、危险规则、密钥管理或目标范围**。
@@ -382,7 +382,7 @@ scripts/              冒烟与 Docker 联调脚本
 - [docs/milestones.md](docs/milestones.md)：里程碑与验收口径
 - [docs/ui-design.md](docs/ui-design.md)：配置台设计系统与页面规格
 - [docs/verify/m7-01.md](docs/verify/m7-01.md)：M7 安装、登录、多 Token
-- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 约束 v2（服务端优先 + 同源 fetch 渐进增强）
+- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 约束 v3（配置台需要 JavaScript，校验仍在服务端）
 - [docs/verify/async-ux-01.md](docs/verify/async-ux-01.md)：异步交互与保存门槛、真实 Chrome 验证
 - [docs/verify/ux-audit-01.md](docs/verify/ux-audit-01.md)：全站交互审计与修复
 - [docs/verify/form-ux-01.md](docs/verify/form-ux-01.md)：目标表单重组与保存前测试连接

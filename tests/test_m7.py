@@ -230,7 +230,7 @@ async def test_login_session_csrf_and_actor(tmp_path: Path) -> None:
 
 async def test_session_ttl_setting_controls_login_cookie(tmp_path: Path) -> None:
     runtime, cfg, key, _ = await _auth_runtime(tmp_path)
-    await runtime.store.update_settings({"session_ttl_minutes": "5"}, "admin")
+    await runtime.store.update_settings({"session_ttl_minutes": "30"}, "admin")
     app = create_app(cfg, runtime, auth_required=True, session_key=key)
     try:
         async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url=BASE) as client:
@@ -241,7 +241,7 @@ async def test_session_ttl_setting_controls_login_cookie(tmp_path: Path) -> None
                 data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
                 follow_redirects=False,
             )
-        assert "Max-Age=300" in response.headers["set-cookie"]
+        assert "Max-Age=1800" in response.headers["set-cookie"]
     finally:
         await runtime.close()
 

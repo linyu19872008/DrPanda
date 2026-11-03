@@ -11,7 +11,11 @@
 <body data-msg-network="{{ t('网络异常，请检查连接后重试。') }}"
       data-msg-timeout="{{ t('请求超时，请稍后重试。') }}"
       data-msg-expired="{{ t('页面已过期，请刷新后重试。') }}"
-      data-msg-generic="{{ t('操作失败，请稍后重试。') }}">
+      data-msg-generic="{{ t('操作失败，请稍后重试。') }}"
+      data-msg-dirty="{{ t('有未保存的修改，离开后会丢失。确定离开？') }}">
+  <noscript>
+    <div class="alert alert--warning" role="status"><div class="alert__body"><strong>{{ t('此配置台需要启用 JavaScript。') }}</strong></div></div>
+  </noscript>
   <header class="topbar">
     <div class="topbar__inner">
       <span class="brand">
@@ -22,7 +26,7 @@
       <div class="topbar__side">
         <span class="chip">{{ t('首次安装') }}</span>
         <form class="lang-switch" method="post" action="/language" aria-label="{{ t('语言') }}">
-          <input type="hidden" name="next" value="/setup">
+          <input type="hidden" name="next" value="{{ current_url }}">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           {% for lang in language_options %}
           <button class="lang-switch__btn{% if lang.code == locale %} is-active{% endif %}" type="submit" name="lang" value="{{ lang.code }}" title="{{ lang.label }}">{{ lang.short }}</button>

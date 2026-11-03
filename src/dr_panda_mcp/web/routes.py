@@ -66,6 +66,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             q=q,
             active_type=type_,
             type_filters=_type_filters(q, type_, all_views),
+            type_cards=forms.type_cards(),
             has_targets=bool(all_views),
         )
 
@@ -218,18 +219,20 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 existing=target,
             )
         if str(form.get("action", "")) == "test":
-            # 兼容旧表单（HTML 回退）：只探测、不保存。
             result = await _test_draft_target(draft, target)
             return _probe_render(
                 request, spec, values=values, mode="edit", existing=target,
                 result=result,
             )
-        result = await _test_draft_target(draft, target)
-        if not result.get("ok"):
-            return _probe_render(
-                request, spec, values=values, mode="edit", existing=target,
-                result=result, status=400,
-            )
+        probed = False
+        if forms.connection_changed(target, draft):
+            result = await _test_draft_target(draft, target)
+            if not result.get("ok"):
+                return _probe_render(
+                    request, spec, values=values, mode="edit", existing=target,
+                    result=result, status=400,
+                )
+            probed = True
         try:
             await store.update(target.id, draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
@@ -238,7 +241,8 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 request, spec, values=values, errors=errors, mode="edit",
                 existing=target, message=str(exc),
             )
-        await _record_probe_success(target.id)
+        if probed:
+            await _record_probe_success(target.id)
         if async_api.wants_json(request):
             return async_api.ok(
                 request,
@@ -329,6 +333,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             history=await _settings_history(store),
             active_section=request.query_params.get("section", ""),
             flash=_flash(request),
+            sqlite_config=runtime.config.database_url.startswith("sqlite"),
         )
 
     @server.custom_route("/settings", methods=["POST"])
@@ -370,6 +375,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 history=await _settings_history(store),
                 active_section=section,
                 status=400,
+                sqlite_config=runtime.config.database_url.startswith("sqlite"),
             )
         if async_api.wants_json(request):
             return async_api.ok(
@@ -431,8 +437,11 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def set_theme(request: Request) -> Response:
         form = await request.form()
         mode = theme.normalize_mode(str(form.get("mode", "system")))
-        next_path = theme.safe_next(str(form.get("next", "/")))
-        response = RedirectResponse(next_path, status_code=303)
+        if async_api.wants_json(request):
+            response = async_api.ok(request, data={"mode": mode})
+        else:
+            next_path = theme.safe_next(str(form.get("next", "/")))
+            response = RedirectResponse(next_path, status_code=303)
         return theme.apply_theme(response, mode)
 
     @server.custom_route("/static/app.css", methods=["GET"])
@@ -715,14 +724,21 @@ def _row_test_payload(target: Target) -> dict[str, object]:
 
 async def _settings_history(store) -> list[dict[str, str]]:
     changes = await store.list_settings_changes(5)
-    return [
-        {
-            "at": change.created_at.strftime("%Y-%m-%d %H:%M"),
-            "actor": change.actor,
-            "summary": change.summary or "（无摘要）",
-        }
-        for change in changes
-    ]
+    rows = []
+    for change in changes:
+        at = change.created_at
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=UTC)
+        else:
+            at = at.astimezone(UTC)
+        rows.append(
+            {
+                "at": at.strftime("%Y-%m-%d %H:%M UTC"),
+                "actor": change.actor,
+                "summary": change.summary or "（无摘要）",
+            }
+        )
+    return rows
 
 
 def _startup_rows(runtime: Runtime) -> list[dict[str, str]]:
@@ -757,6 +773,7 @@ def _settings_page(
     active_section: str = "",
     flash: dict[str, str] | None = None,
     status: int = 200,
+    sqlite_config: bool = False,
 ) -> HTMLResponse:
     groups: list[dict[str, object]] = []
     for group in settings_module.SETTING_GROUPS:
@@ -817,6 +834,7 @@ def _settings_page(
         history=history or [],
         errors=errors,
         flash=flash,
+        sqlite_config=sqlite_config,
         status_code=status,
     )
 

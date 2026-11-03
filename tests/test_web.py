@@ -851,7 +851,7 @@ async def test_settings_section_switching_and_save(runtime: Runtime) -> None:
         invalid = await client.get("/settings?section=not-a-section")
 
     assert "连接器缓存上限" in advanced.text
-    assert "默认超时" not in advanced.text
+    assert 'name="default_target_timeout_s"' not in advanced.text
     assert "安全边界" in security.text
     assert "settings-field__reset" not in security.text
     assert saved.status_code == 303
@@ -870,7 +870,7 @@ async def test_settings_runtime_uses_field_rows_and_subgroups(runtime: Runtime) 
     assert "settings-field-row" in page.text
     assert "恢复本项默认" in page.text
     assert "settings-field__reset" in page.text
-    assert "立即生效" in page.text
+    assert "下一次取槽" in page.text
 
 
 async def test_default_english_and_language_switch(runtime: Runtime) -> None:
@@ -968,7 +968,8 @@ async def test_form_advanced_layout_and_copy(runtime: Runtime) -> None:
 
     assert form.status_code == 200
     assert "Default ; range —" not in form.text
-    assert 'name="action" value="test"' in form.text
+    assert 'data-probe-button' in form.text
+    assert 'type="button"' in form.text
     assert 'data-submit-loading' in form.text
     assert '<details class="card form-section form-advanced"' in form.text
     assert "高级设置" in form.text

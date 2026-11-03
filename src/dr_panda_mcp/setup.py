@@ -250,7 +250,16 @@ class SetupApp:
     async def language(self, request: Request) -> Response:
         form = await request.form()
         if not self._csrf_ok(request, form):
-            return JSONResponse({"error": "csrf_failed"}, status_code=403)
+            if async_api.wants_json(request):
+                return JSONResponse({"error": "csrf_failed"}, status_code=403)
+            return render.render(
+                "error.html",
+                request=request,
+                title="请求已过期",
+                message="页面已过期，请刷新后重试",
+                code=403,
+                status_code=403,
+            )
         from dr_panda_mcp.web import i18n
 
         locale = i18n.normalize_locale(str(form.get("lang", "")))

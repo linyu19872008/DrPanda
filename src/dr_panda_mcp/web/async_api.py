@@ -77,7 +77,7 @@ def ok(
     message_params: dict[str, Any] | None = None,
     data: dict[str, Any] | None = None,
 ) -> JSONResponse:
-    return JSONResponse(
+    response = JSONResponse(
         _payload(
             True,
             message=(
@@ -90,6 +90,8 @@ def ok(
         status_code=status,
         headers=JSON_HEADERS,
     )
+    _slide(request, response)
+    return response
 
 
 def fail(
@@ -108,7 +110,7 @@ def fail(
         if errors
         else None
     )
-    return JSONResponse(
+    response = JSONResponse(
         _payload(
             False,
             code=code,
@@ -120,6 +122,14 @@ def fail(
         status_code=status,
         headers=JSON_HEADERS,
     )
+    _slide(request, response)
+    return response
+
+
+def _slide(request: Request, response: JSONResponse) -> None:
+    from dr_panda_mcp.web.render import _slide_auth_cookies
+
+    _slide_auth_cookies(request, response, None)
 
 
 def invalid_input(

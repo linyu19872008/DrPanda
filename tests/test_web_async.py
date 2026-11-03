@@ -374,3 +374,32 @@ async def test_login_json_success_redirects(runtime: Runtime) -> None:
     assert body["ok"] is True
     assert body["redirect"] == "/"
     assert auth.SESSION_COOKIE in response.cookies
+
+
+async def test_edit_limit_only_skips_probe(runtime: Runtime, probe_ok, monkeypatch) -> None:
+    from dr_panda_mcp.web import routes as routes_module
+
+    calls = {"n": 0}
+
+    async def counting(draft, existing):
+        calls["n"] += 1
+        return {"ok": False, "message": "不应探测", "code": "UPSTREAM_TIMEOUT"}
+
+    async with _client(runtime) as client:
+        created = await client.post("/targets", data=MYSQL, headers=JSON)
+        assert created.status_code == 200
+        target = await runtime.store.get("mysql-target")
+        assert target is not None
+        monkeypatch.setattr(routes_module, "_test_draft_target", counting)
+        payload = dict(MYSQL)
+        payload.pop("secret_password")
+        payload["max_rows"] = "50"
+        payload["allowed_dbs"] = "app"
+        response = await client.post(f"/targets/{target.id}", data=payload, headers=JSON)
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert calls["n"] == 0
+    updated = await runtime.store.get("mysql-target")
+    assert updated is not None
+    assert updated.options["max_rows"] == 50

@@ -190,6 +190,8 @@ class AuthMiddleware:
             return None
         if issued + ttl_seconds < int(time.time()):
             return None
+        request.state.session_ttl_seconds = ttl_seconds
+        request.state.session_raw = raw
         return user, payload
 
 

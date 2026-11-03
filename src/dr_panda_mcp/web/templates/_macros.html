@@ -68,7 +68,9 @@
   <label class="field__label" for="field-{{ row.key }}">{{ t(row.label) }}</label>
   <div class="input-group">
     <input class="input" type="number" inputmode="numeric" id="field-{{ row.key }}" name="{{ row.key }}"
-           value="{{ row.value }}"{% if row.error %} aria-invalid="true" aria-describedby="err-{{ row.key }}"{% endif %}>
+           value="{{ row.value }}" min="{{ row.low }}" max="{{ row.high }}"
+           {% if row.gate is defined and not row.gate %}data-gate="off"{% endif %}
+           {% if row.error %} aria-invalid="true" aria-describedby="err-{{ row.key }}"{% endif %}>
     <span class="input-group__suffix">{{ t(row.unit) }}</span>
   </div>
   {% if row.error %}<p class="field__error" id="err-{{ row.key }}" role="alert">{{ t(row.error) }}</p>{% endif %}

@@ -11,7 +11,7 @@ from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from starlette.requests import Request
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, Response
 
 from dr_panda_mcp import auth
 from dr_panda_mcp.web import assets, i18n, theme
@@ -82,14 +82,37 @@ def render(
     response = HTMLResponse(body, status_code=status_code)
     response.headers["Content-Language"] = locale
     response.headers["Vary"] = "Cookie"
-    if request is not None and auth.CSRF_COOKIE not in request.cookies:
+    _slide_auth_cookies(request, response, csrf_token)
+    return response
+
+
+def _slide_auth_cookies(
+    request: Request | None, response: Response, csrf_token: str | None
+) -> None:
+    """按当前 Session 时长续上 CSRF，并续上已经登录的会话 Cookie。"""
+    if request is None:
+        return
+    ttl = int(getattr(request.state, "session_ttl_seconds", 720 * 60) or 720 * 60)
+    secure = request.url.scheme == "https"
+    csrf = request.cookies.get(auth.CSRF_COOKIE) or csrf_token
+    if csrf:
         response.set_cookie(
             auth.CSRF_COOKIE,
-            csrf_token,
-            max_age=12 * 3600,
+            csrf,
+            max_age=ttl,
             path="/",
             httponly=True,
             samesite="lax",
-            secure=request.url.scheme == "https",
+            secure=secure,
         )
-    return response
+    raw = getattr(request.state, "session_raw", None)
+    if raw:
+        response.set_cookie(
+            auth.SESSION_COOKIE,
+            raw,
+            max_age=ttl,
+            path="/",
+            httponly=True,
+            samesite="lax",
+            secure=secure,
+        )
