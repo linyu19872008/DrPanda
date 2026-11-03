@@ -38,7 +38,7 @@
 {% if rows %}
 <p class="audit-count">{{ t('共 {total} 条', total=total) }}</p>
 <div class="table-card">
-  <table class="table table--responsive table--audit">
+  <table class="table table--responsive table--audit table--share">
     <thead>
       <tr>
         <th scope="col">{{ t('时间') }}</th>
@@ -62,7 +62,7 @@
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
         <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td data-label="{{ t('摘要') }}" class="cell-summary">
+        <td data-label="{{ t('摘要') }}" class="cell-summary cell-fill">
           {% if row.summary %}
           <button class="summary-preview" type="button" data-dialog-open="audit-summary-{{ loop.index }}">
             <span class="summary-preview__text">{{ row.detail.preview }}</span>

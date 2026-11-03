@@ -23,7 +23,7 @@
 <div class="section-head"><h2>{{ t('需要处理') }}</h2></div>
 {% if problems %}
 <div class="table-card">
-  <table class="table table--responsive">
+  <table class="table table--responsive table--share">
     <thead><tr>
       <th>{{ t('环境') }}</th><th>{{ t('名称') }}</th><th>{{ t('问题') }}</th>
     </tr></thead>
@@ -32,7 +32,7 @@
       <tr>
         <td data-label="{{ t('环境') }}">{% if item.environment_key == 'default' and item.environment_title == '默认' %}{{ t('默认') }}{% else %}{{ item.environment_title or item.environment_key }}{% endif %}</td>
         <td data-label="{{ t('名称') }}"><a class="link-strong" href="{{ item.href }}">{{ item.name }}</a></td>
-        <td data-label="{{ t('问题') }}">{% for issue in item.issues %}{{ t(issue) }}{% if not loop.last %} / {% endif %}{% endfor %}</td>
+        <td data-label="{{ t('问题') }}" class="cell-fill">{% for issue in item.issues %}{{ t(issue) }}{% if not loop.last %} / {% endif %}{% endfor %}</td>
       </tr>
     {% endfor %}
     </tbody>
@@ -48,7 +48,7 @@
 </div>
 {% if recent %}
 <div class="table-card">
-  <table class="table table--responsive table--audit">
+  <table class="table table--responsive table--audit table--share">
     <thead><tr>
       <th>{{ t('时间') }}</th><th>{{ t('操作者') }}</th><th>{{ t('动作') }}</th><th>{{ t('对象') }}</th><th>{{ t('摘要') }}</th>
     </tr></thead>
@@ -59,7 +59,7 @@
         <td data-label="{{ t('操作者') }}">{{ row.actor }}</td>
         <td data-label="{{ t('动作') }}"><span class="badge badge--quiet">{{ t(row.action_label) }}</span></td>
         <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td data-label="{{ t('摘要') }}" class="cell-summary">
+        <td data-label="{{ t('摘要') }}" class="cell-summary cell-fill">
           {% if row.summary %}
           <button class="summary-preview" type="button" data-dialog-open="overview-summary-{{ loop.index }}">
             <span class="summary-preview__text">{{ row.detail.preview }}</span>
@@ -123,7 +123,7 @@
 </div>
 {% if calls %}
 <div class="table-card">
-  <table class="table table--responsive">
+  <table class="table table--responsive table--share">
     <thead><tr>
       <th>{{ t('时间') }}</th><th>{{ t('目标名') }}</th><th>{{ t('工具名') }}</th><th>{{ t('结果') }}</th>
     </tr></thead>
@@ -133,7 +133,7 @@
         <td data-label="{{ t('时间') }}">{{ local_time(row.at) }}</td>
         <td data-label="{{ t('目标名') }}" class="mono">{{ row.target }}</td>
         <td data-label="{{ t('工具名') }}" class="mono">{{ row.tool }}</td>
-        <td data-label="{{ t('结果') }}">{% if row.known and row.ok %}{{ t('成功') }}{% elif row.error %}<span class="audit-detail__error">{{ row.error }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('结果') }}" class="cell-fill">{% if row.known and row.ok %}{{ t('成功') }}{% elif row.error %}<span class="audit-detail__error">{{ row.error }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

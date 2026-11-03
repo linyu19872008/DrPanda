@@ -325,8 +325,13 @@ ul {
 }
 
 .app-shell--nav .container {
+  max-width: none;
   margin-left: 0;
-  margin-right: auto;
+  margin-right: 0;
+}
+
+.app-shell--nav .container--form {
+  max-width: 1180px;
 }
 
 .sidebar {
@@ -733,6 +738,7 @@ ul {
   display: flex;
   gap: var(--space-2);
   flex: 1 1 320px;
+  max-width: 420px;
 }
 
 .toolbar__search .input {
@@ -929,11 +935,11 @@ ul {
     table-layout: fixed;
   }
 
-  .table--targets .col-name { width: 13%; }
-  .table--targets .col-type { width: 8%; }
-  .table--targets .col-endpoint { width: 18%; }
-  .table--targets .col-scope { width: 10%; }
-  .table--targets .col-status { width: 11%; }
+  .table--targets .col-name { width: 16%; }
+  .table--targets .col-type { width: 92px; }
+  .table--targets .col-scope { width: 132px; }
+  .table--targets .col-status { width: 120px; }
+  .table--targets .col-test { width: 164px; }
   .table--targets .col-actions { width: 230px; }
 
   .table--targets .cell-test,
@@ -1208,7 +1214,18 @@ ul {
   font-size: 13px;
 }
 
-.table--audit .cell-summary { max-width: 24rem; }
+@media (min-width: 1121px) {
+  .table--share th,
+  .table--share td {
+    white-space: nowrap;
+  }
+
+  .table--share .cell-fill {
+    width: 100%;
+    min-width: 12rem;
+    white-space: normal;
+  }
+}
 
 .summary-preview {
   display: flex;
@@ -1866,6 +1883,7 @@ ul {
 
   .toolbar__search {
     flex-basis: 100%;
+    max-width: none;
   }
 
   .alert {
@@ -2235,6 +2253,7 @@ ul {
 
 .settings-main {
   min-width: 0;
+  max-width: 880px;
 }
 
 .settings-form,

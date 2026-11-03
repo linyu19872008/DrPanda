@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if key %}{{ t('恢复单项默认值') }}{% else %}{{ t('恢复默认配置') }}{% endif %} · {{ product_name }}{% endblock %}
+{% block container_class %} container--form{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>

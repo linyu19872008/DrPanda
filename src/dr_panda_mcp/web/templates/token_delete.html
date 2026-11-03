@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ t('删除 Token') }} · {{ product_name }}{% endblock %}
+{% block container_class %} container--form{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/me">{{ t('我的') }}</a><span aria-hidden="true">/</span><span>{{ t('删除 Token') }}</span></nav>
 <div class="page-header"><div><h1>{{ t('删除 Token') }}</h1><p class="page-subtitle">{{ t('删除后立即失效，不能恢复。') }}</p></div></div>

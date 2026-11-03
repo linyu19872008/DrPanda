@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import env_label_existing %}
 {% block title %}{{ t('删除目标') }} · {{ product_name }}{% endblock %}
+{% block container_class %} container--form{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
   <a href="/targets">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('删除') }} {{ target.name }}</span>

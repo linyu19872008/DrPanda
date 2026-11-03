@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ t('Token 已生成') }} · {{ product_name }}{% endblock %}
+{% block container_class %} container--form{% endblock %}
 {% block content %}
 <div class="page-header"><div><span class="badge badge--success">{{ t('Token 已生成') }}</span><h1>{{ t('请立即保存') }}</h1><p class="page-subtitle">{{ t('完整 Token 只显示一次，关闭页面后无法再次查看。') }}</p></div></div>
 <div class="card profile-card profile-card--form">

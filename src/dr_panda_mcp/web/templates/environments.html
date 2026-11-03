@@ -18,7 +18,7 @@
 </section>
 {% else %}
 <div class="table-card">
-  <table class="table table--responsive">
+  <table class="table table--responsive table--share">
     <thead>
       <tr>
         <th scope="col">{{ t('展示名') }}</th>
@@ -31,7 +31,7 @@
     <tbody>
       {% for env in environments %}
       <tr>
-        <td data-label="{{ t('展示名') }}"><a class="link-strong" href="/targets?env={{ env.key }}">{{ env_label(env) }}</a></td>
+        <td data-label="{{ t('展示名') }}" class="cell-fill"><a class="link-strong" href="/targets?env={{ env.key }}">{{ env_label(env) }}</a></td>
         <td data-label="{{ t('调用标识') }}" class="mono">{{ env.key }}</td>
         <td data-label="{{ t('目标') }}">{{ t('{count} 个目标', count=env.target_count) }}</td>
         <td data-label="{{ t('状态') }}">

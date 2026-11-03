@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import option_field, secret_field, number_field, env_label, env_label_existing %}
 {% block title %}{{ t("新建目标") if mode == "create" else t("编辑目标") }} · {{ product_name }}{% endblock %}
+{% block container_class %} container--form{% endblock %}
 {% block content %}
 {% set connection_rows = option_rows | selectattr("section", "equalto", "connection") | list %}
 {% set connection_secrets = secret_rows | selectattr("section", "equalto", "connection") | list %}
