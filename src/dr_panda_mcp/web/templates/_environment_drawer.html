@@ -1,0 +1,51 @@
+<dialog id="env-drawer" class="modal drawer" aria-labelledby="env-drawer-title"{% if env_drawer|default(false) %} open data-open-on-load="true"{% endif %}>
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <h2 id="env-drawer-title">{{ t('新建环境') }}</h2>
+    {% set drawer_values = env_values|default({'title': '', 'key': '', 'enabled': 'on'}, true) %}
+    {% set drawer_errors = env_errors|default({}, true) %}
+    {% if drawer_errors.get('_form') %}
+    <div class="alert alert--danger" role="alert">
+      <div class="alert__body"><strong>{{ t('保存失败') }}</strong><span class="alert__detail">{{ t(drawer_errors['_form']) }}</span></div>
+    </div>
+    {% endif %}
+    <form method="post" action="/environments"{% if env_return|default('environments') == 'stay' %} data-env-create{% endif %}>
+      <div class="alert alert--danger" data-env-error role="alert" hidden>
+        <div class="alert__body"><strong data-notice-text></strong></div>
+      </div>
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="return_to" value="{{ env_return|default('environments') }}">
+      {% if context_env|default('') %}
+      <input type="hidden" name="context_env" value="{{ context_env }}">
+      {% endif %}
+      <div class="field{% if drawer_errors.get('title') %} field--invalid{% endif %}">
+        <label class="field__label" for="field-env-title">{{ t('展示名') }}<span class="required" aria-hidden="true">*</span></label>
+        <input class="input" id="field-env-title" name="title" value="{{ drawer_values.title }}" required aria-required="true"
+               placeholder="{{ t('例如生产') }}" autocomplete="off"
+               {% if env_drawer|default(false) %}autofocus{% endif %}
+               {% if drawer_errors.get('title') %}aria-invalid="true" aria-describedby="err-env-title"{% endif %}>
+        {% if drawer_errors.get('title') %}<p class="field__error" id="err-env-title" role="alert">{{ t(drawer_errors.get('title')) }}</p>{% endif %}
+      </div>
+      <div class="field{% if drawer_errors.get('key') %} field--invalid{% endif %}">
+        <label class="field__label" for="field-env-key">{{ t('调用标识') }}<span class="required" aria-hidden="true">*</span></label>
+        <input class="input mono" id="field-env-key" name="key" value="{{ drawer_values.key }}" required aria-required="true"
+               placeholder="prod" autocomplete="off" spellcheck="false"
+               {% if drawer_errors.get('key') %}aria-invalid="true" aria-describedby="err-env-key"{% endif %}>
+        {% if drawer_errors.get('key') %}<p class="field__error" id="err-env-key" role="alert">{{ t(drawer_errors.get('key')) }}</p>{% endif %}
+        <p class="field__hint">{{ t('小写字母、数字和连字符。创建后不能修改，排查时要传这个值。') }}</p>
+      </div>
+      <div class="field">
+        <label class="switch-row" for="env-enabled">
+          <span class="field__label">{{ t('启用') }}</span>
+          <input class="switch__input" type="checkbox" id="env-enabled" name="enabled"{% if drawer_values.enabled %} checked{% endif %}>
+          <span class="switch__track" aria-hidden="true"></span>
+        </label>
+        <p class="field__hint">{{ t('停用后不能查询这个环境，目标配置仍保留。') }}</p>
+      </div>
+      <div class="drawer__actions">
+        <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+        <button class="btn btn--primary" type="submit" data-loading-label="{{ t('保存中…') }}">{{ t('保存环境') }}</button>
+      </div>
+    </form>
+  </div>
+</dialog>

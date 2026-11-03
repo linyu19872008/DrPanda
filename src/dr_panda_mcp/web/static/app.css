@@ -2991,6 +2991,11 @@ dialog.drawer .modal__panel {
   margin-top: var(--space-4);
 }
 
+.drawer .type-grid {
+  grid-template-columns: 1fr;
+  margin-top: var(--space-3);
+}
+
 /* 组件的 display 不能盖住 HTML hidden，否则空的提示槽会画成一条色带。 */
 [hidden] {
   display: none !important;

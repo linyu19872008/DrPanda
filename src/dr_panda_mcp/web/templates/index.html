@@ -2,15 +2,15 @@
 {% macro env_label(env) -%}
 {%- if env.key == 'default' and env.title == '默认' -%}{{ t('默认') }}{%- else -%}{{ env.title }}{%- endif -%}
 {%- endmacro %}
-{% block title %}{{ t('排查目标') }} · {{ product_name }}{% endblock %}
+{% block title %}{{ t('目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>{{ t('排查目标') }}</h1>
+    <h1>{{ t('目标') }}</h1>
   </div>
   <div class="page-header__actions">
     <a class="btn btn--secondary" href="/environments">{{ t('管理环境') }}</a>
-    <a class="btn btn--primary" href="/targets/new{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('＋ 新建目标') }}</a>
+    <a class="btn btn--primary" href="/targets/new{% if current_env %}?env={{ current_env.key }}{% endif %}" data-dialog-open="type-drawer">{{ t('＋ 新建目标') }}</a>
   </div>
 </div>
 
@@ -28,7 +28,7 @@
     </span>
   </a>
   {% endfor %}
-  <a class="env-switch__item env-switch__item--new" href="/environments/new">
+  <a class="env-switch__item env-switch__item--new" href="/environments/new" data-dialog-open="env-drawer">
     <span class="env-switch__title">{{ t('新建环境') }}</span>
   </a>
 </nav>
@@ -84,7 +84,7 @@
 <section class="empty">
   <h2>{{ t('还没有环境') }}</h2>
   <p>{{ t('先新建环境，再在里面登记目标。') }}</p>
-  <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
+  <a class="btn btn--primary" href="/environments/new" data-dialog-open="env-drawer">{{ t('新建环境') }}</a>
 </section>
 {% elif not has_targets %}
 <section class="empty">
@@ -250,4 +250,31 @@
 {% endif %}
 {% endfor %}
 {% endif %}
+
+<dialog id="type-drawer" class="modal drawer" aria-labelledby="type-drawer-title">
+  <div class="modal__panel">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <h2 id="type-drawer-title">{{ t('选择目标类型') }}</h2>
+    <p class="field__hint">{{ t('不同系统的连接方式、授权范围和只读规则不同，先选类型再填连接。') }}</p>
+    {% if current_env %}
+    <div class="alert alert--info" role="status">
+      <div class="alert__body">
+        <strong>{{ env_label(current_env) }} <span class="mono">{{ current_env.key }}</span></strong>
+        <span class="alert__detail">{{ t('目标会登记到这里，保存后不能换环境。') }}</span>
+      </div>
+    </div>
+    {% endif %}
+    <div class="type-grid">
+      {% for card in type_cards %}
+      <a class="type-card type-card--sm" href="/targets/new?type={{ card.type }}{% if current_env %}&env={{ current_env.key }}{% endif %}">
+        <span class="type-card__title">{{ t(card.label) }}</span>
+        <span class="type-card__arrow" aria-hidden="true">→</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</dialog>
+{% set env_return = 'targets' %}
+{% set context_env = current_env.key if current_env else '' %}
+{% include "_environment_drawer.html" %}
 {% endblock %}

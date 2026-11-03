@@ -11,7 +11,7 @@
 {% set advanced_open = (advanced_rows | selectattr("error") | list | length) or (advanced_secrets | selectattr("error") | list | length) or (common_rows | selectattr("error") | list | length) %}
 
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
-  <a href="/targets">{{ t('排查目标') }}</a><span aria-hidden="true">/</span>
+  <a href="/targets">{{ t('目标') }}</a><span aria-hidden="true">/</span>
   <span>{{ t(spec.label) }}{% if mode == "edit" %} · {{ existing.name }}{% endif %}</span>
 </nav>
 <div class="page-header">
@@ -67,10 +67,10 @@
     <section class="card form-section">
       <h2 class="form-section__title">{{ t('基本信息') }}</h2>
       {% if mode == "create" %}
-      <div class="field{% if errors.get('environment') %} field--invalid{% endif %}">
+      <div class="field{% if errors.get('environment') %} field--invalid{% endif %}" data-environment-field>
         {% if environments|length <= 1 %}
         <span class="field__label">{{ t('所属环境') }}</span>
-        <div class="readonly">{{ env_label(environments[0]) if environments else t('还没有环境') }}{% if environments %} <span class="mono">{{ environments[0].key }}</span>{% endif %}</div>
+        <div class="readonly" data-environment-label>{{ env_label(environments[0]) if environments else t('还没有环境') }}{% if environments %} <span class="mono">{{ environments[0].key }}</span>{% endif %}</div>
         <input type="hidden" name="environment" value="{{ values.get('environment', '') }}">
         {% else %}
         <label class="field__label" for="field-environment">{{ t('所属环境') }}<span class="required" aria-hidden="true">*</span></label>
@@ -82,7 +82,7 @@
         </select>
         {% endif %}
         {% if errors.get('environment') %}<p class="field__error" id="err-environment" role="alert">{{ t(errors.get('environment')) }}</p>{% endif %}
-        <p class="field__hint">{{ t('保存后不能更换环境。') }}{% if environments|length <= 1 %} <a href="/environments/new">{{ t('新建环境') }}</a>{% endif %}</p>
+        <p class="field__hint">{{ t('保存后不能更换环境。') }}{% if environments|length <= 1 %} <a href="/environments/new" data-dialog-open="env-drawer">{{ t('新建环境') }}</a>{% endif %}</p>
       </div>
       {% else %}
       <div class="field">
@@ -196,4 +196,8 @@
     </section>
   </aside>
 </div>
+{% if mode == "create" and environments|length <= 1 %}
+{% set env_return = 'stay' %}
+{% include "_environment_drawer.html" %}
+{% endif %}
 {% endblock %}

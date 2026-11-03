@@ -7,14 +7,14 @@
     <h1>{{ t('环境') }}</h1>
     <p class="page-subtitle">{{ t('展示名可以改，调用标识创建后不能改。') }}</p>
   </div>
-  <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
+  <a class="btn btn--primary" href="/environments/new" data-dialog-open="env-drawer">{{ t('新建环境') }}</a>
 </div>
 
 {% if not environments %}
 <section class="empty">
   <h2>{{ t('还没有环境') }}</h2>
-  <p>{{ t('新建一个环境后，再回到排查目标里登记 MySQL、日志和其他系统。') }}</p>
-  <a class="btn btn--primary" href="/environments/new">{{ t('新建环境') }}</a>
+  <p>{{ t('新建一个环境后，再回到目标里登记 MySQL、日志和其他系统。') }}</p>
+  <a class="btn btn--primary" href="/environments/new" data-dialog-open="env-drawer">{{ t('新建环境') }}</a>
 </section>
 {% else %}
 <div class="table-card">
@@ -76,4 +76,6 @@
 </dialog>
 {% endfor %}
 {% endif %}
+{% set env_return = 'environments' %}
+{% include "_environment_drawer.html" %}
 {% endblock %}

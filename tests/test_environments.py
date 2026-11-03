@@ -121,10 +121,35 @@ async def test_web_environment_flow_stays_in_the_chosen_environment(
 ) -> None:
     async with _client(runtime) as client:
         home = await client.get("/targets")
+        single = await client.get("/targets/new", params={"type": "mysql"})
+        environments = await client.get("/environments")
         form = await client.get("/environments/new")
         created = await client.post(
             "/environments",
             data={"title": "乐畅生产", "key": "lechang-prod", "enabled": "on"},
+        )
+        stayed = await client.post(
+            "/environments",
+            data={
+                "title": "测试",
+                "key": "test",
+                "enabled": "on",
+                "return_to": "environments",
+            },
+        )
+        rejected = await client.post(
+            "/environments",
+            data={"title": "坏", "key": "BAD", "enabled": "on", "return_to": "targets"},
+        )
+        inline = await client.post(
+            "/environments",
+            data={"title": "预发", "key": "stage", "enabled": "on", "return_to": "stay"},
+            headers={"Accept": "application/json"},
+        )
+        duplicate = await client.post(
+            "/environments",
+            data={"title": "预发", "key": "stage", "enabled": "on", "return_to": "stay"},
+            headers={"Accept": "application/json"},
         )
         landed = await client.get(created.headers["location"])
         chooser = await client.get("/targets/new", params={"env": "lechang-prod"})
@@ -136,11 +161,31 @@ async def test_web_environment_flow_stays_in_the_chosen_environment(
         blocked = await client.post("/environments/1/delete")
 
     assert "管理环境" in home.text
+    assert 'data-dialog-open="type-drawer"' in home.text
+    assert 'data-dialog-open="env-drawer"' in home.text
+    assert "/targets/new?type=mysql" in home.text
+    assert 'data-dialog-open="env-drawer"' in single.text
+    assert 'name="return_to" value="stay"' in single.text
+    assert 'data-dialog-open="env-drawer"' in environments.text
+    assert 'name="return_to" value="environments"' in environments.text
     assert "调用标识" in form.text
     assert 'placeholder="prod"' in form.text
     assert created.status_code == 303
     assert "flash=env_created" in created.headers["location"]
     assert "env=lechang-prod" in created.headers["location"]
+    assert stayed.status_code == 303
+    assert stayed.headers["location"].startswith("/environments?")
+    assert "flash=env_created" in stayed.headers["location"]
+    assert rejected.status_code == 400
+    assert 'data-open-on-load="true"' in rejected.text
+    assert "调用标识只允许" in rejected.text
+    assert 'value="坏"' in rejected.text
+    assert inline.status_code == 200
+    assert inline.json()["environment"] == "stage"
+    assert any(item["key"] == "stage" for item in inline.json()["environments"])
+    assert duplicate.status_code == 400
+    assert duplicate.json()["ok"] is False
+    assert "已存在" in duplicate.json()["errors"]["key"]
     assert "环境已创建" in landed.text
     assert "这个环境还没有目标" in landed.text
     assert "乐畅生产" in chooser.text

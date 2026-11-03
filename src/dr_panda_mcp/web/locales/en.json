@@ -485,7 +485,7 @@
   "展示名是你和模型对话时用的名字，例如乐畅生产。调用标识是模型传入的 environment，例如 lechang-prod。调用标识创建后不能修改。": "The display name is what you and the model say, such as Lechang production. The call key is the environment value the model passes, such as lechang-prod. The call key cannot be changed later.",
   "乐畅生产": "Lechang production",
   "畅聊生产": "Changliao production",
-  "新建一个环境后，再回到排查目标里登记 MySQL、日志和其他系统。": "After you create an environment, go back to Targets and register MySQL, logs, and the other systems.",
+  "新建一个环境后，再回到目标里登记 MySQL、日志和其他系统。": "After you create an environment, go back to Targets and register MySQL, logs, and the other systems.",
   "展示名": "Display name",
   "调用标识": "Call key",
   "目标": "Targets",

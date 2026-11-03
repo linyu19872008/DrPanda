@@ -79,7 +79,7 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             assert admin_home.headers["location"] == "/"
             overview = await client.get("/")
             assert "需要处理" in overview.text
-            assert "排查目标" in overview.text
+            assert 'href="/targets"' in overview.text
 
             users = await client.get("/users")
             assert "创建成员" in users.text
@@ -150,7 +150,7 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             page = await client.get("/")
             assert "可查询的目标" in page.text
             assert "需要处理" not in page.text
-            assert "排查目标" not in page.text
+            assert 'href="/targets"' not in page.text
             assert "系统配置" not in page.text
             assert SECRET not in page.text
 

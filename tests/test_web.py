@@ -492,7 +492,7 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert 'aria-label="主导航"' in text
     assert 'class="sidebar"' in text
     nav = text.split('aria-label="主导航"', 1)[1]
-    assert nav.index("概览") < nav.index("排查目标") < nav.index("环境") < nav.index("审计")
+    assert nav.index("概览") < nav.index("目标") < nav.index("环境") < nav.index("审计")
     assert nav.index("审计") < nav.index("系统配置") < nav.index("用户") < nav.index("我的")
     assert 'name="mode" value="dark"' in text
     assert "/static/app.css?v=" in text
@@ -502,7 +502,7 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert 'class="brand__name">DrPanda<' in text
     assert "<title>概览 · DrPanda MCP</title>" in text
     assert "还没有登记任何目标" in targets.text
-    assert "<title>排查目标 · DrPanda MCP</title>" in targets.text
+    assert "<title>目标 · DrPanda MCP</title>" in targets.text
 
 
 async def test_theme_cookie_roundtrip(runtime: Runtime) -> None:

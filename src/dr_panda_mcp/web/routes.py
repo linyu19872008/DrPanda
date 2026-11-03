@@ -60,10 +60,20 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         except Exception:  # 记录失败不影响保存结果
             logger.warning("保存后记录连接测试结果失败：target=%s", target_id, exc_info=True)
 
-    @server.custom_route("/targets", methods=["GET"])
-    async def index(request: Request) -> HTMLResponse:
+    async def _render_targets(
+        request: Request,
+        *,
+        requested_env: str | None = None,
+        env_drawer: bool = False,
+        env_values: dict[str, str] | None = None,
+        env_errors: dict[str, str] | None = None,
+        status: int = 200,
+    ) -> HTMLResponse:
         environments = await store.list_environments()
-        current = _current_environment(environments, request.query_params.get("env", ""))
+        requested = (
+            request.query_params.get("env", "") if requested_env is None else requested_env
+        )
+        current = _current_environment(environments, requested)
         env_key = current.key if current is not None else ""
         all_views = views.list_views(await store.list_all())
         env_views = views.filter_views(all_views, environment=env_key or None)
@@ -86,7 +96,15 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             has_any_targets=bool(all_views),
             environments=environments,
             current_env=current,
+            env_drawer=env_drawer,
+            env_values=env_values,
+            env_errors=env_errors or {},
+            status_code=status,
         )
+
+    @server.custom_route("/targets", methods=["GET"])
+    async def index(request: Request) -> HTMLResponse:
+        return await _render_targets(request)
 
     @server.custom_route("/targets/new", methods=["GET"])
     async def new_target(request: Request) -> Response:
@@ -495,14 +513,28 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         ok, message = await _probe_saved_target(target)
         return await _test_response(request, target, ok, message)
 
-    @server.custom_route("/environments", methods=["GET"])
-    async def environments_index(request: Request) -> HTMLResponse:
+    async def _render_environments(
+        request: Request,
+        *,
+        env_drawer: bool = False,
+        env_values: dict[str, str] | None = None,
+        env_errors: dict[str, str] | None = None,
+        status: int = 200,
+    ) -> HTMLResponse:
         return render.render(
             "environments.html",
             request=request,
             flash=_flash(request),
             environments=await store.list_environments(),
+            env_drawer=env_drawer,
+            env_values=env_values,
+            env_errors=env_errors or {},
+            status_code=status,
         )
+
+    @server.custom_route("/environments", methods=["GET"])
+    async def environments_index(request: Request) -> HTMLResponse:
+        return await _render_environments(request)
 
     @server.custom_route("/environments/new", methods=["GET"])
     async def new_environment(request: Request) -> HTMLResponse:
@@ -510,14 +542,51 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             request, mode="create", values={"key": "", "title": "", "enabled": "on"}, errors={}
         )
 
+    async def _environment_create_error(
+        request: Request,
+        form,
+        values: dict[str, str],
+        errors: dict[str, str],
+        return_to: str,
+    ) -> Response:
+        if return_to == "stay" and async_api.wants_json(request):
+            message = errors.get("_form") or "保存失败"
+            return async_api.fail(
+                request,
+                async_api.CODE_INVALID_INPUT,
+                message,
+                errors=errors,
+            )
+        if return_to == "environments":
+            return await _render_environments(
+                request,
+                env_drawer=True,
+                env_values=values,
+                env_errors=errors,
+                status=400,
+            )
+        if return_to == "targets":
+            return await _render_targets(
+                request,
+                requested_env=str(form.get("context_env", "")),
+                env_drawer=True,
+                env_values=values,
+                env_errors=errors,
+                status=400,
+            )
+        return _environment_form(
+            request, mode="create", values=values, errors=errors, status=400
+        )
+
     @server.custom_route("/environments", methods=["POST"])
     async def create_environment(request: Request) -> Response:
         form = await request.form()
         values, errors = _environment_values(form)
+        return_to = str(form.get("return_to", ""))
+        if return_to not in {"environments", "targets", "stay"}:
+            return_to = "page"
         if errors:
-            return _environment_form(
-                request, mode="create", values=values, errors=errors, status=400
-            )
+            return await _environment_create_error(request, form, values, errors, return_to)
         try:
             created = await store.create_environment(
                 values["key"],
@@ -527,14 +596,21 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             )
         except app_errors.EnvironmentKeyTaken as exc:
             errors["key"] = str(exc)
-            return _environment_form(
-                request, mode="create", values=values, errors=errors, status=400
-            )
+            return await _environment_create_error(request, form, values, errors, return_to)
         except app_errors.InvalidTarget as exc:
             errors["_form"] = str(exc)
-            return _environment_form(
-                request, mode="create", values=values, errors=errors, status=400
+            return await _environment_create_error(request, form, values, errors, return_to)
+        if return_to == "stay" and async_api.wants_json(request):
+            environments = await store.list_environments()
+            return async_api.ok(
+                request,
+                data={
+                    "environment": created.key,
+                    "environments": _environment_choices(request, environments),
+                },
             )
+        if return_to == "environments":
+            return _redirect("/environments", flash="env_created")
         return _redirect("/targets", flash="env_created", env=created.key)
 
     @server.custom_route("/environments/{environment_id:int}/edit", methods=["GET"])
@@ -1245,6 +1321,16 @@ async def _environment(store: ConfigStore, environment_id: int):
 
 
 _ENV_KEY_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
+
+
+def _environment_choices(request: Request, environments) -> list[dict[str, str]]:
+    choices: list[dict[str, str]] = []
+    for item in environments:
+        title = item.title
+        if item.key == "default" and item.title == "默认":
+            title = async_api.translate(request, "默认")
+        choices.append({"key": item.key, "label": f"{title} · {item.key}"})
+    return choices
 
 
 def _environment_values(form, *, existing_key: str = "") -> tuple[dict[str, str], dict[str, str]]:

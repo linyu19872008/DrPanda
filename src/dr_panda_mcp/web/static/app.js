@@ -821,11 +821,93 @@
     });
   };
 
+  // 目标表单里新建环境：保存后写进所属环境下拉，已填的连接留在原页。
+  const applyCreatedEnvironment = (data) => {
+    const field = document.querySelector("[data-environment-field]");
+    if (!field || !data || !Array.isArray(data.environments)) return;
+    let select = field.querySelector('select[name="environment"]');
+    if (!select) {
+      select = document.createElement("select");
+      select.className = "input select";
+      select.id = "field-environment";
+      select.name = "environment";
+      select.required = true;
+      select.setAttribute("aria-required", "true");
+      select.dataset.gate = "off";
+      const label = field.querySelector(".field__label");
+      if (label && label.tagName === "SPAN") {
+        const next = document.createElement("label");
+        next.className = label.className;
+        next.htmlFor = select.id;
+        next.innerHTML = label.innerHTML;
+        if (!next.querySelector(".required")) {
+          const star = document.createElement("span");
+          star.className = "required";
+          star.setAttribute("aria-hidden", "true");
+          star.textContent = "*";
+          next.appendChild(star);
+        }
+        label.replaceWith(next);
+      }
+      const readonly = field.querySelector("[data-environment-label]");
+      if (readonly) readonly.replaceWith(select);
+      else field.insertBefore(select, field.querySelector(".field__hint"));
+      field.querySelectorAll('input[type="hidden"][name="environment"]').forEach((node) => {
+        node.remove();
+      });
+      const link = field.querySelector('[data-dialog-open="env-drawer"]');
+      if (link) link.remove();
+    }
+    select.replaceChildren();
+    data.environments.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.key;
+      option.textContent = item.label;
+      option.selected = item.key === data.environment;
+      select.appendChild(option);
+    });
+    const targetForm = document.querySelector("[data-target-form]");
+    if (targetForm instanceof HTMLFormElement) targetForm.dataset.dirty = "1";
+  };
+
+  const initEnvCreate = () => {
+    const form = document.querySelector("form[data-env-create]");
+    if (!(form instanceof HTMLFormElement)) return;
+    const notice = form.querySelector("[data-env-error]");
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button =
+        event.submitter instanceof HTMLButtonElement
+          ? event.submitter
+          : form.querySelector('button[type="submit"]');
+      busyButton(button, true);
+      clearFieldErrors(form);
+      hideNotice(notice);
+      try {
+        const data = await postForm(form, form.getAttribute("action") || "/environments");
+        applyCreatedEnvironment(data);
+        form.reset();
+        const dialog = form.closest("dialog");
+        if (dialog instanceof HTMLDialogElement && dialog.open) dialog.close();
+      } catch (error) {
+        if (error.kind === "unauthorized") return;
+        const errors = error.data && error.data.errors;
+        if (errors) applyFieldErrors(form, errors);
+        const formMessage = errors && errors._form;
+        if (formMessage) setNotice(notice, "danger", formMessage);
+        else if (!errors) setNotice(notice, "danger", errorMessage(form, error));
+      } finally {
+        busyButton(button, false);
+      }
+    });
+  };
+
   // ---------------------------------------------------------------------
   // 初始化
   // ---------------------------------------------------------------------
   try {
     applyLocalTimes(document);
+    initEnvCreate();
     const targetForm = document.querySelector("[data-target-form]");
     if (targetForm) initTargetForm(targetForm);
     initRowActions();
