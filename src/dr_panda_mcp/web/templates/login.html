@@ -10,7 +10,10 @@
   {% if error %}
   <div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>
   {% endif %}
-  <form method="post" action="/login" class="login-form">
+  <div class="alert alert--danger" data-login-error role="alert" hidden>
+    <div class="alert__body"><strong data-notice-text></strong></div>
+  </div>
+  <form method="post" action="/login" class="login-form" data-async-form data-login-form>
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <input type="hidden" name="next" value="{{ next_path }}">
     <div class="field">
@@ -21,7 +24,7 @@
       <label class="field__label" for="login-password">{{ t('密码') }}</label>
       <input class="input" id="login-password" name="password" type="password" autocomplete="current-password" required>
     </div>
-    <button class="btn btn--primary btn--block" type="submit">{{ t('登录') }}</button>
+    <button class="btn btn--primary btn--block" type="submit" data-loading-label="{{ t('登录中…') }}">{{ t('登录') }}</button>
   </form>
 </section>
 {% endblock %}

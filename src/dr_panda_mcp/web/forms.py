@@ -632,6 +632,15 @@ def option_rows(
 ) -> list[dict[str, Any]]:
     rows = []
     for field in spec.options:
+        section = (
+            "advanced"
+            if field.key in ADVANCED_OPTION_KEYS
+            else "connection"
+            if field.kind == "list" and field.key in CONNECTION_LIST_KEYS
+            else "scope"
+            if field.kind == "list" or field.key in SCOPE_KEYS
+            else "connection"
+        )
         rows.append(
             {
                 "key": field.key,
@@ -642,15 +651,9 @@ def option_rows(
                 "choices": field.choices,
                 "required": field.required,
                 "help": field.help,
-                "section": (
-                    "advanced"
-                    if field.key in ADVANCED_OPTION_KEYS
-                    else "connection"
-                    if field.kind == "list" and field.key in CONNECTION_LIST_KEYS
-                    else "scope"
-                    if field.kind == "list" or field.key in SCOPE_KEYS
-                    else "connection"
-                ),
+                "section": section,
+                # 授权范围不影响连通性：改它不必重新测试连接。
+                "gate": section != "scope",
             }
         )
     return rows

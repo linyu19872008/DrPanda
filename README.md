@@ -74,8 +74,10 @@ http://127.0.0.1:8111/
 
 1. 设置管理员密码（至少 8 位）；
 2. 选择配置库：SQLite（推荐本地使用）/ MySQL / PostgreSQL；
-3. 测试连接；
+3. 测试连接（通过后「完成安装」才可点）；
 4. 完成安装，保存安装完成页显示的 MCP Token。
+
+登记排查目标时，必须先点「测试连接」并真实探测成功，保存按钮才会解禁；保存时服务端会再探测一次，失败不会落库。修改连接、TLS、运行限制或密钥后需要重新测试。
 
 健康检查：
 
@@ -354,7 +356,8 @@ scripts/              冒烟与 Docker 联调脚本
 - SQLite / MySQL / PostgreSQL 配置库安装；
 - 多 MCP Token 创建、复制、删除、分页；
 - 登录、Session、CSRF、登出与密码修改；
-- 目标增删改、启停、测试连接、密钥加密；
+- 目标增删改、启停、测试连接（探测通过才能保存）、密钥加密；
+- 同源异步交互：列表行内测试/启停、保存门槛、系统配置/登录/改密/安装向导局部反馈，无 JS 时回退普通表单；
 - 系统配置保存、逐项/全局恢复默认、历史记录；
 - 明暗主题、中英文、1440/390 响应式布局；
 - MySQL / Mongo / ES / Redis / RabbitMQ Docker 真实上游；
@@ -379,7 +382,8 @@ scripts/              冒烟与 Docker 联调脚本
 - [docs/milestones.md](docs/milestones.md)：里程碑与验收口径
 - [docs/ui-design.md](docs/ui-design.md)：配置台设计系统与页面规格
 - [docs/verify/m7-01.md](docs/verify/m7-01.md)：M7 安装、登录、多 Token
-- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 渐进增强约束
+- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 约束 v2（服务端优先 + 同源 fetch 渐进增强）
+- [docs/verify/async-ux-01.md](docs/verify/async-ux-01.md)：异步交互与保存门槛、真实 Chrome 验证
 - [docs/verify/ux-audit-01.md](docs/verify/ux-audit-01.md)：全站交互审计与修复
 - [docs/verify/form-ux-01.md](docs/verify/form-ux-01.md)：目标表单重组与保存前测试连接
 - [docs/verify/settings-03.md](docs/verify/settings-03.md)：系统配置结构化

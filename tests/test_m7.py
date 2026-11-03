@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import httpx
@@ -55,7 +56,7 @@ async def test_setup_wizard_creates_admin_and_install_state(tmp_path: Path) -> N
 
         initial = await client.get("/setup/database")
         assert initial.status_code == 200
-        assert 'value="finish" disabled' in initial.text
+        assert 'data-can-finish="false"' in initial.text
 
         csrf = client.cookies.get(auth.CSRF_COOKIE)
         tested = await client.post(
@@ -68,7 +69,7 @@ async def test_setup_wizard_creates_admin_and_install_state(tmp_path: Path) -> N
             },
         )
         assert tested.status_code == 200
-        assert 'value="finish" disabled' not in tested.text
+        assert 'data-can-finish="true"' in tested.text
         assert 'value="finish"' in tested.text
 
         csrf = client.cookies.get(auth.CSRF_COOKIE)
@@ -96,6 +97,53 @@ async def test_setup_wizard_creates_admin_and_install_state(tmp_path: Path) -> N
     assert user.role == "admin"
     assert auth.verify_password("abcdefgh", user.password_hash)
     assert load_install_state(cfg.install_file, cfg.install_key_file) is not None
+    await app.close()
+
+
+async def test_setup_wizard_json_test_and_finish(tmp_path: Path) -> None:
+    """安装向导的异步模式：测试连接返回 JSON，完成安装返回 redirect + Session。"""
+    cfg = _config(tmp_path)
+    app = SetupApp(cfg)
+    db_path = tmp_path / "config.sqlite"
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app), base_url=BASE, cookies={"drpanda_lang": "zh-Hans"}
+    ) as client:
+        page = await client.get("/setup/admin")
+        token = re.search(r'name="_csrf" value="([^"]+)"', page.text).group(1)
+        admin = await client.post(
+            "/setup/admin",
+            data={"_csrf": token, "password": "abcdefgh", "confirm": "abcdefgh"},
+        )
+        assert admin.status_code == 303
+
+        page = await client.get("/setup/database")
+        token = re.search(r'name="_csrf" value="([^"]+)"', page.text).group(1)
+        base = {
+            "_csrf": token,
+            "db_type": "sqlite",
+            "sqlite_path": str(db_path),
+            "action": "test",
+        }
+        tested = await client.post(
+            "/setup/database", data=base, headers={"accept": "application/json"}
+        )
+        assert tested.status_code == 200, tested.text
+        body = tested.json()
+        assert body["ok"] is True
+        assert body["can_finish"] is True
+        assert load_install_state(cfg.install_file, cfg.install_key_file) is None
+
+        finished = await client.post(
+            "/setup/database",
+            data={**base, "action": "finish"},
+            headers={"accept": "application/json"},
+        )
+        assert finished.status_code == 200, finished.text
+        finished_body = finished.json()
+        assert finished_body["ok"] is True
+        assert finished_body["redirect"] == "/"
+        assert auth.SESSION_COOKIE in finished.cookies
+        assert load_install_state(cfg.install_file, cfg.install_key_file) is not None
     await app.close()
 
 
@@ -229,7 +277,9 @@ async def test_install_state_is_encrypted(tmp_path: Path) -> None:
 async def test_mcp_bearer_initializes_with_auth(tmp_path: Path) -> None:
     runtime, cfg, key, token = await _auth_runtime(tmp_path)
     app = create_app(cfg, runtime, auth_required=True, session_key=key)
-    inner = app.app.app.app  # NotFound -> CSRF -> Auth -> FastMCP
+    inner = app
+    while not hasattr(inner, "router") and hasattr(inner, "app"):
+        inner = inner.app  # SecurityHeaders -> NotFound -> CSRF -> Auth -> FastMCP
     try:
         async with (
             inner.router.lifespan_context(inner),

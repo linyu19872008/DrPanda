@@ -25,7 +25,8 @@ from dr_panda_mcp.install import save_install_state
 from dr_panda_mcp.runtime import Runtime, create_runtime
 from dr_panda_mcp.server import create_app
 from dr_panda_mcp.store.url import create_engine, ensure_driver, normalize_database_url
-from dr_panda_mcp.web import render, theme
+from dr_panda_mcp.web import async_api, render, theme
+from dr_panda_mcp.web.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
@@ -67,6 +68,7 @@ class SetupApp:
                 Mount("/static", StaticFiles(directory=STATIC_DIR), name="setup-static"),
             ]
         )
+        self.app.add_middleware(SecurityHeadersMiddleware)
 
     async def __call__(self, scope, receive, send) -> None:
         if self.normal_app is not None:
@@ -135,7 +137,7 @@ class SetupApp:
             return RedirectResponse("/setup/admin", status_code=303)
         form = await request.form()
         if not self._csrf_ok(request, form):
-            return self._render_database(request, error="请求已过期，请重试", status=403)
+            return self._database_error(request, "请求已过期，请重试", status=403)
         self._capture_database(form)
         action = str(form.get("action", "test"))
         if action == "finish":
@@ -146,15 +148,28 @@ class SetupApp:
         except Exception as exc:  # noqa: BLE001 - 安装页展示脱敏失败原因
             self.state.tested_url = None
             self.state.test_detail = None
-            return self._render_database(request, error=_friendly_test_error(exc), status=400)
+            return self._database_error(request, _friendly_test_error(exc))
         self.state.tested_url = url
         self.state.test_detail = "连接成功"
+        if async_api.wants_json(request):
+            return async_api.ok(
+                request, message="连接成功", data={"can_finish": True}
+            )
         return self._render_database(request)
+
+    def _database_error(
+        self, request: Request, message: str, *, status: int = 400
+    ) -> Response:
+        if async_api.wants_json(request):
+            return async_api.fail(
+                request, async_api.CODE_BAD_REQUEST, message, status=status
+            )
+        return self._render_database(request, error=message, status=status)
 
     async def finish(self, request: Request) -> Response:
         form = await request.form()
         if not self._csrf_ok(request, form):
-            return self._render_database(request, error="请求已过期，请重试", status=403)
+            return self._database_error(request, "请求已过期，请重试", status=403)
         self._capture_database(form)
         return await self._finish_database(request)
 
@@ -164,20 +179,20 @@ class SetupApp:
         try:
             url = self._database_url()
         except Exception as exc:  # noqa: BLE001
-            return self._render_database(request, error=_friendly_test_error(exc), status=400)
+            return self._database_error(request, _friendly_test_error(exc))
         if self.state.tested_url != url:
-            return self._render_database(request, error="请先测试当前连接配置", status=400)
+            return self._database_error(request, "请先测试当前连接配置")
         cfg = replace(self.config, database_url=url)
         try:
             runtime = await create_runtime(cfg)
         except Exception as exc:
             logger.warning("安装迁移失败", exc_info=True)
-            return self._render_database(request, error=_friendly_test_error(exc), status=400)
+            return self._database_error(request, _friendly_test_error(exc))
         try:
             if await auth.has_admin(runtime.session_factory):
                 await runtime.close()
-                return self._render_database(
-                    request, error="该配置库已有管理员，请使用已有安装登录", status=400
+                return self._database_error(
+                    request, "该配置库已有管理员，请使用已有安装登录"
                 )
             user = await auth.create_admin(
                 runtime.session_factory,
@@ -195,26 +210,32 @@ class SetupApp:
         except Exception:
             await runtime.close()
             logger.warning("安装写入失败", exc_info=True)
-            return self._render_database(request, error="安装写入失败，请检查配置库权限", status=400)
+            return self._database_error(request, "安装写入失败，请检查配置库权限")
 
         session_key = auth.load_or_create_session_key(cfg.session_key_file)
         user = await auth.get_user_by_username(runtime.session_factory, "admin")
         if user is None:  # pragma: no cover - 刚创建成功
             await runtime.close()
-            return self._render_database(request, error="管理员创建失败", status=400)
+            return self._database_error(request, "管理员创建失败")
         self.runtime = runtime
         self.normal_app = create_app(cfg, runtime, auth_required=True, session_key=session_key)
         self.cleanup_task = asyncio.create_task(run_cleanup_loop(runtime))
         current = await settings_module.load(runtime.store)
         ttl_seconds = current.session_ttl_minutes * 60
         session = auth.create_session(user, session_key, ttl_seconds)
-        response = self._render(
-            "setup_complete.html",
-            request,
-            mcp_token=token,
-            mcp_url=f"http://{cfg.host}:{cfg.port}/mcp",
-        )
-        response.headers["Cache-Control"] = "no-store"
+        if async_api.wants_json(request):
+            response: Response = async_api.ok(
+                request, message="安装完成", data={"redirect": "/"}
+            )
+            response.headers["Cache-Control"] = "no-store"
+        else:
+            response = self._render(
+                "setup_complete.html",
+                request,
+                mcp_token=token,
+                mcp_url=f"http://{cfg.host}:{cfg.port}/mcp",
+            )
+            response.headers["Cache-Control"] = "no-store"
         response.set_cookie(
             auth.SESSION_COOKIE,
             session,

@@ -62,5 +62,6 @@ async def test_healthz_allows_same_origin(runtime: Runtime) -> None:
 
 def test_mcp_route_mounted(runtime: Runtime) -> None:
     app = create_app(runtime.config, runtime, auth_required=False)
-    paths = {getattr(route, "path", None) for route in app.routes}
+    inner = getattr(app, "app", app)  # 安全响应头中间件包了一层
+    paths = {getattr(route, "path", None) for route in inner.routes}
     assert "/mcp" in paths

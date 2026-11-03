@@ -14,7 +14,8 @@
   </div>
   {% if error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(error) }}</strong></div></div>{% endif %}
   {% if state.test_detail %}<div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(state.test_detail) }}</strong></div></div>{% endif %}
-  <form method="post" action="/setup/database" class="login-form" data-submit-loading>
+  <form method="post" action="/setup/database" class="login-form"
+        data-submit-loading data-async-form data-setup-form>
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <input type="hidden" name="db_type" value="{{ state.db_type }}">
     {% if state.db_type == 'sqlite' %}
@@ -31,9 +32,19 @@
     <div class="field"><label class="field__label" for="db-password">{{ t('密码') }}</label><input class="input" id="db-password" name="password" type="password" autocomplete="new-password"></div>
     <p class="field__hint">{{ t('该账号需要能创建/迁移配置库表；测试只验证连通性，完成时会执行真实迁移。') }}</p>
     {% endif %}
+    <div class="alert alert--success" data-setup-result role="status" hidden>
+      <span class="alert__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>
+      </span>
+      <div class="alert__body"><strong data-notice-text></strong></div>
+    </div>
     <div class="form-actions form-actions--inline">
-      <button class="btn btn--secondary" type="submit" name="action" value="test" data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
-      <button class="btn btn--primary" type="submit" name="action" value="finish"{% if state.tested_url is none %} disabled{% endif %} data-loading-label="{{ t('安装中…') }}">{{ t('完成安装') }}</button>
+      <button class="btn btn--secondary" type="submit" name="action" value="test"
+              data-setup-action="test" data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
+      <button class="btn btn--primary" type="submit" name="action" value="finish"
+              data-setup-action="finish" data-can-finish="{{ 'false' if state.tested_url is none else 'true' }}"
+              {% if state.tested_url is none %}disabled aria-disabled="true"{% endif %}
+              data-loading-label="{{ t('安装中…') }}">{{ t('完成安装') }}</button>
     </div>
     <p class="field__hint">{{ t('修改连接信息后需要重新测试。') }}</p>
   </form>

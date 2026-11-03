@@ -1,4 +1,22 @@
+/*
+ * Dr Panda MCP 渐进增强脚本（无依赖、自托管、同源）。
+ *
+ * 约束（docs/verify/frontend-js-policy.md v2）：
+ * - 只做体验增强：加载态、内联结果、脏检查、行内更新、错误定位；
+ * - 校验/权限/门槛以服务端为准，脚本不替代服务端判断；
+ * - 请求只允许同源，且必须带 CSRF（表单里的 _csrf 随 FormData 一起提交）；
+ * - 无 JS 或脚本失败时，所有表单仍按普通 POST 工作。
+ */
 (() => {
+  "use strict";
+
+  const body = document.body;
+  const msg = (form, key) =>
+    (form && form.dataset[key]) || (body && body.dataset[key]) || "";
+
+  // ---------------------------------------------------------------------
+  // 原生 dialog（保持原有行为）
+  // ---------------------------------------------------------------------
   const openDialog = (id) => {
     const dialog = document.getElementById(id);
     if (!dialog || typeof dialog.showModal !== "function") return false;
@@ -48,9 +66,27 @@
     });
   });
 
-  // 渐进增强：提交期间禁用提交按钮，避免重复提交；无 JS 时仍是普通表单。
+  // ---------------------------------------------------------------------
+  // 普通表单提交加载态
+  // ---------------------------------------------------------------------
+  // 注意：提交按钮自身的 name/value 必须保住。表单数据在 submit 事件之后
+  // 构造，被禁用的提交按钮不再算提交按钮，它的 name/value 会从请求体里消失
+  // （“点测试连接变成保存”“完成安装不生效”都是这个原因）。
+  // 这里先把 submitter 镜像成隐藏域，再禁用按钮，防重复提交与语义两不误。
+  const mirrorSubmitter = (form, submitter) => {
+    if (!submitter || !submitter.name) return;
+    const mirror = document.createElement("input");
+    mirror.type = "hidden";
+    mirror.name = submitter.name;
+    mirror.value = submitter.value;
+    form.appendChild(mirror);
+  };
+
   document.querySelectorAll("form[data-submit-loading]").forEach((form) => {
-    form.addEventListener("submit", () => {
+    form.addEventListener("submit", (event) => {
+      // 异步表单自行管理按钮状态，避免失败后按钮停留在禁用态。
+      if (form.matches("[data-async-form]")) return;
+      mirrorSubmitter(form, event.submitter);
       form.setAttribute("aria-busy", "true");
       form.querySelectorAll('button[type="submit"]').forEach((button) => {
         button.disabled = true;
@@ -58,6 +94,509 @@
       });
     });
   });
+
+  // ---------------------------------------------------------------------
+  // 同源 JSON 请求（渐进增强底座）
+  // ---------------------------------------------------------------------
+  class ApiError extends Error {
+    constructor(kind, data) {
+      super(kind);
+      this.kind = kind;
+      this.data = data || null;
+    }
+  }
+
+  const formBody = (form, extra) => {
+    const params = new URLSearchParams();
+    new FormData(form).forEach((value, key) => {
+      if (typeof value === "string") params.append(key, value);
+    });
+    Object.entries(extra || {}).forEach(([key, value]) => params.set(key, value));
+    return params;
+  };
+
+  const postForm = async (form, url, options = {}) => {
+    const timeoutMs = options.timeoutMs || 25000;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        body: formBody(form, options.extra),
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      const type = response.headers.get("content-type") || "";
+      let data = null;
+      if (type.includes("application/json")) {
+        try {
+          data = await response.json();
+        } catch (_) {
+          data = null;
+        }
+      }
+      if (!data || typeof data !== "object") throw new ApiError("bad_response", null);
+      if (data.code === "UNAUTHORIZED") {
+        window.location.assign(data.login || "/login");
+        throw new ApiError("unauthorized", data);
+      }
+      if (!response.ok || !data.ok) throw new ApiError("rejected", data);
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (error && error.name === "AbortError") throw new ApiError("timeout", null);
+      throw new ApiError("network", null);
+    } finally {
+      window.clearTimeout(timer);
+    }
+  };
+
+  const errorMessage = (form, error) => {
+    if (error.kind === "timeout") return msg(form, "msgTimeout") || "请求超时，请稍后重试。";
+    if (error.kind === "network") return msg(form, "msgNetwork") || "网络异常，请检查连接后重试。";
+    if (error.kind === "expired") return msg(form, "msgExpired") || "页面已过期，请刷新后重试。";
+    if (error.data && error.data.message) return error.data.message;
+    return msg(form, "msgGeneric") || "操作失败，请稍后重试。";
+  };
+
+  const clearFieldErrors = (root) => {
+    root.querySelectorAll("[data-field-error]").forEach((el) => el.remove());
+    root.querySelectorAll('[aria-invalid="true"]').forEach((el) => {
+      el.removeAttribute("aria-invalid");
+      el.removeAttribute("aria-describedby");
+    });
+  };
+
+  const applyFieldErrors = (root, errors) => {
+    clearFieldErrors(root);
+    let first = null;
+    Object.entries(errors || {}).forEach(([key, message]) => {
+      if (key === "_form") return;
+      const input =
+        root.querySelector(`[name="secret_${key}"]`) || root.querySelector(`[name="${key}"]`);
+      if (!input) return;
+      const container =
+        input.closest(".field") ||
+        input.closest(".settings-field-copy") ||
+        input.closest(".settings-field-row") ||
+        input.parentElement;
+      input.setAttribute("aria-invalid", "true");
+      const error = document.createElement("p");
+      error.className = "field__error";
+      error.dataset.fieldError = "1";
+      error.setAttribute("role", "alert");
+      error.textContent = message;
+      if (container) container.appendChild(error);
+      first = first || error;
+    });
+    if (first) first.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
+
+  const focusResult = (element) => {
+    if (!(element instanceof HTMLElement)) return;
+    element.tabIndex = -1;
+    try {
+      element.focus({ preventScroll: true });
+    } catch (_) {
+      // 老浏览器不支持 preventScroll 时忽略。
+    }
+  };
+
+  const setNotice = (element, tone, text) => {
+    if (!element) return;
+    element.hidden = false;
+    element.className = `alert alert--${tone}`;
+    const slot = element.querySelector("[data-notice-text]") || element.querySelector(".alert__body");
+    if (slot) slot.textContent = text;
+    focusResult(element);
+  };
+
+  const hideNotice = (element) => {
+    if (!element) return;
+    element.hidden = true;
+  };
+
+  const pageError = () => document.querySelector("[data-live-error]");
+
+  const notifyError = (message) => setNotice(pageError(), "danger", message);
+
+  // 按钮加载态：只有带 loading-label 的按钮才替换文案，且恢复时还原原始 child，
+  // 避免把开关这类“图标 + 文字”按钮的内部结构写成纯文本。
+  const busyStates = new WeakMap();
+  const busyButton = (button, on) => {
+    if (!button) return;
+    if (on) {
+      busyStates.set(button, { html: button.innerHTML, disabled: button.disabled });
+      button.disabled = true;
+      if (button.dataset.loadingLabel) button.textContent = button.dataset.loadingLabel;
+      return;
+    }
+    const previous = busyStates.get(button);
+    if (!previous) return;
+    if (button.dataset.loadingLabel) button.innerHTML = previous.html;
+    button.disabled = previous.disabled;
+    busyStates.delete(button);
+  };
+
+  const updateStats = (stats) => {
+    if (!stats) return;
+    document.querySelectorAll("[data-stat]").forEach((el) => {
+      const key = el.dataset.stat;
+      if (typeof stats[key] !== "number") return;
+      el.textContent = String(stats[key]);
+      const card = el.closest(".stat");
+      if (card && key === "failed") card.classList.toggle("stat--danger", stats[key] > 0);
+      if (card && key === "key_issues") card.classList.toggle("stat--warning", stats[key] > 0);
+    });
+  };
+
+  const handleApiError = (form, error) => {
+    if (error.kind === "rejected" && error.data && error.data.errors) {
+      applyFieldErrors(form, error.data.errors);
+    }
+    if (error.kind !== "unauthorized") notifyError(errorMessage(form, error));
+  };
+
+  // ---------------------------------------------------------------------
+  // 目标新建/编辑：测试连接 → 保存门槛
+  // ---------------------------------------------------------------------
+  const initTargetForm = (form) => {
+    const saveButton = form.querySelector("[data-save-button]");
+    const probeButton = form.querySelector("[data-probe-button]");
+    const hint = form.querySelector("[data-gate-hint]");
+    const resultRegion = form.querySelector("[data-probe-result]");
+    const alertBox = form.querySelector("[data-probe-alert]");
+    const titleSlot = form.querySelector("[data-probe-title]");
+    const detailSlot = form.querySelector("[data-probe-detail]");
+    const metaSlot = form.querySelector("[data-probe-meta]");
+    const probeTimeout = Number(form.dataset.probeTimeoutMs) || 25000;
+    if (!saveButton || !probeButton) return;
+
+    const hints = {
+      pending: form.dataset.gateHintPending || "",
+      clean: form.dataset.gateHintClean || "",
+      dirty: form.dataset.gateHintDirty || "",
+    };
+    const okTitle = form.dataset.probeOkTitle || "";
+    const failTitle = form.dataset.probeFailTitle || "";
+    const durationLabel = form.dataset.durationLabel || "";
+    let tested = null; // 探测通过时的表单快照；null = 尚未通过
+    let busy = false;
+    let clicked = null;
+
+    const gateControls = () =>
+      Array.from(form.elements).filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (el.matches('[type="hidden"], [type="submit"], [type="button"], [type="reset"]')) {
+          return false;
+        }
+        if (el.closest('[data-gate="off"]')) return false;
+        return true;
+      });
+
+    const snapshot = () =>
+      gateControls().map((el) => [
+        el.name,
+        el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value,
+      ]);
+
+    const isClean = () => tested !== null && JSON.stringify(snapshot()) === JSON.stringify(tested);
+
+    const renderResult = (tone, title, detail, meta) => {
+      if (!resultRegion || !alertBox) return;
+      resultRegion.hidden = false;
+      alertBox.className = `alert alert--${tone}`;
+      alertBox.setAttribute("role", tone === "danger" ? "alert" : "status");
+      alertBox.querySelectorAll("[data-probe-icon]").forEach((icon) => {
+        icon.hidden = icon.dataset.probeIcon !== (tone === "success" ? "ok" : "fail");
+      });
+      if (titleSlot) titleSlot.textContent = title || "";
+      if (detailSlot) detailSlot.textContent = detail || "";
+      if (metaSlot) metaSlot.textContent = meta || "";
+      focusResult(resultRegion);
+    };
+
+    const metaText = (data) => {
+      const parts = [];
+      if (data && data.checked_at) parts.push(data.checked_at);
+      if (data && typeof data.duration_ms === "number") {
+        parts.push(`${durationLabel} ${data.duration_ms} ms`);
+      }
+      return parts.join(" · ");
+    };
+
+    const refreshGate = () => {
+      if (busy) return;
+      const clean = isClean();
+      saveButton.disabled = !clean;
+      saveButton.setAttribute("aria-disabled", clean ? "false" : "true");
+      if (hint) {
+        hint.textContent = tested === null ? hints.pending : clean ? hints.clean : hints.dirty;
+      }
+    };
+
+    const setBusy = (value) => {
+      busy = value;
+      form.setAttribute("aria-busy", value ? "true" : "false");
+      [probeButton, saveButton].forEach((button) => {
+        if (button) button.disabled = value;
+      });
+    };
+
+    const doProbe = async () => {
+      if (busy) return;
+      setBusy(true);
+      const probeLabel = probeButton.textContent;
+      probeButton.textContent = probeButton.dataset.loadingLabel || probeLabel;
+      try {
+        const data = await postForm(form, form.dataset.probeUrl, {
+          timeoutMs: probeTimeout,
+        });
+        tested = snapshot();
+        renderResult("success", okTitle, data.message || "", metaText(data));
+      } catch (error) {
+        tested = null;
+        if (error.kind === "rejected" && error.data && error.data.errors) {
+          applyFieldErrors(form, error.data.errors);
+        }
+        renderResult("danger", failTitle, errorMessage(form, error), "");
+      } finally {
+        setBusy(false);
+        probeButton.textContent = probeLabel;
+        probeButton.disabled = false;
+        refreshGate();
+      }
+    };
+
+    const doSave = async () => {
+      if (busy || saveButton.disabled) return;
+      setBusy(true);
+      const saveLabel = saveButton.textContent;
+      saveButton.textContent = saveButton.dataset.loadingLabel || saveLabel;
+      try {
+        const data = await postForm(form, form.getAttribute("action"));
+        if (data.redirect) {
+          window.location.assign(data.redirect);
+          return;
+        }
+        window.location.reload();
+      } catch (error) {
+        if (error.kind === "rejected" && error.data) {
+          const payload = error.data;
+          if (payload.errors) applyFieldErrors(form, payload.errors);
+          if (payload.phase === "probe") tested = null;
+          renderResult("danger", failTitle, payload.message || errorMessage(form, error), "");
+        } else {
+          renderResult("danger", failTitle, errorMessage(form, error), "");
+        }
+      } finally {
+        setBusy(false);
+        saveButton.textContent = saveLabel;
+        refreshGate();
+      }
+    };
+
+    form.addEventListener("click", (event) => {
+      const button = event.target.closest("button[type=submit]");
+      clicked = button ? (button === probeButton ? "probe" : "save") : null;
+    });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const submitter = event.submitter;
+      const kind = submitter
+        ? submitter === probeButton
+          ? "probe"
+          : "save"
+        : clicked || (saveButton.disabled ? "probe" : "save");
+      if (kind === "probe") doProbe();
+      else doSave();
+    });
+    form.addEventListener("input", refreshGate);
+    form.addEventListener("change", refreshGate);
+
+    tested = null;
+    refreshGate();
+  };
+
+  // ---------------------------------------------------------------------
+  // 列表行内动作：测试、启停
+  // ---------------------------------------------------------------------
+  const updateTestCell = (row, data) => {
+    if (!row) return;
+    const cell = row.querySelector("[data-test-cell]");
+    if (!cell) return;
+    const status = cell.querySelector("[data-test-status]");
+    const label = cell.querySelector("[data-test-label]");
+    const time = cell.querySelector("[data-test-time]");
+    const details = cell.querySelector("[data-test-details]");
+    const errorText = cell.querySelector("[data-test-error]");
+    const failed = data.test_ok === false;
+    if (status) status.className = `status status--${failed ? "error" : "ok"}`;
+    if (label) {
+      label.textContent = failed ? label.dataset.error || "" : label.dataset.ok || "";
+    }
+    if (time) {
+      time.textContent = data.test_time || "";
+      time.hidden = !data.test_time;
+    }
+    if (details) details.hidden = !data.test_error;
+    if (errorText) errorText.textContent = data.test_error || "";
+  };
+
+  const updateToggle = (form, data) => {
+    const button = form.querySelector("button");
+    if (!button) return;
+    button.classList.toggle("is-on", Boolean(data.enabled));
+    button.setAttribute("aria-pressed", data.enabled ? "true" : "false");
+    const label = button.querySelector(".switch__label");
+    if (label) label.textContent = data.label || "";
+    const title = data.enabled ? button.dataset.onTitle : button.dataset.offTitle;
+    if (title) button.title = title;
+  };
+
+  const initRowActions = () => {
+    document.querySelectorAll("[data-row-action]").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (form.dataset.busy) return;
+        const button = form.querySelector('button[type="submit"]');
+        if (!button) return;
+        const row = form.closest("tr");
+        form.dataset.busy = "1";
+        busyButton(button, true);
+        try {
+          const data = await postForm(form, form.getAttribute("action"));
+          updateStats(data.stats);
+          if (form.dataset.rowAction === "test") updateTestCell(row, data);
+          else if (form.dataset.rowAction === "toggle") updateToggle(form, data);
+          hideNotice(pageError());
+        } catch (error) {
+          handleApiError(form, error);
+        } finally {
+          delete form.dataset.busy;
+          busyButton(button, false);
+        }
+      });
+    });
+  };
+
+  // ---------------------------------------------------------------------
+  // 系统配置：保存本组
+  // ---------------------------------------------------------------------
+  const initSettingsForm = (form) => {
+    const notice = document.querySelector("[data-settings-notice]");
+    const submit = form.querySelector('button[type="submit"]');
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (form.dataset.busy) return;
+      form.dataset.busy = "1";
+      busyButton(submit, true);
+      try {
+        const data = await postForm(form, form.getAttribute("action"));
+        clearFieldErrors(form);
+        setNotice(notice, "success", data.message || "");
+        hideNotice(pageError());
+      } catch (error) {
+        if (error.kind === "rejected" && error.data && error.data.errors) {
+          applyFieldErrors(form, error.data.errors);
+        }
+        if (error.kind !== "unauthorized") {
+          setNotice(notice, "danger", errorMessage(form, error));
+        }
+      } finally {
+        delete form.dataset.busy;
+        busyButton(submit, false);
+      }
+    });
+  };
+
+  // ---------------------------------------------------------------------
+  // 登录 / 修改密码：内联错误，成功后跳转
+  // ---------------------------------------------------------------------
+  const initRedirectForm = (form, noticeElement) => {
+    const submit = form.querySelector('button[type="submit"]');
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (form.dataset.busy) return;
+      form.dataset.busy = "1";
+      busyButton(submit, true);
+      hideNotice(noticeElement);
+      try {
+        const data = await postForm(form, form.getAttribute("action"));
+        window.location.assign(data.redirect || "/");
+      } catch (error) {
+        if (error.kind === "unauthorized") return;
+        setNotice(noticeElement, "danger", errorMessage(form, error));
+      } finally {
+        delete form.dataset.busy;
+        busyButton(submit, false);
+      }
+    });
+  };
+
+  // ---------------------------------------------------------------------
+  // 安装向导：测试连接 → 完成安装
+  // ---------------------------------------------------------------------
+  const initSetupForm = (form) => {
+    const result = document.querySelector("[data-setup-result]");
+    const finish = form.querySelector('[data-setup-action="finish"]');
+    let clicked = null;
+    form.addEventListener("click", (event) => {
+      const button = event.target.closest("button[type=submit]");
+      clicked = button ? button.dataset.setupAction || null : null;
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (form.dataset.busy) return;
+      const submitter = event.submitter;
+      const action = (submitter && submitter.dataset.setupAction) || clicked;
+      if (!action) return;
+      const button = submitter || (action === "finish" ? finish : null);
+      form.dataset.busy = "1";
+      busyButton(button, true);
+      try {
+        const data = await postForm(form, form.getAttribute("action"), { extra: { action } });
+        if (data.redirect) {
+          window.location.assign(data.redirect);
+          return;
+        }
+        setNotice(result, "success", data.message || "");
+        if (finish) finish.disabled = !data.can_finish;
+      } catch (error) {
+        if (error.kind === "unauthorized") return;
+        setNotice(result, "danger", errorMessage(form, error));
+      } finally {
+        delete form.dataset.busy;
+        busyButton(button, false);
+      }
+    });
+  };
+
+  // ---------------------------------------------------------------------
+  // 初始化
+  // ---------------------------------------------------------------------
+  try {
+    const targetForm = document.querySelector("[data-target-form]");
+    if (targetForm) initTargetForm(targetForm);
+    initRowActions();
+    const settingsForm = document.querySelector("[data-settings-form]");
+    if (settingsForm) initSettingsForm(settingsForm);
+    const loginForm = document.querySelector("[data-login-form]");
+    if (loginForm) initRedirectForm(loginForm, document.querySelector("[data-login-error]"));
+    const passwordForm = document.querySelector("[data-password-form]");
+    if (passwordForm) {
+      initRedirectForm(passwordForm, document.querySelector("[data-password-error]"));
+    }
+    const setupForm = document.querySelector("[data-setup-form]");
+    if (setupForm) initSetupForm(setupForm);
+  } catch (error) {
+    // 脚本失败时保持普通表单可用：把被脚本禁用的按钮恢复。
+    document.querySelectorAll("button[disabled][data-save-button]").forEach((button) => {
+      button.disabled = false;
+    });
+    if (window.console && window.console.error) window.console.error(error);
+  }
 })();
 
 // 错误页/表单回到浏览器时，把焦点放到第一个错误字段。

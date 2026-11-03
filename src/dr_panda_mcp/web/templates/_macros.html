@@ -1,18 +1,20 @@
 {% macro control(row, field_id) -%}
   {%- set invalid = ' aria-invalid="true" aria-describedby="err-' ~ row.key ~ '"' if row.error else '' -%}
   {%- set required = ' required aria-required="true"' if row.required else '' -%}
+  {#- 授权范围不参与“保存前必须测试”的门槛，前端脏检查据此跳过。 -#}
+  {%- set gate = ' data-gate="off"' if row.gate is defined and not row.gate else '' -%}
   {%- if row.kind == "bool" -%}
-    <input class="checkbox" type="checkbox" id="{{ field_id }}" name="{{ row.key }}"{% if row.value %} checked{% endif %}>
+    <input class="checkbox" type="checkbox" id="{{ field_id }}" name="{{ row.key }}"{% if row.value %} checked{% endif %}{{ gate }}>
   {%- elif row.kind in ("list", "pem") -%}
-    <textarea class="input textarea" id="{{ field_id }}" name="{{ row.key }}" rows="{{ 6 if row.kind == 'pem' else 3 }}" spellcheck="false"{{ required }}{{ invalid }}>{{ row.value }}</textarea>
+    <textarea class="input textarea" id="{{ field_id }}" name="{{ row.key }}" rows="{{ 6 if row.kind == 'pem' else 3 }}" spellcheck="false"{{ required }}{{ invalid }}{{ gate }}>{{ row.value }}</textarea>
   {%- elif row.kind == "select" -%}
-    <select class="input select" id="{{ field_id }}" name="{{ row.key }}"{{ required }}{{ invalid }}>
+    <select class="input select" id="{{ field_id }}" name="{{ row.key }}"{{ required }}{{ invalid }}{{ gate }}>
       {%- for choice in row.choices %}<option value="{{ choice }}"{% if choice == row.value %} selected{% endif %}>{{ choice }}</option>{% endfor -%}
     </select>
   {%- elif row.kind == "int" -%}
-    <input class="input" type="number" inputmode="numeric" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ required }}{{ invalid }}>
+    <input class="input" type="number" inputmode="numeric" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ required }}{{ invalid }}{{ gate }}>
   {%- else -%}
-    <input class="input" type="text" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ required }}{{ invalid }}>
+    <input class="input" type="text" id="{{ field_id }}" name="{{ row.key }}" value="{{ row.value }}"{{ required }}{{ invalid }}{{ gate }}>
   {%- endif -%}
 {%- endmacro %}
 

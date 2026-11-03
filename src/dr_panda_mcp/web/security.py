@@ -7,6 +7,7 @@ import logging
 import time
 from urllib.parse import parse_qs
 
+from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
@@ -14,12 +15,52 @@ from starlette.responses import JSONResponse, RedirectResponse
 from dr_panda_mcp import auth
 from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.runtime import Runtime
-from dr_panda_mcp.web import render
+from dr_panda_mcp.web import async_api, render
 
 logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
 PUBLIC_PREFIXES = ("/static/",)
+
+# 全局安全响应头：模板没有内联脚本/样式，脚本与网络请求只允许同源。
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "object-src 'none'"
+)
+SECURITY_HEADERS = {
+    "content-security-policy": CONTENT_SECURITY_POLICY,
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "same-origin",
+}
+
+
+class SecurityHeadersMiddleware:
+    """给所有响应补安全头（纯 ASGI，避免 BaseHTTPMiddleware 的流式问题）。"""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                for key, value in SECURITY_HEADERS.items():
+                    headers.setdefault(key, value)
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 class NotFoundMiddleware(BaseHTTPMiddleware):
@@ -85,10 +126,19 @@ class AuthMiddleware:
             target = request.url.path
             if request.url.query:
                 target += "?" + request.url.query
-            response = RedirectResponse(
-                "/login?next=" + _quote(target), status_code=303
-            )
-            _clear_session(response)
+            if async_api.wants_json(request):
+                response = async_api.fail(
+                    request,
+                    async_api.CODE_UNAUTHORIZED,
+                    "登录状态已失效，请重新登录",
+                    status=401,
+                    data={"login": "/login?next=" + _quote(target)},
+                )
+            else:
+                response = RedirectResponse(
+                    "/login?next=" + _quote(target), status_code=303
+                )
+                _clear_session(response)
             await response(scope, receive, send)
             return
 
@@ -166,14 +216,22 @@ class CSRFMiddleware:
         form = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
         token = (form.get("_csrf") or [""])[0]
         if not cookie or not token or not hmac.compare_digest(cookie, token):
-            response = render.render(
-                "error.html",
-                request=request,
-                title="请求已过期",
-                message="页面已过期，请刷新后重试",
-                code=403,
-                status_code=403,
-            )
+            if async_api.wants_json(request):
+                response = async_api.fail(
+                    request,
+                    async_api.CODE_CSRF_EXPIRED,
+                    "页面已过期，请刷新后重试",
+                    status=403,
+                )
+            else:
+                response = render.render(
+                    "error.html",
+                    request=request,
+                    title="请求已过期",
+                    message="页面已过期，请刷新后重试",
+                    code=403,
+                    status_code=403,
+                )
             await response(scope, receive, send)
             return
         await self.app(scope, replay, send)

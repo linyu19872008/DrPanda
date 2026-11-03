@@ -14,7 +14,7 @@ from dr_panda_mcp import auth
 from dr_panda_mcp.config import Config
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import AuditEntry
-from dr_panda_mcp.web import render
+from dr_panda_mcp.web import async_api, render
 
 PAGE_SIZE = 20
 
@@ -205,6 +205,16 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         if profile is None:
             return RedirectResponse("/login", status_code=303)
         form = await request.form()
+
+        async def _error(message: str) -> Response:
+            if async_api.wants_json(request):
+                return async_api.fail(
+                    request, async_api.CODE_INVALID_INPUT, message, status=400
+                )
+            return await _render_me_with_tokens(
+                request, profile, password_error=message, status_code=400
+            )
+
         current = str(form.get("current_password", ""))
         new = str(form.get("new_password", ""))
         confirm = str(form.get("confirm_password", ""))
@@ -212,25 +222,14 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             runtime.session_factory, profile.user.username, current
         )
         if verified is None:
-            return await _render_me_with_tokens(
-                request, profile, password_error="当前密码不正确", status_code=400
-            )
+            return await _error("当前密码不正确")
         problem = auth.password_problem(new)
         if problem:
-            return await _render_me_with_tokens(
-                request, profile, password_error=problem, status_code=400
-            )
+            return await _error(problem)
         if new != confirm:
-            return await _render_me_with_tokens(
-                request, profile, password_error="两次输入的新密码不一致", status_code=400
-            )
+            return await _error("两次输入的新密码不一致")
         if new == current:
-            return await _render_me_with_tokens(
-                request,
-                profile,
-                password_error="新密码不能与当前密码相同",
-                status_code=400,
-            )
+            return await _error("新密码不能与当前密码相同")
         await auth.set_password(
             runtime.session_factory,
             profile.user.id,
@@ -243,6 +242,11 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
                 summary="password changed; sessions invalidated",
             )
         )
-        response = RedirectResponse("/login?flash=password_changed", status_code=303)
+        if async_api.wants_json(request):
+            response: Response = async_api.ok(
+                request, data={"redirect": "/login?flash=password_changed"}
+            )
+        else:
+            response = RedirectResponse("/login?flash=password_changed", status_code=303)
         response.delete_cookie(auth.SESSION_COOKIE, path="/")
         return response

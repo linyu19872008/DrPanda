@@ -73,7 +73,8 @@
 | 开关 | `.switch` / `.switch-row` | 表格内用 button 开关（aria-pressed）；表单内用 checkbox 伪元素 |
 | 徽标 | `.badge` + `--type/--success/--warning/--danger/--muted` | 11.5px，胶囊形 |
 | 状态点 | `.status` + `--ok/--error/--none` | 色点 7px + 文字 |
-| 提示条 | `.alert` + `--success/--warning/--danger/--info` | 图标 + 标题 + 说明；用于 flash 与表单错误摘要 |
+| 提示条 | `.alert` + `--success/--warning/--danger/--info` | 图标 + 标题 + 说明；用于 flash、表单错误摘要、异步结果（`role=status`/`alert`） |
+| 行内动作 | `[data-row-action]` | 列表测试/启停走同源 fetch，只更新当前行与统计，不整页刷新；无 JS 时仍是普通表单 |
 | 表格 | `.table` / `.table--responsive` | 表头 sticky 无需；行悬停；≤900px 转卡片（`data-label`） |
 | 统计 | `.stats` + `.stat` | 4 项概览；数字 22px semibold |
 | 筛选 | `.filter-chips` / `.chip-link` | 链接形式，保留搜索词；当前项 accent |
@@ -165,4 +166,9 @@ POST /theme mode=system   → 清除 Cookie，回到跟随系统
 - TLS/CA/mTLS 仅在启用 TLS 时由渐进增强显示，无 JS 时全部可见并由服务端校验；
 - PEM 字段独占整行；
 - 必填字段带 `required` 与 `aria-required`；
-- 底部操作为取消 / 测试连接 / 保存，测试连接不写库。
+- 底部操作为取消 / 测试连接 / 保存，测试连接不写库；
+- **保存门槛**：保存按钮默认置灰，操作条上方提示「请先测试连接」；测试通过后解禁并显示「已通过连接测试，可以保存。」；
+- **结果区**：位于操作条上方，成功/失败/进行中三种状态；失败展示脱敏原因与时间、耗时；结果区 `role=status`/`alert`，更新后聚焦，顶部不再重复展示测试结果；
+- **脏检查**：连接、TLS、运行限制、密钥任一变化 → 保存重新置灰并提示「配置已修改，请重新测试连接」；改回已测值恢复；名称、启停、授权范围不参与门槛；
+- **无 JS 降级**：保存按钮可直接提交，服务端先探测再保存（失败不写库）；「测试连接」在无 JS 时走普通 POST 重渲染并展示结果；
+- 保存请求期间两个按钮都进入 loading（`aria-busy`），防重复提交。

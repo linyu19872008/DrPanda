@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from urllib.parse import urlencode
@@ -24,7 +25,7 @@ from dr_panda_mcp.guards.protocol import require
 from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import ConfigStore, Target
-from dr_panda_mcp.web import assets, forms, i18n, render, theme, views
+from dr_panda_mcp.web import assets, async_api, forms, i18n, render, theme, views
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,13 @@ _FLASH_MESSAGES = {
 
 def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     store = runtime.store
+
+    async def _record_probe_success(target_id: int) -> None:
+        """保存时探测已通过：把测试结果顺带写回目标，列表页不再显示“未测试”。"""
+        try:
+            await store.record_test(target_id, True, None, auth.current_actor())
+        except Exception:  # 记录失败不影响保存结果
+            logger.warning("保存后记录连接测试结果失败：target=%s", target_id, exc_info=True)
 
     @server.custom_route("/", methods=["GET"])
     async def index(request: Request) -> HTMLResponse:
@@ -91,50 +99,99 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         form = await request.form()
         spec = forms.spec_for(str(form.get("type", "")))
         if spec is None:
-            return _error(request, "未知的目标类型", 400, "无法新建目标")
+            return _bad_type(request)
         current = await settings_module.load(store)
         defaults = settings_module.target_form_defaults(current)
         draft, errors, values = forms.parse_form(
             form, spec=spec, mode="create", defaults=defaults
         )
         if draft is None:
-            return _form_page(
-                request,
-                spec,
-                values=values,
-                errors=errors,
-                mode="create",
-                existing=None,
-                status=400,
-                common_defaults=defaults,
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="create",
+                existing=None, common_defaults=defaults,
             )
         if str(form.get("action", "")) == "test":
-            test_result = await _test_draft_target(draft, None)
-            return _form_page(
-                request,
-                spec,
-                values=values,
-                errors={},
-                mode="create",
-                existing=None,
-                common_defaults=defaults,
-                test_result=test_result,
+            # 兼容旧表单（HTML 回退）：只探测、不保存；新交互走 /targets/probe。
+            result = await _test_draft_target(draft, None)
+            return _probe_render(
+                request, spec, values=values, mode="create", existing=None,
+                result=result, common_defaults=defaults,
+            )
+        # 重名先报错，避免“名冲突”被探测失败掩盖。
+        if await store.get(draft.name) is not None:
+            message = f"目标名 {draft.name} 已存在"
+            return _invalid_form(
+                request, spec, values=values, errors={"_form": message},
+                mode="create", existing=None, common_defaults=defaults,
+                message=message,
+            )
+        result = await _test_draft_target(draft, None)
+        if not result.get("ok"):
+            return _probe_render(
+                request, spec, values=values, mode="create", existing=None,
+                result=result, common_defaults=defaults, status=400,
             )
         try:
-            await store.create(draft, auth.current_actor())
+            created = await store.create(draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
-            return _form_page(
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="create",
+                existing=None, common_defaults=defaults, message=str(exc),
+            )
+        await _record_probe_success(created.id)
+        if async_api.wants_json(request):
+            return async_api.ok(
                 request,
-                spec,
-                values=values,
-                errors=errors,
-                mode="create",
-                existing=None,
-                status=400,
-                common_defaults=defaults,
+                message="目标已创建",
+                data={"redirect": _redirect_target("/", flash="created")},
             )
         return _redirect("/", flash="created")
+
+    @server.custom_route("/targets/probe", methods=["POST"])
+    async def probe_new_target(request: Request) -> Response:
+        """新建草稿探测：真实调用连接器，不写库、不创建目标。"""
+        form = await request.form()
+        spec = forms.spec_for(str(form.get("type", "")))
+        if spec is None:
+            return _bad_type(request)
+        current = await settings_module.load(store)
+        defaults = settings_module.target_form_defaults(current)
+        draft, errors, values = forms.parse_form(
+            form, spec=spec, mode="create", defaults=defaults
+        )
+        if draft is None:
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="create",
+                existing=None, common_defaults=defaults,
+            )
+        result = await _test_draft_target(draft, None)
+        return _probe_render(
+            request, spec, values=values, mode="create", existing=None,
+            result=result, common_defaults=defaults,
+        )
+
+    @server.custom_route("/targets/{target_id:int}/probe", methods=["POST"])
+    async def probe_existing_target(request: Request) -> Response:
+        """编辑草稿探测：密钥留空沿用已存值，不写库。"""
+        target = await _target(store, request.path_params["target_id"])
+        if target is None:
+            return _not_found(request, "目标不存在或已被删除")
+        spec = _spec(target)
+        form = await request.form()
+        draft, errors, values = forms.parse_form(
+            form, spec=spec, mode="edit", existing=target
+        )
+        if draft is None:
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="edit",
+                existing=target,
+            )
+        result = await _test_draft_target(draft, target)
+        return _probe_render(
+            request, spec, values=values, mode="edit", existing=target,
+            result=result,
+        )
 
     @server.custom_route("/targets/{target_id:int}/edit", methods=["GET"])
     async def edit_target(request: Request) -> Response:
@@ -149,36 +206,67 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def update_target(request: Request) -> Response:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
-            return _error(request, "目标不存在或已被删除", 404, "找不到目标")
+            return _not_found(request, "目标不存在或已被删除")
         spec = _spec(target)
         form = await request.form()
         draft, errors, values = forms.parse_form(
             form, spec=spec, mode="edit", existing=target
         )
         if draft is None:
-            return _edit_page(request, target, values=values, errors=errors, status=400)
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="edit",
+                existing=target,
+            )
         if str(form.get("action", "")) == "test":
-            test_result = await _test_draft_target(draft, target)
-            return _edit_page(
-                request,
-                target,
-                values=values,
-                errors={},
-                test_result=test_result,
+            # 兼容旧表单（HTML 回退）：只探测、不保存。
+            result = await _test_draft_target(draft, target)
+            return _probe_render(
+                request, spec, values=values, mode="edit", existing=target,
+                result=result,
+            )
+        result = await _test_draft_target(draft, target)
+        if not result.get("ok"):
+            return _probe_render(
+                request, spec, values=values, mode="edit", existing=target,
+                result=result, status=400,
             )
         try:
             await store.update(target.id, draft, auth.current_actor())
         except app_errors.DrPandaError as exc:
             errors["_form"] = str(exc)
-            return _edit_page(request, target, values=values, errors=errors, status=400)
+            return _invalid_form(
+                request, spec, values=values, errors=errors, mode="edit",
+                existing=target, message=str(exc),
+            )
+        await _record_probe_success(target.id)
+        if async_api.wants_json(request):
+            return async_api.ok(
+                request,
+                message="修改已保存",
+                data={"redirect": _redirect_target("/", flash="updated")},
+            )
         return _redirect("/", flash="updated")
 
     @server.custom_route("/targets/{target_id:int}/toggle", methods=["POST"])
     async def toggle_target(request: Request) -> Response:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
-            return _error(request, "目标不存在或已被删除", 404, "找不到目标")
-        await store.set_enabled(target.id, not target.enabled, auth.current_actor())
+            return _not_found(request, "目标不存在或已被删除")
+        updated = await store.set_enabled(
+            target.id, not target.enabled, auth.current_actor()
+        )
+        if async_api.wants_json(request):
+            label = async_api.translate(
+                request, "已启用" if updated.enabled else "已停用"
+            )
+            return async_api.ok(
+                request,
+                data={
+                    "enabled": updated.enabled,
+                    "label": label,
+                    "stats": _stats_payload(await store.list_all()),
+                },
+            )
         return _redirect("/", flash="toggled")
 
     @server.custom_route("/targets/{target_id:int}/delete", methods=["GET"])
@@ -202,7 +290,7 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def test_target(request: Request) -> Response:
         target = await _target(store, request.path_params["target_id"])
         if target is None:
-            return _error(request, "目标不存在或已被删除", 404, "找不到目标")
+            return _not_found(request, "目标不存在或已被删除")
         ok = True
         message: str | None = None
         try:
@@ -214,7 +302,17 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             ok = False
             message = redact(f"未预期错误：{exc}", target.secret.values())
             logger.warning("测试连接失败：%s", target.name, exc_info=True)
-        await store.record_test(target.id, ok, message, auth.current_actor())
+        updated = await store.record_test(
+            target.id, ok, message, auth.current_actor()
+        )
+        if async_api.wants_json(request):
+            return async_api.ok(
+                request,
+                data={
+                    **_row_test_payload(updated),
+                    "stats": _stats_payload(await store.list_all()),
+                },
+            )
         return _redirect(
             "/", flash="tested", result="ok" if ok else "fail", name=target.name
         )
@@ -261,6 +359,8 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
             except app_errors.InvalidSettings as exc:
                 errors["_form"] = str(exc)
         if errors:
+            if async_api.wants_json(request):
+                return async_api.invalid_input(request, errors)
             return _settings_page(
                 request,
                 current,
@@ -270,6 +370,12 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
                 history=await _settings_history(store),
                 active_section=section,
                 status=400,
+            )
+        if async_api.wants_json(request):
+            return async_api.ok(
+                request,
+                message="系统配置已保存",
+                data={"section": section},
             )
         if section:
             return _redirect("/settings", section=section, flash="saved")
@@ -413,10 +519,24 @@ def _flash(request: Request) -> dict[str, str] | None:
     return {"tone": tone, "title": title, "detail": ""}
 
 
-def _redirect(path: str, **params: str) -> RedirectResponse:
+def _redirect_target(path: str, **params: str) -> str:
     if params:
-        path = f"{path}?{urlencode(params)}"
-    return RedirectResponse(path, status_code=303)
+        return f"{path}?{urlencode(params)}"
+    return path
+
+
+def _redirect(path: str, **params: str) -> RedirectResponse:
+    return RedirectResponse(_redirect_target(path, **params), status_code=303)
+
+
+def _probe_timeout_ms(values: dict[str, str]) -> int:
+    """前端等待探测的上限：目标超时 + 10 秒余量，避免前端先于服务端超时。"""
+    try:
+        seconds = float(values.get("timeout_s", ""))
+    except (TypeError, ValueError):
+        seconds = 15.0
+    seconds = min(max(seconds, 1.0), 120.0)
+    return int((seconds + 10) * 1000)
 
 
 def _form_page(
@@ -445,6 +565,12 @@ def _form_page(
             values, errors, defaults=common_defaults
         ),
         test_result=test_result,
+        probe_url=(
+            f"/targets/{existing.id}/probe"
+            if mode == "edit" and existing is not None
+            else "/targets/probe"
+        ),
+        probe_timeout_ms=_probe_timeout_ms(values),
         status_code=status,
     )
 
@@ -469,6 +595,122 @@ def _edit_page(
         status=status,
         test_result=test_result,
     )
+
+
+def _bad_type(request: Request) -> Response:
+    if async_api.wants_json(request):
+        return async_api.fail(
+            request, async_api.CODE_BAD_REQUEST, "未知的目标类型", status=400
+        )
+    return _error(request, "未知的目标类型", 400, "无法新建目标")
+
+
+def _not_found(request: Request, message: str) -> Response:
+    if async_api.wants_json(request):
+        return async_api.fail(request, async_api.CODE_NOT_FOUND, message, status=404)
+    return _error(request, message, 404, "找不到目标")
+
+
+def _invalid_form(
+    request: Request,
+    spec: forms.TypeSpec,
+    *,
+    values: dict[str, str],
+    errors: dict[str, str],
+    mode: str,
+    existing: Target | None,
+    common_defaults: dict[str, int] | None = None,
+    message: str | None = None,
+) -> Response:
+    """字段校验失败：JSON 内联返回错误，HTML 重渲染表单。"""
+    if async_api.wants_json(request):
+        field_errors = {key: value for key, value in errors.items() if key != "_form"}
+        return async_api.fail(
+            request,
+            async_api.CODE_INVALID_INPUT,
+            message or "有 {count} 处需要修改",
+            status=400,
+            message_params={"count": len(field_errors)},
+            errors=errors or None,
+            data={"count": len(field_errors)},
+        )
+    return _form_page(
+        request,
+        spec,
+        values=values,
+        errors=errors,
+        mode=mode,
+        existing=existing,
+        status=400,
+        common_defaults=common_defaults,
+    )
+
+
+def _probe_render(
+    request: Request,
+    spec: forms.TypeSpec,
+    *,
+    values: dict[str, str],
+    mode: str,
+    existing: Target | None,
+    result: dict[str, object],
+    common_defaults: dict[str, int] | None = None,
+    status: int = 200,
+) -> Response:
+    """探测结果：JSON 直接返回，HTML 重渲染表单并展示结果（不写库）。"""
+    if async_api.wants_json(request):
+        return _probe_json(request, result)
+    return _form_page(
+        request,
+        spec,
+        values=values,
+        errors={},
+        mode=mode,
+        existing=existing,
+        status=status,
+        common_defaults=common_defaults,
+        test_result=result,
+    )
+
+
+def _probe_json(request: Request, result: dict[str, object]) -> Response:
+    data = {
+        "checked_at": result.get("checked_at"),
+        "duration_ms": result.get("duration_ms"),
+    }
+    if result.get("ok"):
+        return async_api.ok(
+            request,
+            message=str(result.get("message") or "连接测试通过，可以保存。"),
+            data=data,
+        )
+    return async_api.fail(
+        request,
+        async_api.CODE_PROBE_FAILED,
+        str(result.get("message") or "连接测试失败"),
+        status=400,
+        phase="probe",
+        data=data,
+    )
+
+
+def _stats_payload(targets) -> dict[str, int]:
+    stats = views.stats(views.list_views(targets))
+    return {
+        "total": stats.total,
+        "enabled": stats.enabled,
+        "failed": stats.failed,
+        "key_issues": stats.key_issues,
+    }
+
+
+def _row_test_payload(target: Target) -> dict[str, object]:
+    view = views.to_view(target)
+    return {
+        "test_ok": view.last_test_ok,
+        "test_time": view.last_test_at_display,
+        "test_error": view.last_test_error,
+    }
 
 
 async def _settings_history(store) -> list[dict[str, str]]:
@@ -602,29 +844,69 @@ def _draft_target(draft, existing: Target | None) -> Target:
     )
 
 
+def _now_display() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.monotonic() - started) * 1000))
+
+
+def _probe_failure(
+    started: float, exc: Exception, target: Target, *, unexpected: bool = False
+) -> dict[str, object]:
+    if unexpected:
+        message = redact(f"未预期错误：{exc}", target.secret.values())
+        code = None
+    else:
+        message = redact(str(exc), target.secret.values())
+        code = getattr(exc, "code", None)
+    return {
+        "ok": False,
+        "message": message,
+        "code": code,
+        "checked_at": _now_display(),
+        "duration_ms": _elapsed_ms(started),
+    }
+
+
 async def _test_draft_target(
     draft, existing: Target | None
 ) -> dict[str, object]:
+    """用草稿配置真实探测一次；不写库、不记录审计。"""
+    started = time.monotonic()
     target = _draft_target(draft, existing)
     connector = get_connector(draft.type)
-    require(connector.probe_guard())
-    client = connector.create_client(target)
+    try:
+        require(connector.probe_guard())
+        client = connector.create_client(target)
+    except app_errors.DrPandaError as exc:
+        return _probe_failure(started, exc, target)
+    except Exception as exc:
+        logger.warning("草稿目标测试连接失败：%s", target.type, exc_info=True)
+        return _probe_failure(started, exc, target, unexpected=True)
     try:
         await connector_base.run_with_timeout(
             connector.probe(client, target),
             connector_base.timeout_seconds(target),
         )
     except app_errors.DrPandaError as exc:
-        return {"ok": False, "message": redact(str(exc), target.secret.values())}
+        return _probe_failure(started, exc, target)
     except Exception as exc:
         logger.warning("草稿目标测试连接失败：%s", target.type, exc_info=True)
-        return {"ok": False, "message": redact(f"未预期错误：{exc}", target.secret.values())}
+        return _probe_failure(started, exc, target, unexpected=True)
     finally:
         try:
             await connector.close_client(client)
         except Exception:
             logger.warning("关闭草稿测试连接失败", exc_info=True)
-    return {"ok": True, "message": "连接可用，可以保存目标。"}
+    return {
+        "ok": True,
+        "message": "连接测试通过，可以保存。",
+        "code": None,
+        "checked_at": _now_display(),
+        "duration_ms": _elapsed_ms(started),
+    }
 
 
 def _error(

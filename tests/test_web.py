@@ -102,6 +102,26 @@ def _client(runtime: Runtime, locale: str | None = "zh-Hans") -> httpx.AsyncClie
     )
 
 
+@pytest.fixture(autouse=True)
+def _probe_through(monkeypatch: pytest.MonkeyPatch) -> None:
+    """保存前会做一次真实探测；单测里替换为“通过”，避免外呼。
+
+    需要探测失败的用例可以在测试体内再次 monkeypatch。
+    """
+    from dr_panda_mcp.web import routes as routes_module
+
+    async def fake_probe(draft, existing):
+        return {
+            "ok": True,
+            "message": "连接测试通过，可以保存。",
+            "code": None,
+            "checked_at": "2026-01-01 00:00:00 UTC",
+            "duration_ms": 1,
+        }
+
+    monkeypatch.setattr(routes_module, "_test_draft_target", fake_probe)
+
+
 @pytest.mark.parametrize(("type_", "label"), [
     ("mysql", "MySQL"),
     ("mongo", "Mongo"),
@@ -485,7 +505,9 @@ async def test_table_accessibility_markup(runtime: Runtime) -> None:
 
     assert page.text.count('scope="col"') >= 6
     assert 'aria-label="按类型筛选"' in page.text
-    assert 'class="status status--none"' in page.text
+    assert 'data-test-status' in page.text
+    assert 'data-test-label' in page.text
+    assert 'data-stat="total"' in page.text
 
 
 async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:

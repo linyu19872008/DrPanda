@@ -425,5 +425,18 @@
   "必填": "Required",
   "可选": "Optional",
   "新建时必填项不能为空；编辑时留空沿用、勾选清除或填新值替换，三者互斥。保存后加密落盘，不回显。": "Required for a new target. When editing, leave blank to keep, check clear, or enter a new value. Stored encrypted and never displayed.",
-  "连接可用，可以保存目标。": "Connection works; you can save the target."
+  "连接可用，可以保存目标。": "Connection works; you can save the target.",
+  "连接测试通过，可以保存。": "Connection test passed. You can save now.",
+  "耗时": "Took",
+  "请先测试连接": "Test the connection first",
+  "已通过连接测试，可以保存。": "Connection test passed; you can save.",
+  "配置已修改，请重新测试连接。": "Configuration changed; test the connection again.",
+  "保存前会先检查连接；测试通过后即可保存。": "The connection is checked before saving. Save becomes available after a successful test.",
+  "网络异常，请检查连接后重试。": "Network error. Check your connection and try again.",
+  "请求超时，请稍后重试。": "Request timed out. Please try again.",
+  "页面已过期，请刷新后重试。": "This page has expired. Refresh and try again.",
+  "操作失败，请稍后重试。": "Something went wrong. Please try again.",
+  "登录状态已失效，请重新登录": "Your session expired. Please sign in again.",
+  "登录中…": "Signing in…",
+  "正在登录": "Signing in"
 }

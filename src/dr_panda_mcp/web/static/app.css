@@ -2469,3 +2469,10 @@ dialog.modal .modal__panel {
     justify-content: space-between;
   }
 }
+
+/* 异步交互：探测结果、保存门槛提示（frontend-js-policy v2） */
+.probe-result{margin:0 0 var(--space-3)}
+.probe-result .alert__icon[hidden]{display:none}
+.probe-result__meta{display:block;margin-top:4px;color:var(--text-muted);font-size:12px}
+.form-gate-hint{margin:0 0 var(--space-2)}
+.settings-actions .alert{margin:0 0 var(--space-2)}

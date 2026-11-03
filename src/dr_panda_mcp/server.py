@@ -23,7 +23,12 @@ from dr_panda_mcp.tools import register_tools
 from dr_panda_mcp.web.auth_routes import register_auth_routes
 from dr_panda_mcp.web.profile import register_profile_routes
 from dr_panda_mcp.web.routes import register_web_routes
-from dr_panda_mcp.web.security import AuthMiddleware, CSRFMiddleware, NotFoundMiddleware
+from dr_panda_mcp.web.security import (
+    AuthMiddleware,
+    CSRFMiddleware,
+    NotFoundMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 if TYPE_CHECKING:
     from starlette.applications import Starlette
@@ -116,14 +121,16 @@ def create_app(
         allowed_origins=allowed_origins,
     )
     if not auth_required:
-        return app
-    return NotFoundMiddleware(
-        CSRFMiddleware(
-            AuthMiddleware(
-                app,
-                runtime=runtime,
-                session_key=key or b"",
-                auth_required=True,
+        return SecurityHeadersMiddleware(app)
+    return SecurityHeadersMiddleware(
+        NotFoundMiddleware(
+            CSRFMiddleware(
+                AuthMiddleware(
+                    app,
+                    runtime=runtime,
+                    session_key=key or b"",
+                    auth_required=True,
+                )
             )
         )
     )

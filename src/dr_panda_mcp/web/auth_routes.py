@@ -12,7 +12,7 @@ from starlette.responses import HTMLResponse, RedirectResponse, Response
 from dr_panda_mcp import auth
 from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.runtime import Runtime
-from dr_panda_mcp.web import render, theme
+from dr_panda_mcp.web import async_api, render, theme
 
 _FAILED_LOGINS: dict[str, list[float]] = {}
 _LOGIN_WINDOW = 300
@@ -36,6 +36,14 @@ def _record_login_failure(request: Request) -> None:
 
 def _clear_login_failures(request: Request) -> None:
     _FAILED_LOGINS.pop(_client_key(request), None)
+
+
+def _login_error_code(status: int) -> str:
+    if status == 403:
+        return async_api.CODE_CSRF_EXPIRED
+    if status == 429:
+        return async_api.CODE_RATE_LIMITED
+    return async_api.CODE_AUTH_FAILED
 
 
 def register_auth_routes(
@@ -66,45 +74,44 @@ def register_auth_routes(
         cookie = request.cookies.get(auth.CSRF_COOKIE, "")
         token = str(form.get("_csrf", ""))
         next_path = theme.safe_next(str(form.get("next", "/")))
-        if not cookie or not token or not hmac.compare_digest(cookie, token):
+
+        def _login_error(message: str, status: int) -> Response:
+            if async_api.wants_json(request):
+                return async_api.fail(
+                    request, _login_error_code(status), message, status=status
+                )
             return render.render(
                 "login.html",
                 request=request,
-                error="请求已过期，请重试",
+                error=message,
                 notice=None,
                 next_path=next_path,
-                status_code=403,
+                status_code=status,
             )
 
+        if not cookie or not token or not hmac.compare_digest(cookie, token):
+            return _login_error("请求已过期，请重试", 403)
+
         if _login_limited(request):
-            return render.render(
-                "login.html",
-                request=request,
-                error="登录尝试次数过多，请稍后再试",
-                notice=None,
-                next_path=next_path,
-                status_code=429,
-            )
+            return _login_error("登录尝试次数过多，请稍后再试", 429)
 
         username = str(form.get("username", "admin")).strip() or "admin"
         password = str(form.get("password", ""))
         user = await auth.authenticate(runtime.session_factory, username, password)
         if user is None:
             _record_login_failure(request)
-            return render.render(
-                "login.html",
-                request=request,
-                error="用户名或密码错误",
-                notice=None,
-                next_path=next_path,
-                status_code=401,
-            )
+            return _login_error("用户名或密码错误", 401)
 
         _clear_login_failures(request)
         current = await settings_module.load(runtime.store)
         session = auth.create_session(user, session_key, current.session_ttl_minutes * 60)
         await auth.set_last_login(runtime.session_factory, user.id)
-        response = RedirectResponse(next_path, status_code=303)
+        if async_api.wants_json(request):
+            response: Response = async_api.ok(
+                request, data={"redirect": next_path}
+            )
+        else:
+            response = RedirectResponse(next_path, status_code=303)
         response.set_cookie(
             auth.SESSION_COOKIE,
             session,

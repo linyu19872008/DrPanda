@@ -29,7 +29,10 @@
     <section class="card profile-card">
       <h2>{{ t('修改密码') }}</h2>
       {% if password_error %}<div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(password_error) }}</strong></div></div>{% endif %}
-      <form method="post" action="/me/password" class="profile-form">
+      <div class="alert alert--danger" data-password-error role="alert" hidden>
+        <div class="alert__body"><strong data-notice-text></strong></div>
+      </div>
+      <form method="post" action="/me/password" class="profile-form" data-async-form data-password-form>
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <div class="field">
           <label class="field__label" for="current-password">{{ t('当前密码') }}</label>
@@ -44,7 +47,7 @@
           <label class="field__label" for="confirm-password">{{ t('确认新密码') }}</label>
           <input class="input" id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
         </div>
-        <button class="btn btn--primary" type="submit">{{ t('保存新密码') }}</button>
+        <button class="btn btn--primary" type="submit" data-loading-label="{{ t('保存中…') }}">{{ t('保存新密码') }}</button>
       </form>
     </section>
   </aside>

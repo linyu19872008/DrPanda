@@ -10,10 +10,10 @@
 </div>
 
 <div class="stats" aria-label="{{ t('概览') }}">
-  <div class="stat"><span class="stat__label">{{ t('目标总数') }}</span><span class="stat__value">{{ stats.total }}</span></div>
-  <div class="stat"><span class="stat__label">{{ t('已启用') }}</span><span class="stat__value">{{ stats.enabled }}</span></div>
-  <div class="stat{% if stats.failed %} stat--danger{% endif %}"><span class="stat__label">{{ t('最近测试失败') }}</span><span class="stat__value">{{ stats.failed }}</span></div>
-  <div class="stat{% if stats.key_issues %} stat--warning{% endif %}"><span class="stat__label">{{ t('密钥异常') }}</span><span class="stat__value">{{ stats.key_issues }}</span></div>
+  <div class="stat"><span class="stat__label">{{ t('目标总数') }}</span><span class="stat__value" data-stat="total">{{ stats.total }}</span></div>
+  <div class="stat"><span class="stat__label">{{ t('已启用') }}</span><span class="stat__value" data-stat="enabled">{{ stats.enabled }}</span></div>
+  <div class="stat{% if stats.failed %} stat--danger{% endif %}"><span class="stat__label">{{ t('最近测试失败') }}</span><span class="stat__value" data-stat="failed">{{ stats.failed }}</span></div>
+  <div class="stat{% if stats.key_issues %} stat--warning{% endif %}"><span class="stat__label">{{ t('密钥异常') }}</span><span class="stat__value" data-stat="key_issues">{{ stats.key_issues }}</span></div>
 </div>
 
 {% if stats.key_issues %}
@@ -85,32 +85,35 @@
         <td data-label="{{ t('端点') }}"><span class="mono truncate" title="{{ target.endpoint }}">{{ t(target.endpoint) }}</span></td>
         <td data-label="{{ t('授权范围') }}"><span class="muted">{{ t(target.scope_source, **target.scope_params) }}</span></td>
         <td data-label="{{ t('状态') }}">
-          <form method="post" action="/targets/{{ target.id }}/toggle" class="inline-form">
+          <form method="post" action="/targets/{{ target.id }}/toggle" class="inline-form"
+                data-submit-loading data-async-form data-row-action="toggle">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
             <button class="switch{% if target.enabled %} is-on{% endif %}" type="submit"
                     aria-pressed="{{ 'true' if target.enabled else 'false' }}"
+                    data-on-title="{{ t('点击停用') }}" data-off-title="{{ t('点击启用') }}"
                     title="{{ t('点击停用') if target.enabled else t('点击启用') }}">
               <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
               <span class="switch__label">{{ t('已启用') if target.enabled else t('已停用') }}</span>
             </button>
           </form>
         </td>
-        <td data-label="{{ t('最近测试') }}">
-          {% if target.last_test_at_display %}
+        <td data-label="{{ t('最近测试') }}" data-test-cell>
           <div class="test-line">
-            <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
-            <span class="muted small">{{ target.last_test_at_display }}</span>
+            <span class="status status--{{ 'ok' if target.last_test_ok else ('error' if target.last_test_at_display else 'none') }}" data-test-status>
+              <span class="status__dot"></span>
+              <span data-test-label data-ok="{{ t('成功') }}" data-error="{{ t('失败') }}" data-none="{{ t('未测试') }}">{{ t('成功') if target.last_test_ok else (t('失败') if target.last_test_at_display else t('未测试')) }}</span>
+            </span>
+            <span class="muted small" data-test-time{% if not target.last_test_at_display %} hidden{% endif %}>{{ target.last_test_at_display or '' }}</span>
           </div>
-          {% if target.last_test_error %}
-          <details class="details"><summary>{{ t('失败详情') }}</summary><p class="details__body mono">{{ target.last_test_error }}</p></details>
-          {% endif %}
-          {% else %}
-          <span class="status status--none"><span class="status__dot"></span>{{ t('未测试') }}</span>
-          {% endif %}
+          <details class="details" data-test-details{% if not target.last_test_error %} hidden{% endif %}>
+            <summary>{{ t('失败详情') }}</summary>
+            <p class="details__body mono" data-test-error>{{ target.last_test_error or '' }}</p>
+          </details>
         </td>
         <td data-label="{{ t('操作') }}" class="cell-actions">
           <div class="row-actions">
-            <form method="post" action="/targets/{{ target.id }}/test" class="inline-form" data-submit-loading>
+            <form method="post" action="/targets/{{ target.id }}/test" class="inline-form"
+                  data-submit-loading data-async-form data-row-action="test">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
               <button class="btn btn--secondary btn--sm" type="submit" data-loading-label="{{ t('测试中…') }}">{{ t('测试') }}</button>
             </form>
