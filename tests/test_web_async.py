@@ -160,7 +160,7 @@ async def test_save_json_with_probe_success_writes(runtime: Runtime, probe_ok) -
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
-    assert body["redirect"].startswith("/?flash=created")
+    assert body["redirect"].startswith("/targets?flash=created")
     assert "env=" in body["redirect"]
     assert target is not None
     # 保存时的探测结果落库，列表页不再显示“未测试”
@@ -193,7 +193,7 @@ async def test_save_html_success_still_redirects(runtime: Runtime, probe_ok) -> 
         response = await client.post("/targets", data=MYSQL)
 
     assert response.status_code == 303
-    assert response.headers["location"].startswith("/?flash=created")
+    assert response.headers["location"].startswith("/targets?flash=created")
     assert "env=" in response.headers["location"]
 
 

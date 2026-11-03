@@ -15,7 +15,9 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
+import string
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -33,6 +35,11 @@ from dr_panda_mcp.store.models import McpTokenRow, UserRow
 logger = logging.getLogger(__name__)
 
 PASSWORD_MIN_LENGTH = 8
+ROLE_ADMIN = "admin"
+ROLE_ANALYST = "analyst"
+CONSOLE_ROLES = frozenset({ROLE_ADMIN, ROLE_ANALYST})
+_USERNAME_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$")
+_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
@@ -54,6 +61,17 @@ class User:
     role: str
     is_enabled: bool
     auth_version: int
+    must_change_password: bool = False
+
+
+@dataclass(frozen=True)
+class ManagedUser:
+    id: int
+    username: str
+    role: str
+    is_enabled: bool
+    must_change_password: bool
+    last_login_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -130,6 +148,23 @@ def password_problem(password: str) -> str | None:
     return None
 
 
+def username_problem(username: str) -> str | None:
+    """登录名：小写字母、数字、连字符，最长 64，不能占用 admin。"""
+    if not _USERNAME_RE.match(username) or username == ROLE_ADMIN:
+        return "登录名只能使用小写字母、数字和连字符"
+    return None
+
+
+def generate_initial_password(length: int = 20) -> str:
+    """生成至少 16 位的初始密码，只含字母和数字。"""
+    count = max(length, 16)
+    return "".join(secrets.choice(_PASSWORD_ALPHABET) for _ in range(count))
+
+
+def is_console_role(role: str) -> bool:
+    return role in CONSOLE_ROLES
+
+
 def hash_password(password: str) -> str:
     salt = os.urandom(16)
     digest = hashlib.scrypt(
@@ -203,9 +238,11 @@ def load_or_create_session_key(path: Path) -> bytes:
 
 
 def _session_signature(payload: str, key: bytes) -> str:
-    return base64.urlsafe_b64encode(
-        hmac.new(key, payload.encode("ascii"), hashlib.sha256).digest()
-    ).decode("ascii").rstrip("=")
+    return (
+        base64.urlsafe_b64encode(hmac.new(key, payload.encode("ascii"), hashlib.sha256).digest())
+        .decode("ascii")
+        .rstrip("=")
+    )
 
 
 def create_session(user: User, key: bytes, ttl_seconds: int) -> str:
@@ -218,9 +255,13 @@ def create_session(user: User, key: bytes, ttl_seconds: int) -> str:
         "iat": now,
         "exp": now + ttl_seconds,
     }
-    encoded = base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    ).decode("ascii").rstrip("=")
+    encoded = (
+        base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
     return f"{encoded}.{_session_signature(encoded, key)}"
 
 
@@ -248,6 +289,7 @@ def user_from_row(row: UserRow) -> User:
         role=row.role,
         is_enabled=bool(row.is_enabled),
         auth_version=row.auth_version,
+        must_change_password=bool(row.must_change_password),
     )
 
 
@@ -261,7 +303,7 @@ async def authenticate(
     if not await asyncio.to_thread(verify_password, password, row.password_hash):
         return None
     user = user_from_row(row)
-    if not user.is_enabled or user.role != "admin":
+    if not user.is_enabled or not is_console_role(user.role):
         return None
     return user
 
@@ -296,7 +338,7 @@ async def authenticate_mcp_token(
             return None
         token_row, user_row = row
         user = user_from_row(user_row)
-        if not user.is_enabled or user.role != "admin":
+        if not user.is_enabled or not is_console_role(user.role):
             return None
         return TokenPrincipal(
             user=user,
@@ -319,6 +361,7 @@ async def create_admin(
             role="admin",
             is_enabled=True,
             auth_version=1,
+            must_change_password=False,
             last_login_at=None,
             created_at=now,
             updated_at=now,
@@ -328,13 +371,70 @@ async def create_admin(
         return user_from_row(row)
 
 
+async def create_analyst(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    username: str,
+    password_hash: str,
+) -> User:
+    now = datetime.now(UTC)
+    async with session_factory() as session, session.begin():
+        row = UserRow(
+            username=username,
+            password_hash=password_hash,
+            role=ROLE_ANALYST,
+            is_enabled=True,
+            auth_version=1,
+            must_change_password=True,
+            last_login_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+        await session.flush()
+        return user_from_row(row)
+
+
+async def list_managed_users(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> list[ManagedUser]:
+    async with session_factory() as session:
+        rows = (await session.scalars(select(UserRow).order_by(UserRow.id.asc()))).all()
+    return [
+        ManagedUser(
+            id=row.id,
+            username=row.username,
+            role=row.role,
+            is_enabled=bool(row.is_enabled),
+            must_change_password=bool(row.must_change_password),
+            last_login_at=row.last_login_at,
+        )
+        for row in rows
+    ]
+
+
+async def set_user_enabled(
+    session_factory: async_sessionmaker[AsyncSession],
+    user_id: int,
+    enabled: bool,
+) -> User | None:
+    """只改分析员的启用状态。管理员账号不能从这里停用。"""
+    now = datetime.now(UTC)
+    async with session_factory() as session, session.begin():
+        row = await session.get(UserRow, user_id)
+        if row is None or row.role != ROLE_ANALYST:
+            return None
+        row.is_enabled = enabled
+        row.updated_at = now
+        await session.flush()
+        return user_from_row(row)
+
+
 async def has_admin(session_factory: async_sessionmaker[AsyncSession]) -> bool:
     async with session_factory() as session:
         return (
             await session.scalar(
-                select(UserRow.id).where(
-                    UserRow.role == "admin", UserRow.is_enabled.is_(True)
-                )
+                select(UserRow.id).where(UserRow.role == "admin", UserRow.is_enabled.is_(True))
             )
         ) is not None
 
@@ -415,9 +515,7 @@ async def list_mcp_tokens(
         return [_token_from_row(row) for row in rows]
 
 
-async def count_mcp_tokens(
-    session_factory: async_sessionmaker[AsyncSession], user_id: int
-) -> int:
+async def count_mcp_tokens(session_factory: async_sessionmaker[AsyncSession], user_id: int) -> int:
     async with session_factory() as session:
         return int(
             await session.scalar(
@@ -432,9 +530,7 @@ async def get_mcp_token(
 ) -> McpToken | None:
     async with session_factory() as session:
         row = await session.scalar(
-            select(McpTokenRow).where(
-                McpTokenRow.id == token_id, McpTokenRow.user_id == user_id
-            )
+            select(McpTokenRow).where(McpTokenRow.id == token_id, McpTokenRow.user_id == user_id)
         )
         return _token_from_row(row) if row is not None else None
 
@@ -444,9 +540,7 @@ async def delete_mcp_token(
 ) -> bool:
     async with session_factory() as session, session.begin():
         row = await session.scalar(
-            select(McpTokenRow).where(
-                McpTokenRow.id == token_id, McpTokenRow.user_id == user_id
-            )
+            select(McpTokenRow).where(McpTokenRow.id == token_id, McpTokenRow.user_id == user_id)
         )
         if row is None:
             return False
@@ -478,6 +572,8 @@ async def set_password(
     session_factory: async_sessionmaker[AsyncSession],
     user_id: int,
     password_hash: str,
+    *,
+    must_change_password: bool = False,
 ) -> None:
     now = datetime.now(UTC)
     async with session_factory() as session, session.begin():
@@ -486,14 +582,11 @@ async def set_password(
             raise ValueError("user not found")
         row.password_hash = password_hash
         row.auth_version += 1
+        row.must_change_password = must_change_password
         row.updated_at = now
 
 
-
-
-async def set_last_login(
-    session_factory: async_sessionmaker[AsyncSession], user_id: int
-) -> None:
+async def set_last_login(session_factory: async_sessionmaker[AsyncSession], user_id: int) -> None:
     async with session_factory() as session, session.begin():
         row = await session.get(UserRow, user_id)
         if row is not None:

@@ -10,7 +10,7 @@
 {% set advanced_open = (advanced_rows | selectattr("error") | list | length) or (advanced_secrets | selectattr("error") | list | length) or (common_rows | selectattr("error") | list | length) %}
 
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
-  <a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span>
+  <a href="/targets">{{ t('排查目标') }}</a><span aria-hidden="true">/</span>
   <span>{{ t(spec.label) }}{% if mode == "edit" %} · {{ existing.name }}{% endif %}</span>
 </nav>
 <div class="page-header">
@@ -169,13 +169,13 @@
         <div class="alert__body">
           <strong data-probe-title>{% if test_result %}{{ t('连接测试通过') if test_result.ok else t('连接测试失败') }}{% else %}{{ t('未测试') }}{% endif %}</strong>
           <span class="alert__detail" data-probe-detail>{% if test_result and test_result.ok %}{{ t('连接测试通过，可以保存。') }}{% elif test_result and test_result.message %}{{ test_result.message }}{% endif %}</span>
-          <span class="probe-result__meta" data-probe-meta>{% if test_result and test_result.checked_at %}{{ test_result.checked_at }}{% if test_result.duration_ms %} · {{ t('耗时') }} {{ test_result.duration_ms }} ms{% endif %}{% endif %}</span>
+          <span class="probe-result__meta" data-probe-meta>{% if test_result and test_result.checked_at_at %}{{ local_time(test_result.checked_at_at, true) }}{% elif test_result and test_result.checked_at %}{{ test_result.checked_at }}{% endif %}{% if test_result and test_result.duration_ms %} · {{ t('耗时') }} {{ test_result.duration_ms }} ms{% endif %}</span>
         </div>
       </div>
     </div>
     <p class="field__hint form-gate-hint" data-gate-hint>{% if mode == 'edit' %}{{ t('连接未修改，可以直接保存。') }}{% else %}{{ t('请先测试连接') }}{% endif %}</p>
     <div class="form-actions">
-      <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>
+      <a class="btn btn--secondary" href="/targets">{{ t('取消') }}</a>
       <button class="btn btn--secondary" type="button" data-probe-button
               data-loading-label="{{ t('测试中…') }}">{{ t('测试连接') }}</button>
       <button class="btn btn--primary" type="submit" data-save-button

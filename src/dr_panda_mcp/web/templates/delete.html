@@ -3,7 +3,7 @@
 {% block title %}{{ t('删除目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <nav class="breadcrumb" aria-label="{{ t('面包屑') }}">
-  <a href="/">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('删除') }} {{ target.name }}</span>
+  <a href="/targets">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('删除') }} {{ target.name }}</span>
 </nav>
 
 <div class="card card--danger">
@@ -17,7 +17,7 @@
     <div><dt>{{ t('最近测试') }}</dt><dd>
       {% if target.last_test_at_display %}
         <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
-        <span class="muted small">{{ target.last_test_at_display }}</span>
+        {{ local_time(target.last_test_at, extra='class="muted small"') }}
       {% else %}<span class="muted">{{ t('未测试') }}</span>{% endif %}
     </dd></div>
   </dl>
@@ -25,7 +25,7 @@
   <p class="muted">{{ t('删除后，这个目标的连接和密钥都会去掉，排查时不能再使用，也无法恢复。') }}</p>
   <form method="post" action="/targets/{{ target.id }}/delete" class="form-actions form-actions--inline">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    <a class="btn btn--secondary" href="/">{{ t('取消') }}</a>
+    <a class="btn btn--secondary" href="/targets">{{ t('取消') }}</a>
     <button class="btn btn--danger" type="submit">{{ t('确认删除') }}</button>
   </form>
 </div>

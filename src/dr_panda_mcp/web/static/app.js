@@ -368,7 +368,7 @@
       else hint.textContent = hints.pending;
     };
 
-    const renderResult = (tone, title, detail, meta) => {
+    const renderResult = (tone, title, detail) => {
       if (!resultRegion || !alertBox) return;
       resultRegion.hidden = false;
       alertBox.className = `alert alert--${tone}`;
@@ -378,17 +378,24 @@
       });
       if (titleSlot) titleSlot.textContent = title || "";
       if (detailSlot) detailSlot.textContent = detail || "";
-      if (metaSlot) metaSlot.textContent = meta || "";
+      if (metaSlot && tone !== "success") metaSlot.replaceChildren();
       focusResult(resultRegion);
     };
 
-    const metaText = (data) => {
-      const parts = [];
-      if (data && data.checked_at) parts.push(data.checked_at);
-      if (data && typeof data.duration_ms === "number") {
-        parts.push(`${durationLabel} ${data.duration_ms} ms`);
+    const fillProbeMeta = (data) => {
+      if (!metaSlot) return;
+      metaSlot.replaceChildren();
+      const instant = (data && (data.checked_at_instant || data.checked_at)) || "";
+      if (instant) {
+        const node = document.createElement("time");
+        node.dataset.seconds = "true";
+        if (!applyTime(node, instant, true)) node.textContent = String(data.checked_at || instant);
+        metaSlot.append(node);
       }
-      return parts.join(" · ");
+      if (data && typeof data.duration_ms === "number") {
+        if (metaSlot.childNodes.length) metaSlot.append(" · ");
+        metaSlot.append(`${durationLabel} ${data.duration_ms} ms`);
+      }
     };
 
     const setBusy = (value) => {
@@ -409,13 +416,14 @@
           timeoutMs: probeTimeout,
         });
         tested = snapshot();
-        renderResult("success", okTitle, data.message || "", metaText(data));
+        renderResult("success", okTitle, data.message || "");
+        fillProbeMeta(data);
       } catch (error) {
         tested = null;
         if (error.kind === "rejected" && error.data && error.data.errors) {
           applyFieldErrors(form, error.data.errors);
         }
-        renderResult("danger", failTitle, errorMessage(form, error), "");
+        renderResult("danger", failTitle, errorMessage(form, error));
       } finally {
         setBusy(false);
         probeButton.textContent = probeLabel;
@@ -441,9 +449,9 @@
           const payload = error.data;
           if (payload.errors) applyFieldErrors(form, payload.errors);
           if (payload.phase === "probe") tested = null;
-          renderResult("danger", failTitle, payload.message || errorMessage(form, error), "");
+          renderResult("danger", failTitle, payload.message || errorMessage(form, error));
         } else {
-          renderResult("danger", failTitle, errorMessage(form, error), "");
+          renderResult("danger", failTitle, errorMessage(form, error));
         }
       } finally {
         setBusy(false);
@@ -482,8 +490,10 @@
       label.textContent = failed ? label.dataset.error || "" : label.dataset.ok || "";
     }
     if (time) {
-      time.textContent = data.test_time || "";
-      time.hidden = !data.test_time;
+      const instant = data.tested_at || data.test_time;
+      const shown = instant && applyTime(time, instant, false);
+      if (!shown) time.textContent = data.test_time || "";
+      time.hidden = !(shown || data.test_time);
     }
     if (details) renderTestError(details, data.test_error, data.test_command);
   };
@@ -540,6 +550,13 @@
     if (label) label.textContent = data.label || "";
     const title = data.enabled ? button.dataset.onTitle : button.dataset.offTitle;
     if (title) button.title = title;
+    const action = form.getAttribute("action") || "";
+    if (/\/(enable|disable)$/.test(action)) {
+      form.setAttribute(
+        "action",
+        action.replace(/\/(enable|disable)$/, data.enabled ? "/disable" : "/enable"),
+      );
+    }
   };
 
   const initRowActions = () => {
@@ -762,9 +779,53 @@
   };
 
   // ---------------------------------------------------------------------
+  // 钟面时间：库存是 UTC，显示换成浏览器本地时区，悬停保留 UTC。
+  // ---------------------------------------------------------------------
+  const padTime = (value) => String(value).padStart(2, "0");
+
+  const formatClock = (date, seconds, utc) => {
+    const year = utc ? date.getUTCFullYear() : date.getFullYear();
+    const month = padTime((utc ? date.getUTCMonth() : date.getMonth()) + 1);
+    const day = padTime(utc ? date.getUTCDate() : date.getDate());
+    const hour = padTime(utc ? date.getUTCHours() : date.getHours());
+    const minute = padTime(utc ? date.getUTCMinutes() : date.getMinutes());
+    const second = padTime(utc ? date.getUTCSeconds() : date.getSeconds());
+    const clock = seconds ? `${hour}:${minute}:${second}` : `${hour}:${minute}`;
+    return `${year}-${month}-${day} ${clock}${utc ? " UTC" : ""}`;
+  };
+
+  const parseInstant = (value) => {
+    if (!value) return null;
+    const labeled = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))? UTC$/.exec(value);
+    if (labeled) {
+      return new Date(Date.UTC(+labeled[1], +labeled[2] - 1, +labeled[3], +labeled[4], +labeled[5], +(labeled[6] || 0)));
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const applyTime = (node, instant, seconds) => {
+    const date = parseInstant(instant);
+    if (!date) return false;
+    const withSeconds = Boolean(seconds);
+    node.textContent = formatClock(date, withSeconds, false);
+    node.title = formatClock(date, withSeconds, true);
+    if ("dateTime" in node) node.dateTime = date.toISOString().replace(/\.\d{3}Z$/, "Z");
+    return true;
+  };
+
+  const applyLocalTimes = (root) => {
+    (root || document).querySelectorAll("time[datetime]").forEach((node) => {
+      if (!node.dateTime) return;
+      applyTime(node, node.dateTime, node.dataset.seconds === "true");
+    });
+  };
+
+  // ---------------------------------------------------------------------
   // 初始化
   // ---------------------------------------------------------------------
   try {
+    applyLocalTimes(document);
     const targetForm = document.querySelector("[data-target-form]");
     if (targetForm) initTargetForm(targetForm);
     initRowActions();

@@ -10,6 +10,7 @@ from typing import Any
 from dr_panda_mcp.client_install import INSTALL_EXTRAS
 from dr_panda_mcp.errors import sync_extra_command
 from dr_panda_mcp.store.protocol import Target
+from dr_panda_mcp.web.clock import utc_text
 from dr_panda_mcp.web.forms import TYPE_SPECS
 
 EMPTY = "—"
@@ -44,6 +45,7 @@ class TargetView:
     secret_fields: tuple[str, ...]
     secret_ok: bool
     updated_at_display: str | None
+    last_test_at: datetime | None
     last_test_at_display: str | None
     last_test_ok: bool | None
     last_test_error: str | None
@@ -64,9 +66,7 @@ class Stats:
 
 
 def _display_time(value: datetime | None) -> str | None:
-    if value is None:
-        return None
-    return value.strftime("%Y-%m-%d %H:%M UTC")
+    return utc_text(value)
 
 
 def _first(value: Any) -> str | None:
@@ -174,6 +174,7 @@ def to_view(target: Target) -> TargetView:
         secret_fields=tuple(sorted(target.secret_fields)),
         secret_ok=target.secret_ok,
         updated_at_display=_display_time(target.updated_at),
+        last_test_at=target.last_test_at,
         last_test_at_display=_display_time(target.last_test_at),
         last_test_ok=target.last_test_ok,
         last_test_error=target.last_test_error,
@@ -218,7 +219,5 @@ def stats(views: list[TargetView]) -> Stats:
         total=len(views),
         enabled=sum(1 for view in views if view.enabled),
         failed=sum(1 for view in views if view.last_test_ok is False),
-        key_issues=sum(
-            1 for view in views if view.secret_fields and not view.secret_ok
-        ),
+        key_issues=sum(1 for view in views if view.secret_fields and not view.secret_ok),
     )

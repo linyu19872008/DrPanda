@@ -2,13 +2,13 @@
 {% from "_macros.html" import env_label %}
 {% block title %}{{ t('新建目标') }} · {{ product_name }}{% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/{% if env %}?env={{ env }}{% endif %}">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
+<nav class="breadcrumb" aria-label="{{ t('面包屑') }}"><a href="/targets{% if env %}?env={{ env }}{% endif %}">{{ t('排查目标') }}</a><span aria-hidden="true">/</span><span>{{ t('新建目标') }}</span></nav>
 <div class="page-header">
   <div>
     <h1>{{ t('选择目标类型') }}</h1>
     <p class="page-subtitle">{{ t('不同系统的连接方式、授权范围和只读规则不同，先选类型再填连接。') }}</p>
   </div>
-  <a class="btn btn--secondary" href="/{% if env %}?env={{ env }}{% endif %}">{{ t('返回列表') }}</a>
+  <a class="btn btn--secondary" href="/targets{% if env %}?env={{ env }}{% endif %}">{{ t('返回列表') }}</a>
 </div>
 {% if current_env %}
 <div class="alert alert--info" role="status">

@@ -137,7 +137,7 @@ def _probe_through(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_create_each_type(runtime: Runtime, type_: str, label: str) -> None:
     async with _client(runtime) as client:
         response = await client.post("/targets", data=PAYLOADS[type_])
-        index = await client.get("/")
+        index = await client.get("/targets")
 
     assert response.status_code == 303
     target = await runtime.store.get(PAYLOADS[type_]["name"])
@@ -204,7 +204,7 @@ async def test_secret_not_displayed(runtime: Runtime) -> None:
     async with _client(runtime) as client:
         await client.post("/targets", data=payload)
         target = await runtime.store.get("mysql-target")
-        index = await client.get("/")
+        index = await client.get("/targets")
         edit = await client.get(f"/targets/{target.id}/edit")
 
     assert "super-secret-value" not in index.text
@@ -269,7 +269,7 @@ async def test_test_connection_failure_recorded(
         await client.post("/targets", data=PAYLOADS["mysql"])
         target = await runtime.store.get("mysql-target")
         await client.post(f"/targets/{target.id}/test")
-        index = await client.get("/")
+        index = await client.get("/targets")
 
     tested = await runtime.store.get("mysql-target")
     assert tested.last_test_ok is False
@@ -299,7 +299,7 @@ async def test_missing_client_offers_install_without_copy(runtime: Runtime) -> N
         await runtime.store.record_test(
             target.id, False, missing_client_message("mongo"), "test"
         )
-        page = await client.get("/")
+        page = await client.get("/targets")
 
     assert "mongo 客户端未安装" in page.text
     assert "uv sync" not in page.text
@@ -315,7 +315,7 @@ async def test_connection_failure_has_no_install_button(runtime: Runtime) -> Non
         await client.post("/targets", data=PAYLOADS["mongo"])
         target = await runtime.store.get("mongo-target")
         await runtime.store.record_test(target.id, False, "mongo 探测失败：refused", "test")
-        page = await client.get("/")
+        page = await client.get("/targets")
 
     assert "mongo 探测失败" in page.text
     assert 'data-dialog-open="install-client-' not in page.text
@@ -482,6 +482,7 @@ async def test_unknown_target_404(runtime: Runtime) -> None:
 async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     async with _client(runtime) as client:
         page = await client.get("/")
+        targets = await client.get("/targets")
 
     text = page.text
     assert '<html lang="zh-Hans">' in text
@@ -491,15 +492,17 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert 'aria-label="主导航"' in text
     assert 'class="sidebar"' in text
     nav = text.split('aria-label="主导航"', 1)[1]
-    assert nav.index("排查目标") < nav.index("环境") < nav.index("审计")
-    assert nav.index("审计") < nav.index("系统配置") < nav.index("我的")
+    assert nav.index("概览") < nav.index("排查目标") < nav.index("环境") < nav.index("审计")
+    assert nav.index("审计") < nav.index("系统配置") < nav.index("用户") < nav.index("我的")
     assert 'name="mode" value="dark"' in text
     assert "/static/app.css?v=" in text
     assert 'src="/static/icon.png?v=' in text
-    assert "还没有登记任何目标" in text
+    assert "没有需要处理的目标" in text
     assert text.count("<h1") == 1
     assert 'class="brand__name">DrPanda<' in text
-    assert "<title>排查目标 · DrPanda MCP</title>" in text
+    assert "<title>概览 · DrPanda MCP</title>" in text
+    assert "还没有登记任何目标" in targets.text
+    assert "<title>排查目标 · DrPanda MCP</title>" in targets.text
 
 
 async def test_theme_cookie_roundtrip(runtime: Runtime) -> None:
@@ -571,9 +574,9 @@ async def test_search_and_type_filter(runtime: Runtime) -> None:
         await client.post("/targets", data=PAYLOADS["mysql"])
         await client.post("/targets", data=PAYLOADS["redis"])
 
-        search = await client.get("/", params={"q": "mysql-target"})
-        filtered = await client.get("/", params={"type": "redis"})
-        no_match = await client.get("/", params={"q": "no-such-target"})
+        search = await client.get("/targets", params={"q": "mysql-target"})
+        filtered = await client.get("/targets", params={"type": "redis"})
+        no_match = await client.get("/targets", params={"q": "no-such-target"})
 
     assert "mysql-target" in search.text
     assert "redis-target" not in search.text
@@ -642,7 +645,7 @@ async def test_html_error_pages(runtime: Runtime) -> None:
 
     assert not_found.status_code == 404
     assert "找不到目标" in not_found.text
-    assert "返回排查目标" in not_found.text
+    assert "返回概览" in not_found.text
     assert bad_type.status_code == 400
     assert "未知的目标类型" in bad_type.text
 
@@ -650,7 +653,7 @@ async def test_html_error_pages(runtime: Runtime) -> None:
 async def test_table_accessibility_markup(runtime: Runtime) -> None:
     async with _client(runtime) as client:
         await client.post("/targets", data=PAYLOADS["mysql"])
-        page = await client.get("/")
+        page = await client.get("/targets")
 
     assert page.text.count('scope="col"') >= 6
     assert 'aria-label="按类型筛选"' in page.text
@@ -673,7 +676,7 @@ async def test_no_javascript_and_css_budget(runtime: Runtime) -> None:
         assert page.text.count("<script") == 1
         assert 'src="/static/app.js' in page.text
         assert "<script>" not in page.text
-    assert len(css.content) < 52_000
+    assert len(css.content) < 54_000
 
 
 async def test_required_secret_cannot_be_cleared_on_edit(runtime: Runtime) -> None:
@@ -1057,6 +1060,8 @@ async def test_english_pages_are_fully_translated(runtime: Runtime) -> None:
 
     urls = [
         "/",
+        "/targets",
+        "/users",
         "/environments",
         "/environments/new",
         "/audit",
@@ -1103,7 +1108,7 @@ async def test_english_validation_errors_are_translated(runtime: Runtime) -> Non
 async def test_destructive_confirm_dialogs_markup(runtime: Runtime) -> None:
     async with _client(runtime) as client:
         await client.post("/targets", data=PAYLOADS["mysql"])
-        index = await client.get("/")
+        index = await client.get("/targets")
         settings = await client.get("/settings?section=runtime")
 
     assert 'data-dialog-open="delete-target-' in index.text

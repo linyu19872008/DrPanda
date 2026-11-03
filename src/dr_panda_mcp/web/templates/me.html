@@ -7,11 +7,16 @@
   </div>
 </div>
 
+{% if current_user and current_user.must_change_password %}
+<p class="page-subtitle">{{ t('请先修改密码。改完后需要重新登录。') }}</p>
+{% endif %}
 <nav class="subnav" aria-label="{{ t('我的') }}">
+  {% if not (current_user and current_user.must_change_password) %}
   <a class="subnav__link{% if tab == 'mcp' %} is-active{% endif %}" href="/me"
      {% if tab == 'mcp' %}aria-current="page"{% endif %}>{{ t('MCP 访问') }}</a>
   <a class="subnav__link{% if tab == 'account' %} is-active{% endif %}" href="/me?tab=account"
      {% if tab == 'account' %}aria-current="page"{% endif %}>{{ t('账号') }}</a>
+  {% endif %}
   <a class="subnav__link{% if tab == 'password' %} is-active{% endif %}" href="/me?tab=password"
      {% if tab == 'password' %}aria-current="page"{% endif %}>{{ t('修改密码') }}</a>
 </nav>
@@ -27,8 +32,8 @@
 <section class="card profile-card profile-panel">
   <dl class="summary">
     <div><dt>{{ t('用户名') }}</dt><dd class="mono">{{ profile.user.username }}</dd></div>
-    <div><dt>{{ t('角色') }}</dt><dd>{{ t('管理员') }}</dd></div>
-    <div><dt>{{ t('最近登录') }}</dt><dd>{{ last_login or t('未记录') }}</dd></div>
+    <div><dt>{{ t('角色') }}</dt><dd>{{ t('分析员' if current_user and current_user.role == 'analyst' else '管理员') }}</dd></div>
+    <div><dt>{{ t('最近登录') }}</dt><dd>{% if last_login %}{{ local_time(last_login) }}{% else %}{{ t('未记录') }}{% endif %}</dd></div>
   </dl>
 </section>
 {% elif tab == 'password' %}
@@ -78,8 +83,8 @@
             <tr>
               <td data-label="{{ t('名称') }}">{{ token.name or '—' }}</td>
               <td data-label="{{ t('Token 前缀') }}" class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</td>
-              <td data-label="{{ t('创建时间') }}" class="muted small">{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
-              <td data-label="{{ t('最近使用') }}" class="muted small">{{ token.last_used_at.strftime('%Y-%m-%d %H:%M UTC') if token.last_used_at else t('从未使用') }}</td>
+              <td data-label="{{ t('创建时间') }}" class="muted small">{{ local_time(token.created_at) }}</td>
+              <td data-label="{{ t('最近使用') }}" class="muted small">{% if token.last_used_at %}{{ local_time(token.last_used_at) }}{% else %}{{ t('从未使用') }}{% endif %}</td>
               <td data-label="{{ t('操作') }}" class="cell-actions">
                 <a class="btn btn--danger-ghost btn--sm" href="/me/tokens/{{ token.id }}/delete" data-dialog-open="delete-token-{{ token.id }}">{{ t('删除') }}</a>
               </td>
@@ -116,7 +121,7 @@
     <dl class="summary">
       <div><dt>{{ t('名称') }}</dt><dd>{{ token.name or '—' }}</dd></div>
       <div><dt>{{ t('Token 前缀') }}</dt><dd class="mono">{{ (token.token_prefix ~ '…') if token.token_prefix else '—' }}</dd></div>
-      <div><dt>{{ t('创建时间') }}</dt><dd>{{ token.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd></div>
+      <div><dt>{{ t('创建时间') }}</dt><dd>{{ local_time(token.created_at) }}</dd></div>
     </dl>
     {% if total == 1 %}
     <div class="alert alert--danger"><div class="alert__body"><span class="alert__detail">{{ t('MCP 会暂时不能访问，直到重新生成。') }}</span></div></div>
@@ -131,6 +136,7 @@
 {% endfor %}
 {% endif %}
 
+{% if tab == 'mcp' %}
 <dialog id="token-create" class="modal{% if modal_open %} is-open{% endif %}" aria-labelledby="token-create-title"{% if modal_open %} open data-open-on-load="true"{% endif %}>
   <div class="modal__panel">
     {% if modal_open %}<a class="modal__close" href="/me" data-dialog-close="navigate" aria-label="{{ t('关闭') }}">×</a>{% else %}<button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>{% endif %}
@@ -167,6 +173,7 @@
     {% endif %}
   </div>
 </dialog>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {% if new_token %}<script src="/static/copy-token.js?v={{ script_version }}" defer></script>{% endif %}

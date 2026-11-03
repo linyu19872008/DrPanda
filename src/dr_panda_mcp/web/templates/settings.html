@@ -153,7 +153,7 @@
       <ol class="settings-history">
         {% for change in history %}
         <li>
-          <span class="settings-history__time">{{ change.at }}</span>
+          <span class="settings-history__time">{{ local_time(change.at) }}</span>
           <span class="settings-history__summary">{{ change.summary }}</span>
           <span class="settings-history__actor">{{ change.actor }}</span>
         </li>

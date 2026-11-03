@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-from datetime import UTC
 
 from fastmcp import FastMCP
 from starlette.requests import Request
@@ -20,9 +19,7 @@ PAGE_SIZE = 20
 PROFILE_TABS = ("mcp", "account", "password")
 
 
-def _profile_tab(
-    request: Request, *, password_error: str | None, modal_open: bool
-) -> str:
+def _profile_tab(request: Request, *, password_error: str | None, modal_open: bool) -> str:
     """出错或弹窗时停在对应分区，否则跟地址栏，默认打开 MCP 访问。"""
     if password_error:
         return "password"
@@ -41,12 +38,6 @@ def _mcp_url(config: Config) -> str:
     if host in {"0.0.0.0", "::"}:
         host = "127.0.0.1"
     return f"http://{host}:{config.port}/mcp"
-
-
-def _display_time(value) -> str | None:
-    if value is None:
-        return None
-    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -> None:
@@ -96,10 +87,12 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             token_name=token_name,
             new_token=new_token,
             notice=notice,
-            tab=_profile_tab(
-                request, password_error=password_error, modal_open=modal_open
+            tab=(
+                "password"
+                if profile.user.must_change_password
+                else _profile_tab(request, password_error=password_error, modal_open=modal_open)
             ),
-            last_login=_display_time(profile.last_login_at),
+            last_login=profile.last_login_at,
             status_code=status_code,
         )
         response.headers["Cache-Control"] = "no-store"
@@ -123,6 +116,8 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         profile = await _current_profile()
         if profile is None:
             return RedirectResponse("/login", status_code=303)
+        if profile.user.must_change_password:
+            return RedirectResponse("/me?tab=password", status_code=303)
         response = render.render("token_new.html", request=request, error=None)
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -132,6 +127,8 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         profile = await _current_profile()
         if profile is None:
             return RedirectResponse("/login", status_code=303)
+        if profile.user.must_change_password:
+            return RedirectResponse("/me?tab=password", status_code=303)
         form = await request.form()
         raw_name = str(form.get("name", "")).strip()
         name = raw_name or None
@@ -185,11 +182,15 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         profile = await _current_profile()
         if profile is None:
             return RedirectResponse("/login", status_code=303)
+        if profile.user.must_change_password:
+            return RedirectResponse("/me?tab=password", status_code=303)
         token = await auth.get_mcp_token(
             runtime.session_factory, profile.user.id, request.path_params["token_id"]
         )
         if token is None:
-            return await _render_me_with_tokens(request, profile, error="Token 不存在", status_code=404)
+            return await _render_me_with_tokens(
+                request, profile, error="Token 不存在", status_code=404
+            )
         total = await auth.count_mcp_tokens(runtime.session_factory, profile.user.id)
         response = render.render(
             "token_delete.html", request=request, token=token, last_token=total == 1
@@ -202,14 +203,14 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         profile = await _current_profile()
         if profile is None:
             return RedirectResponse("/login", status_code=303)
+        if profile.user.must_change_password:
+            return RedirectResponse("/me?tab=password", status_code=303)
         token = await auth.get_mcp_token(
             runtime.session_factory, profile.user.id, request.path_params["token_id"]
         )
         if token is None:
             return RedirectResponse("/me", status_code=303)
-        deleted = await auth.delete_mcp_token(
-            runtime.session_factory, profile.user.id, token.id
-        )
+        deleted = await auth.delete_mcp_token(runtime.session_factory, profile.user.id, token.id)
         if deleted:
             await runtime.store.append_audit(
                 AuditEntry(
@@ -229,9 +230,7 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
 
         async def _error(message: str) -> Response:
             if async_api.wants_json(request):
-                return async_api.fail(
-                    request, async_api.CODE_INVALID_INPUT, message, status=400
-                )
+                return async_api.fail(request, async_api.CODE_INVALID_INPUT, message, status=400)
             return await _render_me_with_tokens(
                 request, profile, password_error=message, status_code=400
             )
@@ -239,9 +238,7 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
         current = str(form.get("current_password", ""))
         new = str(form.get("new_password", ""))
         confirm = str(form.get("confirm_password", ""))
-        verified = await auth.authenticate(
-            runtime.session_factory, profile.user.username, current
-        )
+        verified = await auth.authenticate(runtime.session_factory, profile.user.username, current)
         if verified is None:
             return await _error("当前密码不正确")
         problem = auth.password_problem(new)

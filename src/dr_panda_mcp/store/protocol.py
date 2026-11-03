@@ -155,6 +155,8 @@ class ConfigStore(Protocol):
         action: str | None = None,
         environment_key: str | None = None,
         target_name: str | None = None,
+        actor: str | None = None,
+        actions: tuple[str, ...] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AuditRecord], int]: ...

@@ -136,6 +136,9 @@ class UserRow(Base):
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="admin")
     is_enabled: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
     auth_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1)
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean(), nullable=False, default=False
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)

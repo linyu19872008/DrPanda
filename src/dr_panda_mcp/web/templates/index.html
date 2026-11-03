@@ -18,7 +18,7 @@
 <nav class="env-switch" aria-label="{{ t('选择环境') }}">
   {% for env in environments %}
   <a class="env-switch__item{% if current_env and env.key == current_env.key %} is-active{% endif %}{% if not env.enabled %} is-disabled{% endif %}"
-     href="/?env={{ env.key }}"
+     href="/targets?env={{ env.key }}"
      {% if current_env and env.key == current_env.key %}aria-current="true"{% endif %}>
     <span class="env-switch__title">{{ env_label(env) }}</span>
     <span class="env-switch__meta">
@@ -63,7 +63,7 @@
 {% endif %}
 
 {% if has_targets %}
-<form class="toolbar" method="get" action="/" role="search">
+<form class="toolbar" method="get" action="/targets" role="search">
   <div class="toolbar__search">
     <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
     {% if current_env %}<input type="hidden" name="env" value="{{ current_env.key }}">{% endif %}
@@ -160,7 +160,7 @@
               <span class="status__dot"></span>
               <span data-test-label data-ok="{{ t('成功') }}" data-error="{{ t('失败') }}" data-none="{{ t('未测试') }}">{{ t('成功') if target.last_test_ok else (t('失败') if target.last_test_at_display else t('未测试')) }}</span>
             </span>
-            <span class="muted small" data-test-time{% if not target.last_test_at_display %} hidden{% endif %}>{{ target.last_test_at_display or '' }}</span>
+            {% if target.last_test_at %}{{ local_time(target.last_test_at, extra='class="muted small" data-test-time') }}{% else %}<time class="muted small" data-test-time hidden></time>{% endif %}
           </div>
           <details class="details" data-test-details
                    {% if target.client_extra %}data-install-dialog="install-client-{{ target.id }}" data-install-label="{{ t('安装') }}"{% endif %}
@@ -217,7 +217,7 @@
       <div><dt>{{ t('最近测试') }}</dt><dd>
         {% if target.last_test_at_display %}
           <span class="status status--{{ 'ok' if target.last_test_ok else 'error' }}"><span class="status__dot"></span>{{ t('成功') if target.last_test_ok else t('失败') }}</span>
-          <span class="muted small">{{ target.last_test_at_display }}</span>
+          {{ local_time(target.last_test_at, extra='class="muted small"') }}
         {% else %}<span class="muted">{{ t('未测试') }}</span>{% endif %}
       </dd></div>
     </dl>

@@ -451,9 +451,10 @@ class Settings:                  # 解析并校验后的运行时策略
 | `id` | BigInteger | 主键自增 | |
 | `username` | String(64) | NOT NULL, UNIQUE | 安装时固定 `admin` |
 | `password_hash` | String(255) | NOT NULL | scrypt 哈希，不存明文 |
-| `role` | String(32) | NOT NULL | M7 固定 `admin` |
-| `is_enabled` | Boolean | NOT NULL | 停用后不能登录/调用 |
+| `role` | String(32) | NOT NULL | `admin` 或 `analyst`。安装时只有管理员 |
+| `is_enabled` | Boolean | NOT NULL | 停用后不能登录，已有 Token 也不能调用 |
 | `auth_version` | Integer | NOT NULL | 改密后递增，使旧 Session 失效 |
+| `must_change_password` | Boolean | NOT NULL | 分析员创建和重置密码后为真，本人改密成功后清除 |
 | `last_login_at` | DateTime(timezone=True) | NULL | 最近登录 |
 | `created_at` / `updated_at` | DateTime(timezone=True) | NOT NULL | UTC |
 

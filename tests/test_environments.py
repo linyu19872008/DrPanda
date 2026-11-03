@@ -120,7 +120,7 @@ async def test_web_environment_flow_stays_in_the_chosen_environment(
     runtime: Runtime,
 ) -> None:
     async with _client(runtime) as client:
-        home = await client.get("/")
+        home = await client.get("/targets")
         form = await client.get("/environments/new")
         created = await client.post(
             "/environments",

@@ -102,12 +102,15 @@ class SqlConfigStore:
     async def list_environments(self) -> list[Environment]:
         async with self._session_factory() as session:
             envs = (
-                await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id))
-            ).scalars().all()
+                (await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id)))
+                .scalars()
+                .all()
+            )
             counts = (
                 await session.execute(
-                    select(TargetRow.environment_id, TargetRow.enabled, func.count())
-                    .group_by(TargetRow.environment_id, TargetRow.enabled)
+                    select(TargetRow.environment_id, TargetRow.enabled, func.count()).group_by(
+                        TargetRow.environment_id, TargetRow.enabled
+                    )
                 )
             ).all()
             tally: dict[int, dict[str, int]] = {}
@@ -247,9 +250,7 @@ class SqlConfigStore:
             name=draft.name,
             enabled=draft.enabled,
             options_json=dict(draft.options),
-            secret_json=self._box.encrypt(
-                draft.name, draft.secret_patch.set, environment=env.key
-            ),
+            secret_json=self._box.encrypt(draft.name, draft.secret_patch.set, environment=env.key),
             created_at=now,
             updated_at=now,
             last_test_at=None,
@@ -293,9 +294,7 @@ class SqlConfigStore:
                     for field in draft.secret_patch.clear:
                         envelope.pop(field, None)
                     envelope.update(
-                        self._box.encrypt(
-                            row.name, draft.secret_patch.set, environment=env_row.key
-                        )
+                        self._box.encrypt(row.name, draft.secret_patch.set, environment=env_row.key)
                     )
                     row.options_json = dict(draft.options)
                     row.secret_json = envelope
@@ -357,9 +356,7 @@ class SqlConfigStore:
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
 
-    async def record_test(
-        self, target_id: int, ok: bool, error: str | None, actor: str
-    ) -> Target:
+    async def record_test(self, target_id: int, ok: bool, error: str | None, actor: str) -> Target:
         try:
             async with self._session_factory() as session:
                 async with session.begin():
@@ -409,32 +406,40 @@ class SqlConfigStore:
         action: str | None = None,
         environment_key: str | None = None,
         target_name: str | None = None,
+        actor: str | None = None,
+        actions: tuple[str, ...] | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AuditRecord], int]:
         filters = [AuditRow.created_at >= since]
         if action:
             filters.append(AuditRow.action == action)
+        elif actions:
+            filters.append(AuditRow.action.in_(list(actions)))
         if environment_key:
             filters.append(AuditRow.environment_key == environment_key)
         if target_name:
             filters.append(_contains(AuditRow.target_name, target_name))
+        if actor:
+            filters.append(AuditRow.actor == actor)
         async with self._session_factory() as session:
             total = int(
-                await session.scalar(
-                    select(func.count()).select_from(AuditRow).where(*filters)
-                )
+                await session.scalar(select(func.count()).select_from(AuditRow).where(*filters))
                 or 0
             )
             rows = (
-                await session.execute(
-                    select(AuditRow)
-                    .where(*filters)
-                    .order_by(AuditRow.created_at.desc(), AuditRow.id.desc())
-                    .offset(max(offset, 0))
-                    .limit(limit)
+                (
+                    await session.execute(
+                        select(AuditRow)
+                        .where(*filters)
+                        .order_by(AuditRow.created_at.desc(), AuditRow.id.desc())
+                        .offset(max(offset, 0))
+                        .limit(limit)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         return [
             AuditRecord(
                 created_at=row.created_at,
@@ -461,13 +466,17 @@ class SqlConfigStore:
         while time.monotonic() < deadline:
             async with self._session_factory() as session, session.begin():
                 ids = (
-                    await session.execute(
-                        select(AuditRow.id)
-                        .where(AuditRow.created_at < cutoff)
-                        .order_by(AuditRow.created_at)
-                        .limit(batch_size)
+                    (
+                        await session.execute(
+                            select(AuditRow.id)
+                            .where(AuditRow.created_at < cutoff)
+                            .order_by(AuditRow.created_at)
+                            .limit(batch_size)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 if not ids:
                     break
                 await session.execute(delete(AuditRow).where(AuditRow.id.in_(ids)))
@@ -481,9 +490,7 @@ class SqlConfigStore:
             rows = (await session.execute(select(SettingRow.key, SettingRow.value))).all()
         return {key: value for key, value in rows}
 
-    async def update_settings(
-        self, patch: Mapping[str, str], actor: str
-    ) -> dict[str, str]:
+    async def update_settings(self, patch: Mapping[str, str], actor: str) -> dict[str, str]:
         if not patch:
             return await self.get_settings()
         now = utc_now()
@@ -497,9 +504,7 @@ class SqlConfigStore:
                 for key, value in patch.items():
                     row = existing.get(key)
                     if row is None:
-                        raise StorageUnavailable(
-                            f"系统配置缺少定义：{key}；请先执行迁移"
-                        )
+                        raise StorageUnavailable(f"系统配置缺少定义：{key}；请先执行迁移")
                     old = row.value
                     row.value = value
                     row.updated_at = now
@@ -514,31 +519,29 @@ class SqlConfigStore:
                         )
                     )
                     changes.append(f"{key}: {old} -> {value}")
-                session.add(
-                    self._audit_row(
-                        actor, "settings.update", None, "; ".join(changes)
-                    )
-                )
+                session.add(self._audit_row(actor, "settings.update", None, "; ".join(changes)))
         except SQLAlchemyError as exc:
             raise StorageUnavailable(f"配置库写入失败：{exc}") from exc
         return await self.get_settings()
 
-    async def list_settings_changes(
-        self, limit: int = 5
-    ) -> list[SettingsChange]:
+    async def list_settings_changes(self, limit: int = 5) -> list[SettingsChange]:
         if limit < 1:
             return []
         async with self._session_factory() as session:
             rows = (
-                await session.execute(
-                    select(SettingsHistoryRow)
-                    .order_by(
-                        SettingsHistoryRow.changed_at.desc(),
-                        SettingsHistoryRow.id.desc(),
+                (
+                    await session.execute(
+                        select(SettingsHistoryRow)
+                        .order_by(
+                            SettingsHistoryRow.changed_at.desc(),
+                            SettingsHistoryRow.id.desc(),
+                        )
+                        .limit(min(limit, 50))
                     )
-                    .limit(min(limit, 50))
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         return [
             SettingsChange(
                 created_at=row.changed_at,
@@ -551,14 +554,10 @@ class SqlConfigStore:
             for row in rows
         ]
 
-    async def _get(
-        self, name: str, environment: str, *, require_enabled: bool
-    ) -> Target | None:
+    async def _get(self, name: str, environment: str, *, require_enabled: bool) -> Target | None:
         env = await self._resolve_environment(environment, require_enabled=require_enabled)
         return await self._one_target(
-            _joined_targets().where(
-                TargetRow.environment_id == env.id, TargetRow.name == name
-            )
+            _joined_targets().where(TargetRow.environment_id == env.id, TargetRow.name == name)
         )
 
     async def _resolve_environment(self, key: str, *, require_enabled: bool) -> _EnvRef:
@@ -566,9 +565,7 @@ class SqlConfigStore:
         async with self._session_factory() as session:
             if key:
                 row = (
-                    await session.execute(
-                        select(EnvironmentRow).where(EnvironmentRow.key == key)
-                    )
+                    await session.execute(select(EnvironmentRow).where(EnvironmentRow.key == key))
                 ).scalar_one_or_none()
                 if row is None:
                     choices = await _environment_choices(session)
@@ -576,10 +573,10 @@ class SqlConfigStore:
                     raise EnvironmentNotFound(f"环境 {key} 未登记{suffix}")
             else:
                 rows = (
-                    await session.execute(
-                        select(EnvironmentRow).order_by(EnvironmentRow.id)
-                    )
-                ).scalars().all()
+                    (await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id)))
+                    .scalars()
+                    .all()
+                )
                 if len(rows) == 1:
                     row = rows[0]
                 elif not rows:
@@ -593,7 +590,9 @@ class SqlConfigStore:
                 raise EnvironmentDisabled(f"环境 {row.key}（{row.title}）已停用")
             return _EnvRef(row.id, row.key, row.title, bool(row.enabled))
 
-    async def _environment_counts(self, session: AsyncSession, environment_id: int) -> dict[str, int]:
+    async def _environment_counts(
+        self, session: AsyncSession, environment_id: int
+    ) -> dict[str, int]:
         counts = (
             await session.execute(
                 select(TargetRow.enabled, func.count())
@@ -687,9 +686,7 @@ class SqlConfigStore:
 def _validated(draft: TargetDraft) -> TargetDraft:
     name = (draft.name or "").strip()
     if not _NAME_RE.match(name):
-        raise InvalidTarget(
-            "名称只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
-        )
+        raise InvalidTarget("名称只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64")
     if draft.type not in TARGET_TYPES:
         raise InvalidTarget(f"未知的目标类型：{draft.type}")
     if not isinstance(draft.options, dict):
@@ -704,9 +701,7 @@ def _validated(draft: TargetDraft) -> TargetDraft:
             raise InvalidTarget("要清除的密钥字段名不能为空")
     environment_key = (draft.environment_key or "").strip()
     if environment_key and not _NAME_RE.match(environment_key):
-        raise InvalidTarget(
-            "调用标识只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
-        )
+        raise InvalidTarget("调用标识只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64")
     return TargetDraft(
         name=name,
         type=draft.type,
@@ -739,9 +734,7 @@ def _environment(row: EnvironmentRow, counts: dict[str, int]) -> Environment:
 def _valid_key(value: str, label: str) -> str:
     key = (value or "").strip()
     if not _NAME_RE.match(key):
-        raise InvalidTarget(
-            f"{label}只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64"
-        )
+        raise InvalidTarget(f"{label}只允许小写字母、数字与连字符，以字母或数字开头结尾，最长 64")
     return key
 
 
@@ -756,8 +749,8 @@ def _valid_title(value: str) -> str:
 
 async def _environment_choices(session: AsyncSession) -> str:
     rows = (
-        await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id))
-    ).scalars().all()
+        (await session.execute(select(EnvironmentRow).order_by(EnvironmentRow.id))).scalars().all()
+    )
     return "、".join(f"{row.key}（{row.title}）" for row in rows)
 
 

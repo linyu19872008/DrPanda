@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ t('管理员登录') }} · {{ product_name }}{% endblock %}
+{% block title %}{{ t('登录') }} · {{ product_name }}{% endblock %}
 {% block content %}
 <section class="login-card card">
-  <h1>{{ t('管理员登录') }}</h1>
-  <p class="page-subtitle">{{ t('登录以管理排查目标与系统配置。') }}</p>
+  <h1>{{ t('登录') }}</h1>
+  <p class="page-subtitle">{{ t('使用分配给你的账号登录。') }}</p>
   {% if notice %}
   <div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(notice) }}</strong></div></div>
   {% endif %}
@@ -18,8 +18,7 @@
     <input type="hidden" name="next" value="{{ next_path }}">
     <div class="field">
       <label class="field__label" for="login-username">{{ t('用户名') }}</label>
-      <div class="readonly mono" id="login-username">admin</div>
-      <input type="hidden" name="username" value="admin">
+      <input class="input" id="login-username" name="username" autocomplete="username" required>
     </div>
     <div class="field">
       <label class="field__label" for="login-password">{{ t('密码') }}</label>

@@ -6,8 +6,8 @@
   <h1>{{ t(title) }}</h1>
   <p class="error-page__message">{{ t(message) }}</p>
   <div class="error-page__actions">
-    <a class="btn btn--primary" href="/">{{ t('返回排查目标') }}</a>
-    <a class="btn btn--secondary" href="/settings">{{ t('系统配置') }}</a>
+    <a class="btn btn--primary" href="/">{{ t('返回概览') }}</a>
+    {% if is_admin %}<a class="btn btn--secondary" href="/settings">{{ t('系统配置') }}</a>{% endif %}
   </div>
 </section>
 {% endblock %}

@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ t('用户') }} · {{ product_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ t('用户') }}</h1>
+    <p class="page-subtitle">{{ t('管理可以登录的成员。') }}</p>
+  </div>
+  <a class="btn btn--primary" href="/users?new=1" data-dialog-open="user-drawer">{{ t('创建成员') }}</a>
+</div>
+
+{% if flash %}
+<div class="alert alert--success" role="status"><div class="alert__body"><strong>{{ t(flash) }}</strong></div></div>
+{% endif %}
+
+{% if accounts %}
+<div class="table-card">
+  <table class="table table--responsive">
+    <thead><tr>
+      <th scope="col">{{ t('登录名') }}</th>
+      <th scope="col">{{ t('角色') }}</th>
+      <th scope="col">{{ t('最近登录') }}</th>
+      <th scope="col">{{ t('是否启用') }}</th>
+      <th scope="col">{{ t('操作') }}</th>
+    </tr></thead>
+    <tbody>
+    {% for item in accounts %}
+      <tr>
+        <td data-label="{{ t('登录名') }}" class="mono">{{ item.username }}</td>
+        <td data-label="{{ t('角色') }}">{{ t(item.role_label) }}</td>
+        <td data-label="{{ t('最近登录') }}">{% if item.last_login %}{{ local_time(item.last_login) }}{% else %}{{ t('未记录') }}{% endif %}</td>
+        <td data-label="{{ t('是否启用') }}">
+          {% if item.can_manage %}
+          <form method="post" action="/users/{{ item.id }}/{% if item.is_enabled %}disable{% else %}enable{% endif %}" class="inline-form" data-submit-loading data-async-form data-row-action="toggle">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="switch{% if item.is_enabled %} is-on{% endif %}" type="submit"
+                    aria-pressed="{{ 'true' if item.is_enabled else 'false' }}"
+                    data-on-title="{{ t('点击停用') }}" data-off-title="{{ t('点击启用') }}"
+                    title="{{ t('点击停用') if item.is_enabled else t('点击启用') }}">
+              <span class="switch__track" aria-hidden="true"><span class="switch__thumb"></span></span>
+              <span class="switch__label">
+                <span class="switch__label-text">{{ t('已启用') if item.is_enabled else t('已停用') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('已启用') }}</span>
+                <span class="btn__sizer" aria-hidden="true">{{ t('已停用') }}</span>
+              </span>
+            </button>
+          </form>
+          {% else %}{{ t('已启用') if item.is_enabled else t('已停用') }}{% endif %}
+        </td>
+        <td data-label="{{ t('操作') }}" class="cell-actions">
+          {% if item.can_manage %}
+          <form method="post" action="/users/{{ item.id }}/reset-password" class="inline-form">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <button class="btn btn--secondary btn--sm" type="submit">{{ t('重置密码') }}</button>
+          </form>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="page-subtitle">{{ t('还没有分析员。') }}</p>
+{% endif %}
+
+<dialog id="user-drawer" class="modal drawer" aria-labelledby="user-drawer-title"{% if drawer_open %} open data-open-on-load="true"{% endif %}>
+  <div class="modal__panel">
+    {% if issued_password %}
+    <a class="modal__close" href="/users" data-dialog-close="navigate" aria-label="{{ t('关闭') }}">×</a>
+    <h2 id="user-drawer-title">{% if issued_kind == 'reset' %}{{ t('密码已重置') }}{% else %}{{ t('账号已生成') }}{% endif %}</h2>
+    <p class="field__hint">{{ t('初始密码只显示这一次。离开或刷新后不能再查看。') }}</p>
+    <p>{{ t('请把密码交给对方，并提醒对方登录后马上修改。') }}</p>
+    <dl class="summary">
+      <div><dt>{{ t('登录名') }}</dt><dd class="mono">{{ issued_username }}</dd></div>
+      <div><dt>{{ t('初始密码') }}</dt><dd><pre class="setup-secret" id="initial-password">{{ issued_password }}</pre></dd></div>
+    </dl>
+    {%- set handoff = t('登录名：') ~ issued_username ~ '\n' ~ t('初始密码：') ~ issued_password -%}
+    <pre id="account-handoff" hidden>{{ handoff }}</pre>
+    <div class="drawer__actions">
+      <button class="btn btn--secondary btn--sm" type="button" data-copy-target="account-handoff" data-copied="{{ t('已复制') }}" data-failed="{{ t('请选中文字后复制') }}">{{ t('复制') }}</button>
+      <span data-copy-status role="status"></span>
+      <a class="btn btn--primary btn--sm" href="/users">{{ t('完成') }}</a>
+    </div>
+    {% elif secret_gone %}
+    <a class="modal__close" href="/users" data-dialog-close="navigate" aria-label="{{ t('关闭') }}">×</a>
+    <h2 id="user-drawer-title">{{ t('初始密码') }}</h2>
+    <p>{{ t('密码已经显示过，不能再次查看。') }}</p>
+    <a class="btn btn--primary" href="/users">{{ t('返回列表') }}</a>
+    {% else %}
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <h2 id="user-drawer-title">{{ t('创建成员') }}</h2>
+    <p class="field__hint">{{ t('成员以分析员身份登录，首次登录必须修改密码。') }}</p>
+    {% if form_error %}
+    <div class="alert alert--danger" role="alert"><div class="alert__body"><strong>{{ t(form_error) }}</strong></div></div>
+    {% endif %}
+    <form method="post" action="/users" data-submit-loading>
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="field">
+        <label class="field__label" for="user-name">{{ t('登录名') }}</label>
+        <input class="input" id="user-name" name="username" value="{{ username }}" autocomplete="off" required maxlength="64"{% if drawer_open %} autofocus{% endif %}>
+        <p class="field__hint">{{ t('小写字母、数字和连字符，创建后不能改。') }}</p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="user-password">{{ t('初始密码') }}</label>
+        <input class="input" id="user-password" name="password" type="text" autocomplete="off">
+        <p class="field__hint">{{ t('留空则自动生成。填写时至少 8 位。') }}</p>
+      </div>
+      <div class="drawer__actions">
+        <button class="btn btn--secondary" type="button" data-dialog-close>{{ t('取消') }}</button>
+        <button class="btn btn--primary" type="submit" data-loading-label="{{ t('生成中…') }}">{{ t('生成账号') }}</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</dialog>
+{% endblock %}

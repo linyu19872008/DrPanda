@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
 PUBLIC_PREFIXES = ("/static/",)
+_ADMIN_PREFIXES = ("/targets", "/environments", "/settings", "/users")
+_PASSWORD_GATE_POSTS = {"/me/password", "/logout", "/language", "/theme"}
 
 # 全局安全响应头：模板没有内联脚本/样式，脚本与网络请求只允许同源。
 CONTENT_SECURITY_POLICY = (
@@ -142,15 +144,21 @@ class AuthMiddleware:
                     data={"login": "/login?next=" + _quote(target)},
                 )
             else:
-                response = RedirectResponse(
-                    "/login?next=" + _quote(target), status_code=303
-                )
+                response = RedirectResponse("/login?next=" + _quote(target), status_code=303)
                 _clear_session(response)
             await response(scope, receive, send)
             return
 
         user, _payload = session
         with auth.use_actor(user.username, user):
+            if user.must_change_password and not _password_change_allowed(request):
+                response = _password_gate_response(request)
+                await response(scope, receive, send)
+                return
+            if user.role != auth.ROLE_ADMIN and _requires_admin(path):
+                response = _forbidden(request)
+                await response(scope, receive, send)
+                return
             await self.app(scope, receive, send)
 
     async def _bearer_user(self, request: Request):
@@ -164,9 +172,7 @@ class AuthMiddleware:
         if principal is None:
             return None
         try:
-            await auth.touch_mcp_token_used(
-                self.runtime.session_factory, principal.token_id
-            )
+            await auth.touch_mcp_token_used(self.runtime.session_factory, principal.token_id)
         except Exception:  # 元数据更新失败不影响已认证的工具调用
             logger.warning("更新 MCP Token 最近使用时间失败", exc_info=True)
         return principal
@@ -184,7 +190,7 @@ class AuthMiddleware:
         except (KeyError, TypeError, ValueError):
             return None
         user = await auth.get_user_by_id(self.runtime.session_factory, user_id)
-        if user is None or not user.is_enabled or user.role != "admin":
+        if user is None or not user.is_enabled or not auth.is_console_role(user.role):
             return None
         if user.auth_version != auth_version:
             return None
@@ -266,6 +272,44 @@ async def _read_body(receive):
         return {"type": "http.request", "body": body, "more_body": False}
 
     return body, replay
+
+
+def _requires_admin(path: str) -> bool:
+    return path.startswith(_ADMIN_PREFIXES)
+
+
+def _password_change_allowed(request: Request) -> bool:
+    path = request.url.path
+    if request.method == "POST" and path in _PASSWORD_GATE_POSTS:
+        return True
+    return (
+        request.method == "GET" and path == "/me" and request.query_params.get("tab") == "password"
+    )
+
+
+def _password_gate_response(request: Request):
+    if async_api.wants_json(request):
+        return async_api.fail(
+            request,
+            "PASSWORD_CHANGE_REQUIRED",
+            "请先修改密码",
+            status=403,
+            data={"redirect": "/me?tab=password"},
+        )
+    return RedirectResponse("/me?tab=password", status_code=303)
+
+
+def _forbidden(request: Request):
+    if async_api.wants_json(request):
+        return async_api.fail(request, "FORBIDDEN", "没有权限", status=403)
+    return render.render(
+        "error.html",
+        request=request,
+        title="没有权限",
+        message="这个页面只有管理员可以打开。",
+        code=403,
+        status_code=403,
+    )
 
 
 def _quote(value: str) -> str:

@@ -95,7 +95,7 @@ def register_auth_routes(
         if _login_limited(request):
             return _login_error("登录尝试次数过多，请稍后再试", 429)
 
-        username = str(form.get("username", "admin")).strip() or "admin"
+        username = str(form.get("username", "")).strip()
         password = str(form.get("password", ""))
         user = await auth.authenticate(runtime.session_factory, username, password)
         if user is None:
@@ -106,12 +106,13 @@ def register_auth_routes(
         current = await settings_module.load(runtime.store)
         session = auth.create_session(user, session_key, current.session_ttl_minutes * 60)
         await auth.set_last_login(runtime.session_factory, user.id)
+        landing = "/me?tab=password" if user.must_change_password else next_path
         if async_api.wants_json(request):
             response: Response = async_api.ok(
-                request, data={"redirect": next_path}
+                request, data={"redirect": landing}
             )
         else:
-            response = RedirectResponse(next_path, status_code=303)
+            response = RedirectResponse(landing, status_code=303)
         response.set_cookie(
             auth.SESSION_COOKIE,
             session,

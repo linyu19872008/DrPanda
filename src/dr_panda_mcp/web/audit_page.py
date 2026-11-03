@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
+from dr_panda_mcp import auth
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.web import render
 
@@ -39,8 +40,25 @@ ACTIONS = (
     ("user.mcp_token_create", "生成 Token"),
     ("user.mcp_token_delete", "删除 Token"),
     ("user.password_change", "修改密码"),
+    ("user.create", "创建用户"),
+    ("user.disable", "停用用户"),
+    ("user.enable", "启用用户"),
+    ("user.password_reset", "重置密码"),
 )
+ANALYST_ACTIONS = (
+    ("tool.call", "工具调用"),
+    ("user.mcp_token_create", "生成 Token"),
+    ("user.mcp_token_delete", "删除 Token"),
+    ("user.password_change", "修改密码"),
+)
+_ANALYST_ACTION_CODES = frozenset(code for code, _label in ANALYST_ACTIONS)
 _ACTION_LABELS = dict(ACTIONS)
+
+
+def action_label(code: str) -> str:
+    return _ACTION_LABELS.get(code, code)
+
+
 _RANGE_KEYS = {key: delta for key, _label, delta in RANGES}
 _TOOL_SUMMARY = re.compile(
     r"^(?:client=(?P<client>.*?) prefix=(?P<prefix>\S+) )?"
@@ -154,9 +172,25 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
         range_key = params.get("range", "24h")
         if range_key not in _RANGE_KEYS:
             range_key = "24h"
-        action = _clean(params.get("action", ""), 32)
-        if action not in _ACTION_LABELS:
-            action = ""
+        user = auth.current_user()
+        analyst = user is not None and user.role == auth.ROLE_ANALYST
+        if analyst:
+            raw_action = params.get("action")
+            action = "tool.call" if raw_action is None else _clean(raw_action, 32)
+            if action not in _ANALYST_ACTION_CODES and action != "all":
+                action = "tool.call"
+            menu = ANALYST_ACTIONS
+            actor = user.username if user is not None else None
+            all_value = "all"
+            subtitle = "这里只显示你自己的操作。"
+        else:
+            action = _clean(params.get("action", ""), 32)
+            if action not in _ACTION_LABELS:
+                action = ""
+            menu = ACTIONS
+            actor = None
+            all_value = ""
+            subtitle = "查看已经发生的操作。"
         env = _clean(params.get("env", ""), 64)
         q = _clean(params.get("q", ""), 64)
         try:
@@ -165,30 +199,31 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
             page = 1
         page = max(page, 1)
         since = datetime.now(UTC) - _RANGE_KEYS[range_key]
-        rows, total = await runtime.store.list_audit(
-            since=since,
-            action=action or None,
-            environment_key=env or None,
-            target_name=q or None,
-            offset=(page - 1) * PAGE_SIZE,
-            limit=PAGE_SIZE,
-        )
+        store_action = None if action in {"", "all"} else action
+        action_in = tuple(_ANALYST_ACTION_CODES) if analyst and store_action is None else None
+
+        async def _load(page_no: int):
+            return await runtime.store.list_audit(
+                since=since,
+                action=store_action,
+                actions=action_in,
+                environment_key=env or None,
+                target_name=q or None,
+                actor=actor,
+                offset=(page_no - 1) * PAGE_SIZE,
+                limit=PAGE_SIZE,
+            )
+
+        rows, total = await _load(page)
         pages = max(1, math.ceil(total / PAGE_SIZE))
         if page > pages:
             page = pages
-            rows, total = await runtime.store.list_audit(
-                since=since,
-                action=action or None,
-                environment_key=env or None,
-                target_name=q or None,
-                offset=(page - 1) * PAGE_SIZE,
-                limit=PAGE_SIZE,
-            )
+            rows, total = await _load(page)
         environments = await runtime.store.list_environments()
         titles = {item.key: item.title for item in environments}
         view_rows = [
             {
-                "at": row.created_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+                "at": row.created_at,
                 "actor": row.actor,
                 "action_label": _ACTION_LABELS.get(row.action, row.action),
                 "environment_key": row.environment_key,
@@ -199,11 +234,14 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
             }
             for row in rows
         ]
-        filtered = range_key != "24h" or bool(action or env or q)
+        default_action = "tool.call" if analyst else ""
+        filtered = range_key != "24h" or bool(env or q) or action != default_action
         response = render.render(
             "audit.html",
             request=request,
             rows=view_rows,
+            subtitle=subtitle,
+            all_value=all_value,
             total=total,
             page=page,
             pages=pages,
@@ -217,7 +255,7 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
                 }
                 for key, label, _delta in RANGES
             ],
-            actions=ACTIONS,
+            actions=menu,
             action=action,
             environments=environments,
             env=env,
