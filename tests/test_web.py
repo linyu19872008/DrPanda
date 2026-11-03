@@ -495,6 +495,7 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert nav.index("审计") < nav.index("系统配置") < nav.index("我的")
     assert 'name="mode" value="dark"' in text
     assert "/static/app.css?v=" in text
+    assert 'src="/static/icon.png?v=' in text
     assert "还没有登记任何目标" in text
     assert text.count("<h1") == 1
     assert 'class="brand__name">DrPanda<' in text
@@ -535,6 +536,8 @@ async def test_static_css_route(runtime: Runtime) -> None:
             "/static/app.css", headers={"if-none-match": first.headers["etag"]}
         )
         missing = await client.get("/static/nope.css")
+        icon = await client.get("/static/icon.png")
+        favicon = await client.get("/favicon.ico")
 
     assert first.status_code == 200
     assert "text/css" in first.headers["content-type"]
@@ -542,6 +545,11 @@ async def test_static_css_route(runtime: Runtime) -> None:
     assert first.headers.get("etag")
     assert cached.status_code == 304
     assert missing.status_code == 404
+    assert icon.status_code == 200
+    assert icon.headers["content-type"].startswith("image/png")
+    assert icon.content.startswith(b"\x89PNG")
+    assert favicon.status_code == 200
+    assert favicon.content == icon.content
 
 
 async def test_type_chooser_page(runtime: Runtime) -> None:

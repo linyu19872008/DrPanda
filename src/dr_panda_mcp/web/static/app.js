@@ -64,6 +64,47 @@
     });
   });
 
+  const copyText = async (value) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch (_) {
+        // 权限被拒绝时改用选区复制。
+      }
+    }
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (_) {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  };
+
+  document.querySelectorAll("[data-copy-target]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const source = document.getElementById(button.dataset.copyTarget || "");
+    if (!source) return;
+    const status = button.parentElement
+      ? button.parentElement.querySelector("[data-copy-status]")
+      : null;
+    button.hidden = false;
+    button.addEventListener("click", async () => {
+      const value = source.textContent || "";
+      const ok = await copyText(value);
+      if (status) status.textContent = ok ? button.dataset.copied || "" : button.dataset.failed || "";
+    });
+  });
+
   // ---------------------------------------------------------------------
   // 普通表单提交加载态
   // ---------------------------------------------------------------------

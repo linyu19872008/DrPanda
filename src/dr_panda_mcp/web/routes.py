@@ -646,6 +646,14 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
     async def app_js(request: Request) -> Response:
         return assets.app_js_response(request)
 
+    @server.custom_route("/static/icon.png", methods=["GET"])
+    async def icon_png(request: Request) -> Response:
+        return assets.icon_response(request)
+
+    @server.custom_route("/favicon.ico", methods=["GET"])
+    async def favicon(request: Request) -> Response:
+        return assets.icon_response(request)
+
 
 
 async def _target(store: ConfigStore, target_id: int) -> Target | None:

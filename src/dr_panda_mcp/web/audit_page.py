@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import math
+import re
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import urlencode
 
 from fastmcp import FastMCP
@@ -39,10 +42,85 @@ ACTIONS = (
 )
 _ACTION_LABELS = dict(ACTIONS)
 _RANGE_KEYS = {key: delta for key, _label, delta in RANGES}
+_TOOL_SUMMARY = re.compile(
+    r"^(?:client=(?P<client>.*?) prefix=(?P<prefix>\S+) )?"
+    r"(?P<tool>\S+) env=(?P<env>\S+) target=(?P<target>\S+) params=(?P<params>.*)"
+    r" returned=(?P<returned>\d+) elapsed_ms=(?P<elapsed>\d+) error=(?P<error>\S+)\s*$",
+    re.DOTALL,
+)
 
 
 def _clean(value: str, limit: int) -> str:
     return value.strip()[:limit]
+
+
+def _field_text(value: Any) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(value, ensure_ascii=False)
+
+
+def describe_summary(action: str, summary: str) -> dict[str, Any]:
+    """把审计摘要拆成列表预览和弹层字段。解析失败时保留原文。"""
+    text = summary or ""
+    if action == "tool.call":
+        parsed = _describe_tool_summary(text)
+        if parsed is not None:
+            return parsed
+    return {"kind": "plain", "preview": text, "truncated": len(text) >= 1024}
+
+
+def _describe_tool_summary(summary: str) -> dict[str, Any] | None:
+    match = _TOOL_SUMMARY.match(summary)
+    if match is None:
+        return None
+    client = match.group("client")
+    prefix = match.group("prefix")
+    error = match.group("error")
+    params_sql, params_fields, params_pretty, params_raw = _describe_params(match.group("params"))
+    hint = params_sql or next(
+        (value for _key, value in params_fields if value and value != "—"), ""
+    )
+    preview_parts = [match.group("tool")]
+    if hint:
+        preview_parts.append(hint)
+    ok = error in {"", "-"}
+    if not ok:
+        preview_parts.append(error)
+    return {
+        "kind": "tool",
+        "preview": " · ".join(preview_parts),
+        "tool": match.group("tool"),
+        "client": client if client and client != "-" else "",
+        "prefix": prefix if prefix and prefix != "-" else "",
+        "returned": match.group("returned"),
+        "elapsed_ms": match.group("elapsed"),
+        "error": error,
+        "ok": ok,
+        "params_sql": params_sql,
+        "params_fields": params_fields,
+        "params_pretty": params_pretty,
+        "params_raw": params_raw,
+    }
+
+
+def _describe_params(raw: str) -> tuple[str, list[tuple[str, str]], str, str]:
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return "", [], "", raw
+    if not isinstance(payload, dict):
+        return "", [], json.dumps(payload, ensure_ascii=False, indent=2), ""
+    sql = payload.get("sql")
+    params_sql = sql if isinstance(sql, str) else ""
+    fields = [(key, _field_text(value)) for key, value in payload.items() if key != "sql"]
+    return params_sql, fields, "", ""
 
 
 def _href(
@@ -117,6 +195,7 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
                 "environment_title": titles.get(row.environment_key or ""),
                 "target_name": row.target_name,
                 "summary": row.summary or "",
+                "detail": describe_summary(row.action, row.summary or ""),
             }
             for row in rows
         ]

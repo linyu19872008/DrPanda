@@ -25,7 +25,7 @@ from dr_panda_mcp.install import save_install_state
 from dr_panda_mcp.runtime import Runtime, create_runtime
 from dr_panda_mcp.server import create_app
 from dr_panda_mcp.store.url import create_engine, ensure_driver, normalize_database_url
-from dr_panda_mcp.web import async_api, render, theme
+from dr_panda_mcp.web import assets, async_api, render, theme
 from dr_panda_mcp.web.security import SecurityHeadersMiddleware
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class SetupApp:
                 Route("/setup/database", self.database_post, methods=["POST"]),
                 Route("/setup/finish", self.finish, methods=["POST"]),
                 Route("/language", self.language, methods=["POST"]),
+                Route("/favicon.ico", self.favicon, methods=["GET"]),
                 Mount("/static", StaticFiles(directory=STATIC_DIR), name="setup-static"),
             ]
         )
@@ -85,6 +86,9 @@ class SetupApp:
                 pass
         if self.runtime is not None:
             await self.runtime.close()
+
+    async def favicon(self, request: Request) -> Response:
+        return assets.icon_response(request)
 
     async def healthz(self, request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "installed": False})

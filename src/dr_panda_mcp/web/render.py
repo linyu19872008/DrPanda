@@ -82,6 +82,7 @@ def render(
             "asset_version": assets.asset_version(),
             "script_version": assets.script_version(),
             "app_script_version": assets.app_js_version(),
+            "icon_version": assets.icon_version(),
             "flash": flash,
         }
     )

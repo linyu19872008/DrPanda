@@ -15,6 +15,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 CSS_PATH = STATIC_DIR / "app.css"
 COPY_JS_PATH = STATIC_DIR / "copy-token.js"
 APP_JS_PATH = STATIC_DIR / "app.js"
+ICON_PATH = STATIC_DIR / "icon.png"
 
 
 def _read_css() -> bytes:
@@ -33,6 +34,10 @@ def app_js_version() -> str:
     return hashlib.sha256(APP_JS_PATH.read_bytes()).hexdigest()[:10]
 
 
+def icon_version() -> str:
+    return hashlib.sha256(ICON_PATH.read_bytes()).hexdigest()[:10]
+
+
 def app_js_response(request: Request) -> Response:
     data = APP_JS_PATH.read_bytes()
     etag = f'"{hashlib.sha256(data).hexdigest()}"'
@@ -49,6 +54,15 @@ def copy_js_response(request: Request) -> Response:
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     return Response(data, media_type="text/javascript; charset=utf-8", headers=headers)
+
+
+def icon_response(request: Request) -> Response:
+    data = ICON_PATH.read_bytes()
+    etag = f'"{hashlib.sha256(data).hexdigest()}"'
+    headers = {"Cache-Control": "public, max-age=300", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return Response(data, media_type="image/png", headers=headers)
 
 
 def css_response(request: Request) -> Response:

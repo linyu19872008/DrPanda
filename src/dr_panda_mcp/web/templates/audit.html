@@ -62,12 +62,79 @@
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
         <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-        <td data-label="{{ t('摘要') }}" class="cell-summary">{% if row.summary %}{{ row.summary }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('摘要') }}" class="cell-summary">
+          {% if row.summary %}
+          <button class="summary-preview" type="button" data-dialog-open="audit-summary-{{ loop.index }}">
+            <span class="summary-preview__text">{{ row.detail.preview }}</span>
+            <span class="summary-preview__action">{{ t('查看') }}</span>
+          </button>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+{% for row in rows %}
+{% if row.summary %}
+<dialog id="audit-summary-{{ loop.index }}" class="modal" aria-labelledby="audit-summary-title-{{ loop.index }}">
+  <div class="modal__panel modal__panel--wide">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <div class="audit-detail">
+      <h2 id="audit-summary-title-{{ loop.index }}">{{ t(row.action_label) }}</h2>
+      <p class="audit-detail__meta">
+        <span>{{ row.at }}</span>
+        <span>{{ row.actor }}</span>
+        <span>
+          {% if row.environment_key %}
+          {% if row.environment_key == 'default' and row.environment_title == '默认' %}{{ t('默认') }}{% else %}{{ row.environment_title or row.environment_key }}{% endif %}
+          {% if row.environment_title and row.environment_title != row.environment_key %}<span class="mono"> {{ row.environment_key }}</span>{% endif %}
+          {% else %}—{% endif %}
+        </span>
+        <span>{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}—{% endif %}</span>
+      </p>
+      {% if row.detail.kind == 'tool' %}
+      <dl class="audit-detail__stats">
+        <div><dt>{{ t('返回条数') }}</dt><dd>{{ row.detail.returned }}</dd></div>
+        <div><dt>{{ t('耗时') }}</dt><dd>{{ row.detail.elapsed_ms }} ms</dd></div>
+        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}{{ t('成功') }}{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
+      </dl>
+      <h3>{{ t('调用') }}</h3>
+      <dl class="audit-detail__fields">
+        <div><dt>{{ t('工具') }}</dt><dd class="mono">{{ row.detail.tool }}</dd></div>
+        {% if row.detail.client %}<div><dt>{{ t('客户端') }}</dt><dd>{{ row.detail.client }}</dd></div>{% endif %}
+        {% if row.detail.prefix %}<div><dt>{{ t('凭证前缀') }}</dt><dd class="mono">{{ row.detail.prefix }}</dd></div>{% endif %}
+      </dl>
+      {% if row.detail.params_sql or row.detail.params_fields or row.detail.params_pretty or row.detail.params_raw %}
+      <h3>{{ t('参数') }}</h3>
+      {% if row.detail.params_sql %}<pre class="setup-secret audit-code">{{ row.detail.params_sql }}</pre>{% endif %}
+      {% if row.detail.params_fields %}
+      <dl class="audit-detail__fields">
+        {% for key, value in row.detail.params_fields %}
+        <div><dt class="mono">{{ key }}</dt><dd class="mono">{{ value }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% if row.detail.params_pretty %}<pre class="setup-secret audit-code">{{ row.detail.params_pretty }}</pre>{% endif %}
+      {% if row.detail.params_raw %}
+      <pre class="setup-secret audit-code">{{ row.detail.params_raw }}</pre>
+      <p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>
+      {% endif %}
+      {% endif %}
+      {% else %}
+      <pre class="setup-secret audit-code">{{ row.summary }}</pre>
+      {% if row.detail.truncated %}<p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>{% endif %}
+      {% endif %}
+      <div class="audit-detail__actions">
+        <button class="btn btn--secondary btn--sm" type="button" data-copy-target="audit-raw-{{ loop.index }}" data-copied="{{ t('已复制') }}" data-failed="{{ t('请选中文字后复制') }}" hidden>{{ t('复制') }}</button>
+        <span class="audit-detail__note" data-copy-status role="status"></span>
+      </div>
+      <pre id="audit-raw-{{ loop.index }}" hidden>{{ row.summary }}</pre>
+    </div>
+  </div>
+</dialog>
+{% endif %}
+{% endfor %}
 {% if pages > 1 %}
 <nav class="pagination" aria-label="{{ t('分页') }}">
   {% if page > 1 %}<a class="btn btn--secondary btn--sm" href="{{ prev_href }}">{{ t('上一页') }}</a>{% endif %}
