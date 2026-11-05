@@ -1137,10 +1137,11 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 
 ### 9.1 日志
 
-- 用标准库 logging，级别由 `DR_PANDA_LOG_LEVEL` 控制，默认 INFO，输出到 stdout，一行一条。
-- 每条日志包含：时间、级别、事件、工具或动作、target 名、耗时、返回条数、错误码；不含密钥、请求体、连接串。
-- SQL 或查询原文超过 200 字符截断后记录。
-- 事件至少覆盖：`app.start`、`migrate.done`、`target.create/update/enable/disable/delete/test`、`settings.update`、`tool.call`、`audit.cleanup`、`store.error`、`upstream.error`。
+- 用标准库 logging，级别由 `DR_PANDA_LOG_LEVEL` 控制，默认 INFO，输出到 stdout，一行一条。访问日志由本服务的 `http` 事件承担，不再使用 uvicorn 自带的访问行。
+- 字段按需出现：`request`、`actor`、`tool`、`env`、`target`、`elapsed_ms`、`returned`、`error`，后面是一句说明。不含密钥、请求体、连接串和结果行。启动日志只写监听地址和数据库种类。
+- 每个 HTTP 请求生成 8 位请求号，放进响应头 `X-Request-Id`，并写进该次工具审计摘要的末尾。`/static/`、图标和成功的 `/healthz` 只在 DEBUG 出现。5xx 记 WARNING。
+- 工具调用结束时记一行：成功是 `tool.call` INFO；超时和上游失败是 `upstream.error` WARNING；配置库失败是 `store.error` WARNING；其它预期失败是 `tool.call` WARNING。未预期的异常是 `tool.call` ERROR，堆栈先脱敏。默认不打印 SQL。DEBUG 再附大约 120 字的脱敏参数开头。
+- 事件还包括 `app.start`、`migrate.done`、`audit.cleanup`。网页上已经写入审计的配置变更不另打一条 INFO。
 
 ### 9.2 健康检查
 

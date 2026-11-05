@@ -119,6 +119,7 @@ class AuthMiddleware:
             if principal is None:
                 await _unauthorized()(scope, receive, send)
                 return
+            _remember_actor(scope, principal.user.username)
             with auth.use_actor(
                 principal.user.username,
                 principal.user,
@@ -150,6 +151,7 @@ class AuthMiddleware:
             return
 
         user, _payload = session
+        _remember_actor(scope, user.username)
         with auth.use_actor(user.username, user):
             if user.must_change_password and not _password_change_allowed(request):
                 response = _password_gate_response(request)
@@ -250,6 +252,12 @@ class CSRFMiddleware:
             await response(scope, receive, send)
             return
         await self.app(scope, replay, send)
+
+
+def _remember_actor(scope, username: str) -> None:
+    state = scope.setdefault("state", {})
+    if isinstance(state, dict):
+        state["actor"] = username
 
 
 async def _read_body(receive):

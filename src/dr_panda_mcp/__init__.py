@@ -19,8 +19,9 @@ from dr_panda_mcp.audit import run_cleanup_loop
 from dr_panda_mcp.config import Config, is_loopback_host, load_config
 from dr_panda_mcp.errors import ConfigError, StartupError
 from dr_panda_mcp.install import load_install_state
+from dr_panda_mcp.log import configure_logging, database_kind, format_event
 from dr_panda_mcp.runtime import create_runtime
-from dr_panda_mcp.server import SERVER_NAME, check_port_available, create_app
+from dr_panda_mcp.server import check_port_available, create_app
 from dr_panda_mcp.setup import SetupApp
 
 logger = logging.getLogger(__name__)
@@ -34,13 +35,7 @@ def main() -> int:
         _fail(f"启动失败：{exc}")
         return 2
 
-    _configure_logging(config.log_level)
-    logger.info(
-        "配置就绪：host=%s port=%d database=%s",
-        config.host,
-        config.port,
-        config.database_url,
-    )
+    configure_logging(config.log_level)
 
     try:
         return asyncio.run(_run(config))
@@ -83,13 +78,14 @@ async def _run(config: Config) -> int:
                 host=config.host,
                 port=config.port,
                 log_level=config.log_level.lower(),
+                access_log=False,
             )
         )
         logger.info(
-            "%s 启动：http://%s:%d（/mcp 与配置网页共用）",
-            SERVER_NAME,
-            config.host,
-            config.port,
+            format_event(
+                "app.start",
+                f"http://{config.host}:{config.port} database={database_kind(config.database_url)}",
+            )
         )
         await server.serve()
         return 0
@@ -102,13 +98,6 @@ async def _run(config: Config) -> int:
             await runtime.close()
         elif isinstance(app, SetupApp):
             await app.close()
-
-
-def _configure_logging(level: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, level),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
-    )
 
 
 def _fail(message: str) -> None:

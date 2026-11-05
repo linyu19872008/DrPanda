@@ -104,32 +104,20 @@
         <div><dt>{{ t('工具') }}</dt><dd class="mono">{{ row.detail.tool }}</dd></div>
         {% if row.detail.client %}<div><dt>{{ t('客户端') }}</dt><dd>{{ row.detail.client }}</dd></div>{% endif %}
         {% if row.detail.prefix %}<div><dt>{{ t('凭证前缀') }}</dt><dd class="mono">{{ row.detail.prefix }}</dd></div>{% endif %}
+        {% if row.detail.request %}<div><dt>{{ t('请求号') }}</dt><dd class="mono">{{ row.detail.request }}</dd></div>{% endif %}
       </dl>
-      {% if row.detail.params_sql or row.detail.params_fields or row.detail.params_pretty or row.detail.params_raw %}
-      <h3>{{ t('参数') }}</h3>
-      {% if row.detail.params_sql %}<pre class="setup-secret audit-code">{{ row.detail.params_sql }}</pre>{% endif %}
-      {% if row.detail.params_fields %}
-      <dl class="audit-detail__fields">
-        {% for key, value in row.detail.params_fields %}
-        <div><dt class="mono">{{ key }}</dt><dd class="mono">{{ value }}</dd></div>
-        {% endfor %}
-      </dl>
-      {% endif %}
-      {% if row.detail.params_pretty %}<pre class="setup-secret audit-code">{{ row.detail.params_pretty }}</pre>{% endif %}
-      {% if row.detail.params_raw %}
-      <pre class="setup-secret audit-code">{{ row.detail.params_raw }}</pre>
-      <p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>
-      {% endif %}
-      {% endif %}
+      {% with copy_id='audit-copy-' ~ loop.index %}
+      {% include "_audit_params.html" %}
+      {% endwith %}
       {% else %}
-      <pre class="setup-secret audit-code">{{ row.summary }}</pre>
       {% if row.detail.truncated %}<p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>{% endif %}
+      <pre class="audit-code">{{ row.summary }}</pre>
+      <pre id="audit-copy-{{ loop.index }}" hidden>{{ row.summary }}</pre>
       {% endif %}
       <div class="audit-detail__actions">
-        <button class="btn btn--secondary btn--sm" type="button" data-copy-target="audit-raw-{{ loop.index }}" data-copied="{{ t('已复制') }}" data-failed="{{ t('请选中文字后复制') }}" hidden>{{ t('复制') }}</button>
+        <button class="btn btn--secondary btn--sm" type="button" data-copy-target="audit-copy-{{ loop.index }}" data-copied="{{ t('已复制') }}" data-failed="{{ t('请选中文字后复制') }}" hidden>{{ t('复制') }}</button>
         <span class="audit-detail__note" data-copy-status role="status"></span>
       </div>
-      <pre id="audit-raw-{{ loop.index }}" hidden>{{ row.summary }}</pre>
     </div>
   </div>
 </dialog>

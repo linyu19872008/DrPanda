@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 
 from dr_panda_mcp import auth
 from dr_panda_mcp.errors import StartupError
+from dr_panda_mcp.log import RequestLogMiddleware, current_request_id, failure_text
 from dr_panda_mcp.prompts import register_prompts
 from dr_panda_mcp.tools import register_tools
 from dr_panda_mcp.web.auth_routes import register_auth_routes
@@ -72,8 +73,10 @@ def create_server(config: Config, runtime: Runtime) -> FastMCP:
     async def healthz(_: Request) -> JSONResponse:
         try:
             await runtime.store.ping()
-        except Exception:
-            logger.warning("健康检查失败：配置库不可用", exc_info=True)
+        except Exception:  # noqa: BLE001 - 探活失败只反映配置库状态
+            logger.warning(
+                failure_text("store.error", "配置库不可用", request=current_request_id())
+            )
             return JSONResponse(
                 {"ok": False, "version": package_version(), "db": "error"},
                 status_code=503,
@@ -124,15 +127,17 @@ def create_app(
         allowed_origins=allowed_origins,
     )
     if not auth_required:
-        return SecurityHeadersMiddleware(app)
-    return SecurityHeadersMiddleware(
-        NotFoundMiddleware(
-            CSRFMiddleware(
-                AuthMiddleware(
-                    app,
-                    runtime=runtime,
-                    session_key=key or b"",
-                    auth_required=True,
+        return RequestLogMiddleware(SecurityHeadersMiddleware(app))
+    return RequestLogMiddleware(
+        SecurityHeadersMiddleware(
+            NotFoundMiddleware(
+                CSRFMiddleware(
+                    AuthMiddleware(
+                        app,
+                        runtime=runtime,
+                        session_key=key or b"",
+                        auth_required=True,
+                    )
                 )
             )
         )

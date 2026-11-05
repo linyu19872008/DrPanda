@@ -60,10 +60,14 @@ def action_label(code: str) -> str:
 
 
 _RANGE_KEYS = {key: delta for key, _label, delta in RANGES}
+# 与 tools.base.build_tool_summary 的格式对应。params 用非贪婪匹配，
+# 这样末尾的 params_truncated=1 不会被吞进参数正文。
 _TOOL_SUMMARY = re.compile(
     r"^(?:client=(?P<client>.*?) prefix=(?P<prefix>\S+) )?"
-    r"(?P<tool>\S+) env=(?P<env>\S+) target=(?P<target>\S+) params=(?P<params>.*)"
-    r" returned=(?P<returned>\d+) elapsed_ms=(?P<elapsed>\d+) error=(?P<error>\S+)\s*$",
+    r"(?P<tool>\S+) env=(?P<env>\S+) target=(?P<target>\S+) params=(?P<params>.*?)"
+    r"(?: params_truncated=(?P<params_truncated>1))?"
+    r" returned=(?P<returned>\d+) elapsed_ms=(?P<elapsed>\d+) error=(?P<error>\S+)"
+    r"(?: request=(?P<request>[0-9a-f]{8}))?\s*$",
     re.DOTALL,
 )
 
@@ -73,8 +77,6 @@ def _clean(value: str, limit: int) -> str:
 
 
 def _field_text(value: Any) -> str:
-    if value is None:
-        return "—"
     if isinstance(value, str):
         return value
     if isinstance(value, bool):
@@ -82,6 +84,25 @@ def _field_text(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     return json.dumps(value, ensure_ascii=False)
+
+
+def _blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return value == [] or value == {}
+
+
+def _limit_text(value: Any) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped if stripped.isdigit() else None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    return str(int(value))
 
 
 def describe_summary(action: str, summary: str) -> dict[str, Any]:
@@ -101,9 +122,9 @@ def _describe_tool_summary(summary: str) -> dict[str, Any] | None:
     client = match.group("client")
     prefix = match.group("prefix")
     error = match.group("error")
-    params_sql, params_fields, params_pretty, params_raw = _describe_params(match.group("params"))
-    hint = params_sql or next(
-        (value for _key, value in params_fields if value and value != "—"), ""
+    params = _describe_params(match.group("params"), bool(match.group("params_truncated")))
+    hint = params["params_sql"] or next(
+        (value for _key, value in params["params_fields"] if value), ""
     )
     preview_parts = [match.group("tool")]
     if hint:
@@ -121,24 +142,48 @@ def _describe_tool_summary(summary: str) -> dict[str, Any] | None:
         "elapsed_ms": match.group("elapsed"),
         "error": error,
         "ok": ok,
-        "params_sql": params_sql,
-        "params_fields": params_fields,
-        "params_pretty": params_pretty,
-        "params_raw": params_raw,
+        "request": match.group("request") or "",
+        **params,
     }
 
 
-def _describe_params(raw: str) -> tuple[str, list[tuple[str, str]], str, str]:
+def _describe_params(raw: str, marked: bool) -> dict[str, Any]:
+    empty = {
+        "params_sql": "",
+        "params_limit": "",
+        "params_fields": [],
+        "params_pretty": "",
+        "params_raw": "",
+        "params_truncated": marked,
+    }
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        return "", [], "", raw
+        return {**empty, "params_raw": raw, "params_truncated": True}
     if not isinstance(payload, dict):
-        return "", [], json.dumps(payload, ensure_ascii=False, indent=2), ""
+        return {
+            **empty,
+            "params_pretty": json.dumps(payload, ensure_ascii=False, indent=2),
+        }
     sql = payload.get("sql")
     params_sql = sql if isinstance(sql, str) else ""
-    fields = [(key, _field_text(value)) for key, value in payload.items() if key != "sql"]
-    return params_sql, fields, "", ""
+    params_limit = ""
+    fields: list[tuple[str, str]] = []
+    for key, value in payload.items():
+        if key == "sql" or _blank(value):
+            continue
+        if params_sql and key == "limit":
+            limit = _limit_text(value)
+            if limit is not None:
+                params_limit = limit
+                continue
+        fields.append((key, _field_text(value)))
+    return {
+        **empty,
+        "params_sql": params_sql,
+        "params_limit": params_limit,
+        "params_fields": fields,
+    }
 
 
 def _href(

@@ -1,0 +1,49 @@
+{% set detail = row.detail %}
+{% set has_params = detail.params_sql or detail.params_limit or detail.params_fields or detail.params_pretty or detail.params_raw %}
+{% if has_params %}
+<h3>{{ t('参数') }}</h3>
+{% if detail.params_truncated %}<p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>{% endif %}
+{% if detail.params_sql %}
+<pre class="audit-code">{{ detail.params_sql }}</pre>
+{% if detail.params_limit %}<p class="audit-detail__limit">{{ t('最多 {n} 行', n=detail.params_limit) }}</p>{% endif %}
+{% endif %}
+{% if detail.params_fields %}
+<dl class="audit-detail__fields">
+  {% for key, value in detail.params_fields %}
+  <div{% if value|length > 40 or '\n' in value %} class="audit-detail__field--stack"{% endif %}>
+    <dt class="mono">{{ key }}</dt><dd class="mono">{{ value }}</dd>
+  </div>
+  {% endfor %}
+</dl>
+{% endif %}
+{% if detail.params_pretty %}<pre class="audit-code">{{ detail.params_pretty }}</pre>{% endif %}
+{% if detail.params_raw %}<pre class="audit-code">{{ detail.params_raw }}</pre>{% endif %}
+{% endif %}
+{% if copy_id is defined and copy_id %}
+<pre id="{{ copy_id }}" hidden>{%- if detail.kind == 'tool' and has_params -%}
+{%- if detail.params_sql -%}
+{{- detail.params_sql -}}
+{%- if detail.params_limit -%}
+{{- '\n' -}}
+{{- t('最多 {n} 行', n=detail.params_limit) -}}
+{%- endif -%}
+{%- endif -%}
+{%- for key, value in detail.params_fields -%}
+{%- if detail.params_sql or detail.params_limit or not loop.first -%}
+{{- '\n' -}}
+{%- endif -%}
+{{- key }}: {{ value -}}
+{%- endfor -%}
+{%- if detail.params_pretty -%}
+{%- if detail.params_sql or detail.params_limit or detail.params_fields -%}
+{{- '\n' -}}
+{%- endif -%}
+{{- detail.params_pretty -}}
+{%- endif -%}
+{%- if detail.params_raw -%}
+{{- detail.params_raw -}}
+{%- endif -%}
+{%- else -%}
+{{- row.summary -}}
+{%- endif -%}</pre>
+{% endif %}

@@ -14,6 +14,12 @@ from pydantic import Field
 
 from dr_panda_mcp import auth, errors
 from dr_panda_mcp.connectors import base as connectors_base
+from dr_panda_mcp.log import (
+    current_request_id,
+    failure_text,
+    log_tool_call,
+)
+from dr_panda_mcp.log import logger as event_logger
 from dr_panda_mcp.masking import redact
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import AuditEntry, Target
@@ -60,10 +66,170 @@ def code_for(exc: errors.DrPandaError) -> str:
     return errors.INTERNAL
 
 
+_SUMMARY_LIMIT = 1024
+_TRUNCATED_MARK = " params_truncated=1"
+
+
 def mask_params(params: dict[str, Any], target: Target | None) -> str:
+    """整段脱敏。截短放到写入摘要时，按剩余空间在空白处截断。"""
     raw = json.dumps(params, ensure_ascii=False, default=str)
     secrets = list(target.secret.values()) if target else []
-    return redact(raw, secrets)[:200]
+    return redact(raw, secrets)
+
+
+def fit_audit_params(redacted: str, limit: int) -> tuple[str, bool]:
+    """把已脱敏的参数收进 ``limit``。放不下时优先保留短字段和 SQL 开头。"""
+    if limit <= 0:
+        return "", True
+    if len(redacted) <= limit:
+        return redacted, False
+    try:
+        payload = json.loads(redacted)
+    except json.JSONDecodeError:
+        return _clip_text(redacted, limit), True
+    if isinstance(payload, dict):
+        compact = json.dumps(payload, ensure_ascii=False, default=str)
+        if len(compact) <= limit:
+            return compact, False
+        fitted = _fit_object(payload, limit)
+        if fitted is not None:
+            return fitted, True
+    return _clip_text(redacted, limit), True
+
+
+def build_tool_summary(
+    *,
+    tool: str,
+    name: str,
+    environment_key: str | None,
+    params: dict[str, Any],
+    target: Target | None,
+    returned: int,
+    elapsed_ms: int,
+    error_code: str | None,
+    client_prefix: str = "",
+    request_id: str = "",
+) -> str:
+    """拼一条不超过 1024 字的工具审计。参数放不下时标明 ``params_truncated=1``。"""
+    head = f"{client_prefix}{tool} env={environment_key or '-'} target={name or '-'} params="
+    request = f" request={request_id}" if _request_id(request_id) else ""
+    tail = f" returned={returned} elapsed_ms={elapsed_ms} error={error_code or '-'}{request}"
+    redacted = mask_params(params, target)
+    room = _SUMMARY_LIMIT - len(head) - len(tail)
+    if room >= len(redacted):
+        return f"{head}{redacted}{tail}"
+    if room <= len(_TRUNCATED_MARK):
+        bare = f"{head}{tail}"
+        return bare if len(bare) <= _SUMMARY_LIMIT else bare[:_SUMMARY_LIMIT]
+    text, cut = fit_audit_params(redacted, room - len(_TRUNCATED_MARK))
+    if not cut and len(text) <= room:
+        return f"{head}{text}{tail}"
+    summary = f"{head}{text}{_TRUNCATED_MARK}{tail}"
+    if len(summary) <= _SUMMARY_LIMIT:
+        return summary
+    overflow = len(summary) - _SUMMARY_LIMIT
+    text = text[:-overflow] if overflow < len(text) else ""
+    return f"{head}{text}{_TRUNCATED_MARK}{tail}"
+
+
+def _fit_object(payload: dict[str, Any], limit: int) -> str | None:
+    kept: dict[str, Any] = {}
+    order: list[str] = []
+    for key in _param_priority(payload):
+        value = payload[key]
+        trial = dict(kept)
+        trial[key] = value
+        if _json_len(trial) <= limit:
+            kept[key] = value
+            order.append(key)
+            continue
+        if isinstance(value, str):
+            shortened = _shrink_string(kept, key, value, limit)
+            if shortened:
+                kept[key] = shortened
+                order.append(key)
+    if not kept:
+        return None
+    ordered: dict[str, Any] = {}
+    if "sql" in kept:
+        ordered["sql"] = kept["sql"]
+    for key in order:
+        if key != "sql":
+            ordered[key] = kept[key]
+    dumped = json.dumps(ordered, ensure_ascii=False, default=str)
+    if len(dumped) > limit:
+        return None
+    return dumped
+
+
+def _param_priority(payload: dict[str, Any]) -> list[str]:
+    small: list[str] = []
+    sql: list[str] = []
+    rest: list[str] = []
+    for key, value in payload.items():
+        if key == "sql" and isinstance(value, str):
+            sql.append(key)
+        elif _is_small(value):
+            small.append(key)
+        else:
+            rest.append(key)
+    return small + sql + rest
+
+
+def _is_small(value: Any) -> bool:
+    if value is None or isinstance(value, (bool, int, float)):
+        return True
+    return isinstance(value, str) and len(value) <= 80
+
+
+def _json_len(payload: dict[str, Any]) -> int:
+    return len(json.dumps(payload, ensure_ascii=False, default=str))
+
+
+def _shrink_string(kept: dict[str, Any], key: str, value: str, limit: int) -> str | None:
+    best: str | None = None
+    low = 1
+    high = len(value)
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = _cut_at_space(value, mid)
+        if not candidate:
+            high = mid - 1
+            continue
+        trial = dict(kept)
+        trial[key] = candidate
+        if _json_len(trial) <= limit:
+            best = candidate
+            low = mid + 1
+        else:
+            high = mid - 1
+    return best
+
+
+def _clip_text(text: str, limit: int) -> str:
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    return _cut_at_space(text, limit)
+
+
+def _cut_at_space(value: str, max_len: int) -> str:
+    if max_len <= 0:
+        return ""
+    if len(value) <= max_len:
+        return value.rstrip()
+    chunk = value[:max_len]
+    space = chunk.rfind(" ")
+    if space > 0:
+        return chunk[:space].rstrip()
+    return chunk.rstrip()
+
+
+def _request_id(value: str) -> str:
+    if len(value) == 8 and all(char in "0123456789abcdef" for char in value):
+        return value
+    return ""
 
 
 def _client_prefix() -> str:
@@ -84,14 +250,37 @@ async def write_tool_audit(
     returned: int,
     started: float,
     error_code: str | None,
+    error_message: str = "",
 ) -> None:
-    """工具调用结束后追加一条审计。写失败不影响工具结果。"""
-    env_label = environment_key or "-"
-    summary = (
-        f"{_client_prefix()}{tool} env={env_label} target={name or '-'} "
-        f"params={mask_params(params, target)} returned={returned} "
-        f"elapsed_ms={int((time.monotonic() - started) * 1000)} "
-        f"error={error_code or '-'}"
+    """工具调用结束后记一行日志，再追加一条审计。写失败不影响工具结果。"""
+    secrets = [str(item) for item in target.secret.values() if item] if target else []
+    hint = (
+        _clip_text(mask_params(params, target), 120)
+        if event_logger.isEnabledFor(logging.DEBUG)
+        else ""
+    )
+    log_tool_call(
+        tool=tool,
+        target_name=name,
+        environment_key=environment_key,
+        returned=returned,
+        started=started,
+        error_code=error_code,
+        error_message=error_message,
+        secrets=secrets,
+        debug_hint=hint,
+    )
+    summary = build_tool_summary(
+        tool=tool,
+        name=name,
+        environment_key=environment_key,
+        params=params,
+        target=target,
+        returned=returned,
+        elapsed_ms=int((time.monotonic() - started) * 1000),
+        error_code=error_code,
+        client_prefix=_client_prefix(),
+        request_id=current_request_id(),
     )
     try:
         await runtime.store.append_audit(
@@ -99,12 +288,12 @@ async def write_tool_audit(
                 actor=auth.current_actor(),
                 action="tool.call",
                 target_name=name or None,
-                summary=summary[:1024],
+                summary=summary,
                 environment_key=environment_key or None,
             )
         )
-    except Exception:
-        logger.warning("工具审计写入失败：%s", tool, exc_info=True)
+    except Exception:  # noqa: BLE001 - 审计写失败不影响工具结果
+        logger.warning(failure_text("store.error", "工具审计写入失败", tool=tool))
 
 
 async def run_tool(
@@ -123,6 +312,7 @@ async def run_tool(
     target: Target | None = None
     returned = 0
     error_code: str | None = None
+    error_message = ""
     timeout = connectors_base.DEFAULT_TIMEOUT_SECONDS
     try:
         target = await runtime.catalog.resolve(
@@ -139,16 +329,15 @@ async def run_tool(
         raise
     except TimeoutError as exc:
         error_code = errors.UPSTREAM_TIMEOUT
-        raise ToolError(
-            f"{errors.UPSTREAM_TIMEOUT}: 工具调用超过 {timeout:.0f} 秒（含排队），目标可能繁忙"
-        ) from exc
+        error_message = f"工具调用超过 {timeout:.0f} 秒（含排队），目标可能繁忙"
+        raise ToolError(f"{errors.UPSTREAM_TIMEOUT}: {error_message}") from exc
     except errors.DrPandaError as exc:
         error_code = code_for(exc)
-        message = redact(str(exc), target.secret.values() if target else [])
-        raise ToolError(f"{error_code}: {message}") from exc
+        error_message = redact(str(exc), target.secret.values() if target else [])
+        raise ToolError(f"{error_code}: {error_message}") from exc
     except Exception as exc:
         error_code = errors.INTERNAL
-        logger.exception("工具执行失败：%s", tool)
+        error_message = str(exc)
         raise ToolError(f"{errors.INTERNAL}: 工具执行失败（{type(exc).__name__}）") from exc
     finally:
         environment_key = (
@@ -166,6 +355,7 @@ async def run_tool(
             returned=returned,
             started=started,
             error_code=error_code,
+            error_message=error_message,
         )
 
 

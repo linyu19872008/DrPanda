@@ -19,6 +19,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import String, column, select, table
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from dr_panda_mcp.log import format_event
 from dr_panda_mcp.store.url import database_path
 
 logger = logging.getLogger(__name__)
@@ -125,8 +126,7 @@ async def migrate(engine: AsyncEngine) -> Path | None:
         return None
     keep = await _configured_backup_keep(engine)
     backup = backup_sqlite_database(str(engine.url), keep=keep)
-    if backup is not None:
-        logger.info("迁移前已备份 SQLite：%s", backup)
     async with engine.begin() as connection:
         await connection.run_sync(upgrade_to_head)
+    logger.info(format_event("migrate.done", backup.name if backup is not None else ""))
     return backup

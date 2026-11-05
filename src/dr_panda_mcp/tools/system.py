@@ -26,6 +26,7 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
         started = time.monotonic()
         returned = 0
         error_code: str | None = None
+        error_message = ""
         try:
             with base.Stopwatch() as watch:
                 payload = (
@@ -38,9 +39,11 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
             return payload
         except errors.DrPandaError as exc:
             error_code = code_for(exc)
+            error_message = str(exc)
             raise ToolError(f"{error_code}: {exc}") from exc
-        except Exception:
+        except Exception as exc:
             error_code = errors.INTERNAL
+            error_message = str(exc)
             raise
         finally:
             await write_tool_audit(
@@ -53,6 +56,7 @@ def register_systems_status(server: FastMCP, runtime: Runtime) -> None:
                 returned=returned,
                 started=started,
                 error_code=error_code,
+                error_message=error_message,
             )
 
 

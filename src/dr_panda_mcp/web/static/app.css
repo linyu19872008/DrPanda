@@ -2851,16 +2851,43 @@ dialog.modal .modal__panel {
 
 .audit-detail__fields dt { margin: 0; color: var(--text-muted); }
 
-.audit-detail__fields dd { margin: 0; overflow-wrap: anywhere; }
+.audit-detail__fields div.audit-detail__field--stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.audit-detail__fields dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: pre-wrap;
+}
+
+.audit-detail__field--stack dd { overflow-x: auto; }
 
 .audit-code {
   max-height: 240px;
   overflow: auto;
-  margin-top: var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: 10px 12px;
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.5;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.audit-code + .audit-detail__fields,
+.audit-detail__limit + .audit-detail__fields { margin-top: var(--space-3); }
+
+.audit-detail__limit {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .audit-detail__note { margin: var(--space-2) 0 0; }

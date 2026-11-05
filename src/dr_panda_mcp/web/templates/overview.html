@@ -89,12 +89,13 @@
       <h3>{{ t('调用') }}</h3>
       <dl class="audit-detail__fields">
         <div><dt>{{ t('工具') }}</dt><dd class="mono">{{ row.detail.tool }}</dd></div>
+        {% if row.detail.request %}<div><dt>{{ t('请求号') }}</dt><dd class="mono">{{ row.detail.request }}</dd></div>{% endif %}
       </dl>
-      {% if row.detail.params_sql %}<h3>{{ t('参数') }}</h3><pre class="setup-secret audit-code">{{ row.detail.params_sql }}</pre>{% endif %}
+      {% include "_audit_params.html" %}
       {% else %}
-      <pre class="setup-secret audit-code">{{ row.summary }}</pre>
+      {% if row.detail.truncated %}<p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>{% endif %}
+      <pre class="audit-code">{{ row.summary }}</pre>
       {% endif %}
-      <pre id="overview-raw-{{ loop.index }}" hidden>{{ row.summary }}</pre>
     </div>
   </div>
 </dialog>

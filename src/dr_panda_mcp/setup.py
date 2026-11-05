@@ -22,6 +22,7 @@ from dr_panda_mcp.audit import run_cleanup_loop
 from dr_panda_mcp.config import Config
 from dr_panda_mcp.errors import DrPandaError
 from dr_panda_mcp.install import save_install_state
+from dr_panda_mcp.log import RequestLogMiddleware
 from dr_panda_mcp.runtime import Runtime, create_runtime
 from dr_panda_mcp.server import create_app
 from dr_panda_mcp.store.url import create_engine, ensure_driver, normalize_database_url
@@ -70,6 +71,7 @@ class SetupApp:
             ]
         )
         self.app.add_middleware(SecurityHeadersMiddleware)
+        self.app.add_middleware(RequestLogMiddleware)
 
     async def __call__(self, scope, receive, send) -> None:
         if self.normal_app is not None:

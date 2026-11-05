@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 from httpx import ASGITransport
 
@@ -66,7 +68,14 @@ async def test_audit_page_lists_and_filters(runtime: Runtime) -> None:
     assert "查看" in page.text
     assert "SHOW TABLES LIKE" in page.text
     assert "返回条数" in page.text
+    assert "最多 40 行" in page.text
     assert "参数在记录时已截短" not in page.text
+    assert "client=cursor" not in page.text
+    copies = re.findall(
+        r'<pre id="audit-copy-\d+" hidden>(.*?)</pre>', page.text, re.DOTALL
+    )
+    assert any("SHOW TABLES LIKE" in item and "最多 40 行" in item for item in copies)
+    assert "setup-secret" not in page.text
 
     async with _client(runtime, locale=None) as client:
         english = await client.get("/audit")
@@ -78,6 +87,7 @@ async def test_audit_page_lists_and_filters(runtime: Runtime) -> None:
     assert "View" in english.text
     assert "Parameters" in english.text
     assert "Rows returned" in english.text
+    assert "Up to 40 rows" in english.text
     assert "查看" not in english.text
 
 
@@ -98,8 +108,10 @@ def test_tool_summary_splits_sql_and_keeps_a_returned_inside_it() -> None:
     assert detail["elapsed_ms"] == "122"
     assert detail["ok"] is True
     assert detail["params_sql"] == "SELECT 1 AS returned=2 FROM t"
-    assert detail["params_fields"] == [("limit", "40")]
+    assert detail["params_limit"] == "40"
+    assert detail["params_fields"] == []
     assert detail["params_raw"] == ""
+    assert detail["params_truncated"] is False
 
 
 def test_tool_summary_without_the_suffix_stays_plain() -> None:
@@ -125,3 +137,47 @@ def test_cut_json_is_marked_truncated() -> None:
     assert "UPSTREAM_TIMEOUT" in detail["preview"]
     assert detail["params_raw"].startswith('{"sql"')
     assert detail["params_sql"] == ""
+    assert detail["params_truncated"] is True
+
+
+def test_empty_fields_are_omitted_and_limit_stays_with_sql() -> None:
+    params = '{"sql": "SELECT 1", "limit": 20, "db": null, "table": ""}'
+    summary = (
+        "mysql_describe env=default target=test-mysql "
+        f"params={params} returned=1 elapsed_ms=9 error=-"
+    )
+
+    detail = describe_summary("tool.call", summary)
+
+    assert detail["params_sql"] == "SELECT 1"
+    assert detail["params_limit"] == "20"
+    assert detail["params_fields"] == []
+
+
+def test_short_fields_keep_only_filled_values() -> None:
+    params = '{"table": "log_login", "db": null}'
+    summary = (
+        "mysql_describe env=default target=test-mysql "
+        f"params={params} returned=15 elapsed_ms=326 error=-"
+    )
+
+    detail = describe_summary("tool.call", summary)
+
+    assert detail["params_sql"] == ""
+    assert detail["params_limit"] == ""
+    assert detail["params_fields"] == [("table", "log_login")]
+
+
+def test_marked_truncation_keeps_the_sql_prefix() -> None:
+    params = '{"sql": "SELECT id FROM t", "limit": 20}'
+    summary = (
+        "mysql_query env=default target=test-mysql "
+        f"params={params} params_truncated=1 returned=20 elapsed_ms=135 error=-"
+    )
+
+    detail = describe_summary("tool.call", summary)
+
+    assert detail["params_truncated"] is True
+    assert detail["params_sql"] == "SELECT id FROM t"
+    assert detail["params_limit"] == "20"
+    assert detail["params_raw"] == ""
