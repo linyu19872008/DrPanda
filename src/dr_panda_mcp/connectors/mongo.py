@@ -17,6 +17,87 @@ from dr_panda_mcp.store.protocol import Target
 
 AUTH_MODES = frozenset({"none", "password", "uri"})
 
+_HEX_DIGITS = frozenset("0123456789abcdefABCDEF")
+
+
+def _is_hex_escape(text: str, index: int) -> bool:
+    """``text[index]`` 是 ``%`` 时，判断后两位是否构成合法的百分号转义。"""
+    return (
+        index + 2 < len(text)
+        and text[index + 1] in _HEX_DIGITS
+        and text[index + 2] in _HEX_DIGITS
+    )
+
+
+def _has_unquoted_percent(text: str) -> bool:
+    return any(
+        char == "%" and not _is_hex_escape(text, index)
+        for index, char in enumerate(text)
+    )
+
+
+def _escape_credential(text: str) -> str:
+    """把会破坏 URI 结构的字符编码掉，保留用户已写好的 ``%XX``。"""
+    pieces: list[str] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "%" and _is_hex_escape(text, index):
+            pieces.append(text[index : index + 3])
+            index += 3
+            continue
+        if char == "%":
+            pieces.append("%25")
+        elif char == "@":
+            pieces.append("%40")
+        elif char == ":":
+            pieces.append("%3A")
+        else:
+            pieces.append(char)
+        index += 1
+    return "".join(pieces)
+
+
+def _userinfo_is_valid(userinfo: str) -> bool:
+    """与 pymongo 的 userinfo 校验保持一致，避免对合法 URI 二次编码。"""
+    if "@" in userinfo or userinfo.count(":") > 1 or _has_unquoted_percent(userinfo):
+        return False
+    return bool(userinfo.partition(":")[0])
+
+
+def _normalize_uri_credentials(uri: str) -> str:
+    """URI 模式兜底：凭证未转义时自动编码，已合法的 URI 原样返回。
+
+    pymongo 在构造客户端时解析 URI：``//`` 之后、最后一个 ``@`` 之前的 userinfo
+    里只要还有 ``@``、多个 ``:`` 或非法 ``%``，就直接抛 ``InvalidURI``。裸密码
+    常见于 ``p@ss`` / ``pa:ss`` / ``100%zz``，这里按已知边界重新编码——
+    最后一个 ``@`` 前是 userinfo，userinfo 里第一个 ``:`` 前是用户名。
+    已经写好的 ``%XX`` 保持不变，避免把 ``%40`` 二次编码成 ``%2540``。
+    """
+    scheme, separator, rest = uri.partition("://")
+    if not separator:
+        return uri
+    cut = len(rest)
+    for marker in "/?#":
+        position = rest.find(marker)
+        if position != -1:
+            cut = min(cut, position)
+    authority, tail = rest[:cut], rest[cut:]
+    if "@" not in authority:
+        return uri
+    userinfo, host_part = authority.rsplit("@", 1)
+    if _userinfo_is_valid(userinfo):
+        return uri
+    user, password_separator, password = userinfo.partition(":")
+    if not user:
+        raise errors.UpstreamUnavailable(
+            "mongo 连接 URI 的用户名为空；格式应为 mongodb://用户名:密码@主机:端口/"
+        )
+    encoded_user = _escape_credential(user)
+    if not password_separator:
+        return f"{scheme}://{encoded_user}@{host_part}{tail}"
+    return f"{scheme}://{encoded_user}:{_escape_credential(password)}@{host_part}{tail}"
+
 
 def _auth_mode(target: Target) -> str:
     mode = target.options.get("auth_mode")
@@ -40,7 +121,7 @@ def _build_uri(target: Target) -> str:
         scheme = urlsplit(uri).scheme
         if scheme not in {"mongodb", "mongodb+srv"}:
             raise errors.UpstreamUnavailable("mongo 连接 URI 必须以 mongodb:// 或 mongodb+srv:// 开头")
-        return uri
+        return _normalize_uri_credentials(uri)
 
     host = str(options.get("host") or "").strip()
     if not host:
@@ -107,11 +188,18 @@ class _MongoClient:
             timeout = base.timeout_seconds(self.target)
             # 留出 20% 给工具级 deadline，让驱动先报 ServerSelection/TLS 错误，
             # 避免整调用超时把认证/证书错误掩盖成 UPSTREAM_TIMEOUT。
-            client = AsyncIOMotorClient(
-                _build_uri(self.target),
-                serverSelectionTimeoutMS=max(int(timeout * 0.8 * 1000), 1000),
-                **tls_kwargs,
-            )
+            try:
+                client = AsyncIOMotorClient(
+                    _build_uri(self.target),
+                    serverSelectionTimeoutMS=max(int(timeout * 0.8 * 1000), 1000),
+                    **tls_kwargs,
+                )
+            except errors.DrPandaError:
+                raise
+            except Exception as exc:
+                # 驱动在构造阶段就解析 URI；把 InvalidURI 之类的异常转成可读错误，
+                # 否则会以“未预期错误”直出网页。
+                raise errors.UpstreamUnavailable(f"mongo 连接串无法解析：{exc}") from exc
             yield client
         finally:
             if client is not None:

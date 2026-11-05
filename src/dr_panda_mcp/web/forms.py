@@ -119,7 +119,7 @@ TYPE_SPECS: dict[str, TypeSpec] = {
             SecretField(
                 "uri",
                 "连接 URI（auth_mode=uri 时必填，含凭证）",
-                help="完整 mongodb:// 或 mongodb+srv:// URI；含凭证，加密保存。",
+                help="完整 mongodb:// 或 mongodb+srv:// URI；凭证里未转义的 @、:、% 会自动做 URL 编码；含凭证，加密保存。",
             ),
             SecretField("password", "密码（auth_mode=password 时必填）"),
             SecretField(

@@ -843,7 +843,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 字段 | 键 | 必填 | 默认 | 说明 |
 |---|---|---|---|---|
 | 认证方式 | `options.auth_mode` | 是 | none | none / password / uri；旧 target 缺失时按 uri→password→none 推断 |
-| URI | `secret.uri` | 条件 | — | auth_mode=uri 必填；含凭证，加密保存 |
+| URI | `secret.uri` | 条件 | — | auth_mode=uri 必填；用户/密码里未转义的 `@`、`:`、非法 `%` 由服务端自动做百分号编码（已有 `%XX` 保留），加密保存 |
 | 主机 | `options.host` | 条件 | — | none/password 模式必填；uri 模式必须留空 |
 | 端口 | `options.port` | 否 | 27017 | |
 | 用户 | `options.user` | 否 | — | 与 URI 互斥 |

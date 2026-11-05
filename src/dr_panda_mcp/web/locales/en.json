@@ -217,7 +217,7 @@
   "mTLS 客户端私钥，与证书必须同时提供；当前不支持带口令私钥。": "mTLS client private key; must be provided with the certificate. Encrypted keys are not supported.",
   "none=无认证；password=用户名密码；uri=完整连接串（SRV/X.509/TLS 等高级选项）。": "none = no auth; password = username/password; uri = full connection string (SRV/X.509/TLS and other advanced options).",
   "配置后必须启用 TLS。": "TLS must be enabled when set.",
-  "完整 mongodb:// 或 mongodb+srv:// URI；含凭证，加密保存。": "Full mongodb:// or mongodb+srv:// URI; credentials are encrypted.",
+  "完整 mongodb:// 或 mongodb+srv:// URI；凭证里未转义的 @、:、% 会自动做 URL 编码；含凭证，加密保存。": "Full mongodb:// or mongodb+srv:// URI; unescaped @, : and % in credentials are URL-encoded automatically; credentials are encrypted.",
   "粘贴 PEM 证书；配置后必须保持 TLS 校验开启。": "Paste the PEM certificate; TLS verification must stay enabled when set.",
   "仅 SSL / SASL_SSL 可用。": "Only available with SSL / SASL_SSL.",
   "新建目标表单的默认 timeout_s；既有目标仍使用各自配置。": "Default timeout_s for new targets; existing targets keep their own value.",

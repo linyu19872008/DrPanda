@@ -347,6 +347,83 @@ def test_mongo_uri_encodes_credentials() -> None:
     assert _build_uri(target) == "mongodb://ro%40corp:p%40ss%3Aword@mongo:27017/?authSource=admin"
 
 
+def _mongo_uri_target(uri: str) -> Target:
+    return make_target(
+        type_="mongo", options={"auth_mode": "uri"}, secret={"uri": uri}
+    )
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (
+            "mongodb://ro:p@ss@mongo:27017/?authSource=admin",
+            "mongodb://ro:p%40ss@mongo:27017/?authSource=admin",
+        ),
+        ("mongodb://ro:pa:ss@mongo:27017/", "mongodb://ro:pa%3Ass@mongo:27017/"),
+        ("mongodb://ro:100%zz@mongo:27017/", "mongodb://ro:100%25zz@mongo:27017/"),
+        (
+            "mongodb://ro@corp:p@ss:word@mongo:27017/",
+            "mongodb://ro%40corp:p%40ss%3Aword@mongo:27017/",
+        ),
+        (
+            "mongodb://u:p@ss@h1:27017,h2:27017/db?replicaSet=rs0",
+            "mongodb://u:p%40ss@h1:27017,h2:27017/db?replicaSet=rs0",
+        ),
+        (
+            "mongodb+srv://u:p@ss@cluster.mongodb.net/?retryWrites=true",
+            "mongodb+srv://u:p%40ss@cluster.mongodb.net/?retryWrites=true",
+        ),
+    ],
+)
+def test_mongo_uri_mode_normalizes_unescaped_credentials(raw: str, expected: str) -> None:
+    from dr_panda_mcp.connectors.mongo import _build_uri
+
+    assert _build_uri(_mongo_uri_target(raw)) == expected
+
+
+@pytest.mark.parametrize(
+    "escaped",
+    [
+        "mongodb://ro%40corp:p%40ss%3Aword@mongo:27017/?authSource=admin",
+        "mongodb://ro:p%40ss@mongo:27017/",
+        "mongodb://mongo:27017/",
+        "mongodb+srv://cluster/?retryWrites=true",
+    ],
+)
+def test_mongo_uri_mode_keeps_valid_uri_untouched(escaped: str) -> None:
+    from dr_panda_mcp.connectors.mongo import _build_uri
+
+    assert _build_uri(_mongo_uri_target(escaped)) == escaped
+
+
+def test_mongo_uri_mode_rejects_empty_username() -> None:
+    from dr_panda_mcp.connectors.mongo import _build_uri
+
+    with pytest.raises(errors.UpstreamUnavailable):
+        _build_uri(_mongo_uri_target("mongodb://:pw@mongo:27017/"))
+
+
+async def test_mongo_client_construction_error_is_mapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = types.ModuleType("motor.motor_asyncio")
+
+    class _BoomClient:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            raise RuntimeError("bad uri")
+
+    module.AsyncIOMotorClient = _BoomClient
+    monkeypatch.setitem(sys.modules, "motor", types.ModuleType("motor"))
+    monkeypatch.setitem(sys.modules, "motor.motor_asyncio", module)
+
+    client = mongo_module.connector.create_client(_mongo_target())
+    with pytest.raises(errors.UpstreamUnavailable) as excinfo:
+        async with client._connected():
+            pass
+    assert "无法解析" in str(excinfo.value)
+
+
 async def test_redis_string_over_byte_limit_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
