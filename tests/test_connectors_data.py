@@ -218,6 +218,100 @@ def _redis_target() -> Target:
     )
 
 
+def _fake_redis_package(
+    monkeypatch: pytest.MonkeyPatch, captured: dict[str, Any]
+) -> None:
+    """安装假的 redis.asyncio，捕获传给 Redis(...) 的 kwargs。"""
+    module = types.ModuleType("redis.asyncio")
+
+    class _FakeRedis:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    module.Redis = _FakeRedis
+    redis_package = types.ModuleType("redis")
+    redis_package.asyncio = module
+    monkeypatch.setitem(sys.modules, "redis", redis_package)
+    monkeypatch.setitem(sys.modules, "redis.asyncio", module)
+
+
+@pytest.mark.parametrize(("configured", "expected"), [(None, 2), ("2", 2), ("3", 3)])
+def test_redis_client_protocol(
+    monkeypatch: pytest.MonkeyPatch, configured: str | None, expected: int
+) -> None:
+    """redis-py 8 默认 RESP3 会发 HELLO；未配置时固定 2，配置 3 才启用 RESP3。"""
+    captured: dict[str, Any] = {}
+    _fake_redis_package(monkeypatch, captured)
+    options: dict[str, Any] = {"host": "127.0.0.1", "port": 6379, "db": 0}
+    if configured is not None:
+        options["protocol"] = configured
+    target = make_target(type_="redis", options=options)
+
+    redis_module.connector.create_client(target)._client()
+
+    assert captured["protocol"] == expected
+    assert captured["host"] == "127.0.0.1"
+    assert captured["db"] == 0
+
+
+@pytest.mark.parametrize("configured", ["4", "resp2", "abc"])
+def test_redis_client_rejects_invalid_protocol(
+    monkeypatch: pytest.MonkeyPatch, configured: str
+) -> None:
+    captured: dict[str, Any] = {}
+    _fake_redis_package(monkeypatch, captured)
+    target = make_target(
+        type_="redis", options={"host": "127.0.0.1", "protocol": configured}
+    )
+
+    with pytest.raises(errors.UpstreamUnavailable) as excinfo:
+        redis_module.connector.create_client(target)._client()
+
+    assert "协议版本" in str(excinfo.value)
+    assert captured == {}
+
+
+class _FailingPingClient:
+    def __init__(self, message: str) -> None:
+        self.message = message
+        self.closed = False
+
+    async def ping(self) -> None:
+        raise RuntimeError(self.message)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+async def test_redis_hello_error_gets_resp2_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = redis_module.connector.create_client(_redis_target())
+    fake = _FailingPingClient("unknown command 'HELLO'")
+    monkeypatch.setattr(client, "_client", lambda: fake)
+
+    with pytest.raises(errors.UpstreamUnavailable) as excinfo:
+        await client.ping()
+
+    message = str(excinfo.value)
+    assert "RESP3" in message
+    assert "协议版本" in message
+    assert fake.closed is True
+
+
+async def test_redis_other_errors_keep_wrapped_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = redis_module.connector.create_client(_redis_target())
+    fake = _FailingPingClient("boom")
+    monkeypatch.setattr(client, "_client", lambda: fake)
+
+    with pytest.raises(errors.UpstreamUnavailable) as excinfo:
+        await client.ping()
+
+    assert str(excinfo.value) == "redis 读取失败：boom"
+
+
 async def test_redis_inspect_bounded_and_unbounded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

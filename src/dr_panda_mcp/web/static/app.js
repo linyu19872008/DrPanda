@@ -12,6 +12,12 @@
   const msg = (form, key) =>
     (form && form.dataset[key]) || (body && body.dataset[key]) || "";
 
+  // 表单提交成功、或主动跳转（登录/安装完成/会话过期）前清掉未保存标记。
+  // 否则 beforeunload 会把「保存后跳转」也当成放弃修改，弹出浏览器原生确认框。
+  const clearUnsaved = (form) => {
+    if (form instanceof HTMLFormElement) delete form.dataset.dirty;
+  };
+
   // ---------------------------------------------------------------------
   // 原生 dialog（保持原有行为）
   // ---------------------------------------------------------------------
@@ -177,6 +183,7 @@
       }
       if (!data || typeof data !== "object") throw new ApiError("bad_response", null);
       if (data.code === "UNAUTHORIZED") {
+        clearUnsaved(form);
         window.location.assign(data.login || "/login");
         throw new ApiError("unauthorized", data);
       }
@@ -440,9 +447,11 @@
       try {
         const data = await postForm(form, form.getAttribute("action"));
         if (data.redirect) {
+          clearUnsaved(form);
           window.location.assign(data.redirect);
           return;
         }
+        clearUnsaved(form);
         window.location.reload();
       } catch (error) {
         if (error.kind === "rejected" && error.data) {
@@ -608,7 +617,7 @@
       try {
         const data = await postForm(form, form.getAttribute("action"));
         clearFieldErrors(form);
-        delete form.dataset.dirty;
+        clearUnsaved(form);
         setNotice(notice, "success", data.message || "");
         hideNotice(pageError());
       } catch (error) {
@@ -638,6 +647,7 @@
       hideNotice(noticeElement);
       try {
         const data = await postForm(form, form.getAttribute("action"));
+        clearUnsaved(form);
         window.location.assign(data.redirect || "/");
       } catch (error) {
         if (error.kind === "unauthorized") return;
@@ -673,6 +683,7 @@
       try {
         const data = await postForm(form, form.getAttribute("action"), { extra: { action } });
         if (data.redirect) {
+          clearUnsaved(form);
           window.location.assign(data.redirect);
           return;
         }
@@ -740,12 +751,22 @@
 
   const initLeaveGuard = () => {
     const message = (body && body.dataset.msgDirty) || "";
+    // 与页面初始值比较，只有真的改了才标记「未保存」：改回原值会撤销标记。
+    const fingerprint = (form) => {
+      const params = new URLSearchParams();
+      new FormData(form).forEach((value, key) => {
+        if (typeof value === "string") params.append(key, value);
+      });
+      return params.toString();
+    };
     document.querySelectorAll("[data-leave-guard]").forEach((form) => {
-      const mark = () => {
-        form.dataset.dirty = "1";
+      const baseline = fingerprint(form);
+      const refresh = () => {
+        if (fingerprint(form) === baseline) delete form.dataset.dirty;
+        else form.dataset.dirty = "1";
       };
-      form.addEventListener("input", mark);
-      form.addEventListener("change", mark);
+      form.addEventListener("input", refresh);
+      form.addEventListener("change", refresh);
     });
     const dirtyForm = () => document.querySelector('[data-leave-guard][data-dirty="1"]');
     const allow = () => {

@@ -12,6 +12,27 @@ from dr_panda_mcp.guards import redis as redis_guard
 from dr_panda_mcp.guards.protocol import Decision, require
 from dr_panda_mcp.store.protocol import Target
 
+DEFAULT_PROTOCOL = 2
+SUPPORTED_PROTOCOLS = (2, 3)
+
+
+def _protocol(target: Target) -> int:
+    """target 级 RESP 版本：缺省 2，兼容 Redis < 6.0 与 Codis/Twemproxy 等代理。"""
+    raw = target.options.get("protocol", DEFAULT_PROTOCOL)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 0
+    if value not in SUPPORTED_PROTOCOLS:
+        raise errors.UpstreamUnavailable(f"redis 协议版本必须是 2 或 3，当前：{raw!r}")
+    return value
+
+
+def _is_hello_unsupported(exc: Exception) -> bool:
+    """服务端不认 RESP3 握手命令（Redis < 6.0 或只实现 RESP2 的代理）。"""
+    message = str(exc).lower()
+    return "unknown command" in message and "hello" in message
+
 
 class _RedisClient:
     def __init__(self, target: Target) -> None:
@@ -52,6 +73,9 @@ class _RedisClient:
             "socket_connect_timeout": base.timeout_seconds(self.target),
             "socket_timeout": base.timeout_seconds(self.target),
             "decode_responses": True,
+            # redis-py 8.0 起默认走 RESP3，连接时先发 HELLO 3；Redis < 6.0 和
+            # Codis/Twemproxy 等代理不认 HELLO。target 未配置时固定 2，配置 3 才启用 RESP3。
+            "protocol": _protocol(self.target),
         }
         username = str(options.get("username") or "").strip()
         if username:
@@ -75,6 +99,11 @@ class _RedisClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
+            if _is_hello_unsupported(exc):
+                raise errors.UpstreamUnavailable(
+                    "redis 服务端不支持 RESP3（unknown command 'HELLO'）：服务端可能是 "
+                    "Redis < 6.0 或代理型 Redis，请把该目标的「协议版本」改回 2。"
+                ) from exc
             raise errors.UpstreamUnavailable(f"redis 读取失败：{exc}") from exc
         finally:
             await client.aclose()

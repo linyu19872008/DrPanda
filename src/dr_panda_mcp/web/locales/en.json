@@ -196,6 +196,8 @@
   "API Key（与用户名密码二选一）": "API Key (alternative to username/password)",
   "ACL 用户名（可选）": "ACL username (optional)",
   "key 前缀（空=不限）": "Key prefix (empty = unrestricted)",
+  "协议版本（RESP）": "Protocol (RESP)",
+  "默认 2（RESP2），兼容 Redis < 6.0 与 Codis/Twemproxy 等代理；仅当服务端 Redis ≥ 6.0 且确需 RESP3 时改为 3。": "Default 2 (RESP2), compatible with Redis < 6.0 and proxies such as Codis/Twemproxy; set to 3 only when the server is Redis ≥ 6.0 and RESP3 is actually needed.",
   "实例地址": "Instance URL",
   "允许的项目（一行一个）": "Allowed projects (one per line)",
   "私人 Token": "Private token",

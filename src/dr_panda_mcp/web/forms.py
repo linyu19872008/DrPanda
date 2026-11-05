@@ -177,6 +177,14 @@ TYPE_SPECS: dict[str, TypeSpec] = {
             Field("host", "主机", "text", required=True),
             Field("port", "端口", "int", default=6379),
             Field("db", "DB", "int", default=0),
+            Field(
+                "protocol",
+                "协议版本（RESP）",
+                "select",
+                default="2",
+                choices=("2", "3"),
+                help="默认 2（RESP2），兼容 Redis < 6.0 与 Codis/Twemproxy 等代理；仅当服务端 Redis ≥ 6.0 且确需 RESP3 时改为 3。",
+            ),
             Field("username", "ACL 用户名（可选）", "text"),
             Field("tls", "启用 TLS", "bool", default=False),
             Field(

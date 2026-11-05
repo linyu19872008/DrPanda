@@ -884,6 +884,7 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | 密码 | `secret.password` | 否 | — | |
 | ACL 用户名 | `options.username` | 否 | — | Redis 6+ ACL；填写时密码必填 |
 | DB | `options.db` | 否 | 0 | 0–15 |
+| 协议版本 | `options.protocol` | 否 | 2 | 2=RESP2（默认，兼容 Redis < 6.0 与 Codis/Twemproxy 等代理）；3=RESP3，仅服务端 ≥ 6.0 且确需时 |
 | 是否 TLS | `options.tls` | 否 | false | |
 | CA 证书 | `options.ca_pem` | 否 | 空 | PEM；配置时必须启用 TLS |
 | 客户端证书 | `secret.client_cert` | 否 | 空 | PEM；与私钥同时提供 |
@@ -891,6 +892,8 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | key 前缀 | `options.key_prefix` | 否 | `""` | 空表示不限；非空只读此前缀下的 key |
 
 `SCAN` 带 `COUNT` 上限。列表、集合、哈希、有序集合的返回条数受该目标上限约束。命令白名单见 6.3。
+
+客户端默认使用 RESP2（`protocol=2`）：redis-py 8.0 起库默认 RESP3，连接时先发 `HELLO 3`，而 Redis < 6.0 与 Codis/Twemproxy 等代理不认该命令。target 未配置 `options.protocol` 时按 2 处理；只有服务端 Redis ≥ 6.0 且确需 RESP3 特性时才设为 3。若服务端返回 `unknown command 'HELLO'`，连接器会提示把该目标的协议版本改回 2。
 
 ### GitLab
 
