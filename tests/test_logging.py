@@ -153,6 +153,41 @@ async def test_written_audit_uses_the_active_request_id(runtime: Runtime, caplog
     assert "SELECT 1" not in caplog.text
 
 
+async def test_failed_tool_audit_keeps_error_detail(runtime: Runtime) -> None:
+    await write_tool_audit(
+        runtime,
+        tool="mysql_query",
+        name="gift-mysql",
+        environment_key="default",
+        params={"sql": "SELECT 1"},
+        target=None,
+        returned=0,
+        started=0,
+        error_code="UPSTREAM_UNAVAILABLE",
+        error_message="连接被拒绝",
+    )
+    await write_tool_audit(
+        runtime,
+        tool="mysql_query",
+        name="gift-mysql",
+        environment_key="default",
+        params={"sql": "SELECT 2"},
+        target=None,
+        returned=0,
+        started=0,
+        error_code="UPSTREAM_UNAVAILABLE",
+        error_message="x" * 600,
+    )
+
+    rows, _total = await runtime.store.list_audit(since=datetime(2000, 1, 1, tzinfo=UTC))
+    by_summary = {row.summary: row for row in rows}
+    refused = next(row for summary, row in by_summary.items() if "SELECT 1" in summary)
+    assert refused.error_detail == "连接被拒绝"
+    assert refused.outcome == "failed"
+    long_row = next(row for summary, row in by_summary.items() if "SELECT 2" in summary)
+    assert len(long_row.error_detail or "") == 512
+
+
 async def test_audit_dialog_shows_the_request_id(runtime: Runtime) -> None:
     await runtime.store.append_audit(
         AuditEntry(

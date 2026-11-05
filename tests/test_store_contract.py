@@ -363,6 +363,23 @@ async def test_append_audit(runtime: Runtime) -> None:
     assert rows == [("anonymous", "app.start", "test")]
 
 
+async def test_audit_error_detail_persisted(runtime: Runtime) -> None:
+    await runtime.store.append_audit(
+        AuditEntry(
+            actor="admin",
+            action="tool.call",
+            summary="select 1",
+            outcome="failed",
+            error_detail="connection refused",
+        )
+    )
+
+    since = datetime(2000, 1, 1, tzinfo=UTC)
+    rows, _total = await runtime.store.list_audit(since=since)
+    assert rows[0].error_detail == "connection refused"
+    assert _raw(runtime, "SELECT error_detail FROM audit") == [("connection refused",)]
+
+
 async def test_concurrent_same_name_only_one_wins(runtime: Runtime) -> None:
     results = await asyncio.gather(
         runtime.store.create(_draft(), "anonymous"),

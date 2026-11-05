@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
 PUBLIC_PREFIXES = ("/static/",)
-_ADMIN_PREFIXES = ("/targets", "/environments", "/settings", "/users")
+_ADMIN_PREFIXES = ("/admin", "/targets", "/environments", "/settings", "/users")
 # 只读页：分析员仅能 GET 这一个精确路径；/targets/new、/targets/{id}/edit 等仍为管理员专属。
 _ANALYST_READONLY_GETS = frozenset({"/targets"})
 _PASSWORD_GATE_POSTS = {"/me/password", "/logout", "/language", "/theme"}

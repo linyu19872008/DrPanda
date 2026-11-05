@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 
 from dr_panda_mcp import auth
-from dr_panda_mcp.web import assets, clock, i18n, theme
+from dr_panda_mcp.web import assets, clock, i18n, labels, theme
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 BRAND_NAME = "DrPanda"
@@ -28,6 +28,8 @@ _environment = Environment(
 )
 _environment.globals["local_time"] = clock.local_time
 _environment.globals["t"] = i18n.t
+_environment.globals["error_label"] = labels.error_label
+_environment.globals["ERROR_CODE_DISPLAY"] = labels.ERROR_CODE_DISPLAY
 _environment.globals["plural"] = i18n.plural
 _environment.globals["brand_name"] = BRAND_NAME
 _environment.globals["product_name"] = PRODUCT_NAME
@@ -71,7 +73,9 @@ def render(
             "is_admin": current_user is None or current_user.role == auth.ROLE_ADMIN,
             "show_nav": path != "/login",
             "nav_active": (
-                "overview"
+                "admin"
+                if path.startswith("/admin")
+                else "overview"
                 if path == "/"
                 else "me"
                 if path.startswith("/me")

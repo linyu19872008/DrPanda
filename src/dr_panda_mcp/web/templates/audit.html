@@ -108,7 +108,7 @@
       <dl class="audit-detail__stats">
         <div><dt>{{ t('返回条数') }}</dt><dd>{{ row.detail.returned }}</dd></div>
         <div><dt>{{ t('耗时') }}</dt><dd>{{ row.detail.elapsed_ms }} ms</dd></div>
-        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
+        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% else %}<span class="audit-detail__error">{{ t(ERROR_CODE_DISPLAY, code=row.detail.error, label=t(error_label(row.detail.error))) }}</span>{% if row.error_detail %}<span class="audit-detail__error-note">{{ row.error_detail }}</span>{% endif %}{% endif %}</dd></div>
       </dl>
       <h3>{{ t('调用') }}</h3>
       <dl class="audit-detail__fields">

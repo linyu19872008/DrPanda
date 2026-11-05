@@ -314,10 +314,18 @@ async def test_mysql_explain_and_processlist(
         runtime, "mysql_explain", {"target": "db-mysql", "sql": "SELECT * FROM users"}
     )
     processlist = await _call(runtime, "mysql_processlist", {"target": "db-mysql"})
+    prefixed = await _call(
+        runtime,
+        "mysql_explain",
+        {"target": "db-mysql", "sql": "EXPLAIN SELECT * FROM users"},
+    )
 
     assert explain["rows"][0]["select_type"] == "SIMPLE"
     assert "EXPLAIN SELECT" in mysql.calls[0]
     assert processlist["rows"][0]["Command"] == "Query"
+    # 入参自带 EXPLAIN 时不能拼成 EXPLAIN EXPLAIN。
+    assert prefixed["rows"][0]["select_type"] == "SIMPLE"
+    assert mysql.calls[-1] == "EXPLAIN SELECT * FROM users"
 
 
 async def test_mongo_find_aggregate_scope_and_guard(

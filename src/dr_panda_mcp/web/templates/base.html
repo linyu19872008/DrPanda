@@ -81,6 +81,10 @@
     <nav class="sidebar__nav" aria-label="{{ t('主导航') }}">
       <a class="sidebar__link{% if nav_active == 'overview' %} is-active{% endif %}" href="/"
          {% if nav_active == 'overview' %}aria-current="page"{% endif %}>{{ t('概览') }}</a>
+      {% if is_admin %}
+      <a class="sidebar__link{% if nav_active == 'admin' %} is-active{% endif %}" href="/admin/overview"
+         {% if nav_active == 'admin' %}aria-current="page"{% endif %}>{{ t('管理概览') }}</a>
+      {% endif %}
       <div class="sidebar__group">
         <p class="sidebar__label">{{ t('排查') }}</p>
         <a class="sidebar__link{% if nav_active == 'targets' %} is-active{% endif %}" href="/targets"

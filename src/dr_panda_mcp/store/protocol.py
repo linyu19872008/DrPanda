@@ -82,6 +82,7 @@ class AuditEntry:
     summary: str | None = None
     environment_key: str | None = None
     outcome: str | None = None
+    error_detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,7 @@ class AuditRecord:
     target_name: str | None
     summary: str | None
     outcome: str | None = None
+    error_detail: str | None = None
 
 
 @dataclass(frozen=True)

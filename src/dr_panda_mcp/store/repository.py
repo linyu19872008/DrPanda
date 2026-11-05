@@ -396,6 +396,7 @@ class SqlConfigStore:
                         target_name=entry.target_name,
                         summary=_truncate(entry.summary, 1024),
                         outcome=entry.outcome,
+                        error_detail=_truncate(entry.error_detail, 512),
                     )
                 )
         except SQLAlchemyError as exc:
@@ -454,6 +455,7 @@ class SqlConfigStore:
                 target_name=row.target_name,
                 summary=row.summary,
                 outcome=row.outcome,
+                error_detail=row.error_detail,
             )
             for row in rows
         ], total

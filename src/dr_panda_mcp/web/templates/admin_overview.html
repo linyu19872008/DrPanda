@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ t('管理概览') }} · {{ product_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ t('管理概览') }}</h1>
+    <p class="page-subtitle">{{ t('看配置是否需要处理，以及刚刚发生的操作。') }}</p>
+  </div>
+</div>
+
+<div class="stats" aria-label="{{ t('概览') }}">
+  <div class="stat"><span class="stat__label">{{ t('环境') }}</span><span class="stat__value">{{ environment_count }}</span></div>
+  <div class="stat"><span class="stat__label">{{ t('已启用目标') }}</span><span class="stat__value">{{ enabled_targets }}</span></div>
+  <div class="stat{% if failed %} stat--danger{% endif %}"><span class="stat__label">{{ t('最近测试失败') }}</span><span class="stat__value">{{ failed }}</span></div>
+  <div class="stat{% if key_issues %} stat--warning{% endif %}"><span class="stat__label">{{ t('密钥异常') }}</span><span class="stat__value">{{ key_issues }}</span></div>
+</div>
+
+<div class="section-head"><h2>{{ t('需要处理') }}</h2></div>
+{% if problems %}
+<div class="table-card">
+  <table class="table table--responsive table--share">
+    <thead><tr>
+      <th>{{ t('环境') }}</th><th>{{ t('名称') }}</th><th>{{ t('问题') }}</th>
+    </tr></thead>
+    <tbody>
+    {% for item in problems %}
+      <tr>
+        <td data-label="{{ t('环境') }}">{% if item.environment_key == 'default' and item.environment_title == '默认' %}{{ t('默认') }}{% else %}{{ item.environment_title or item.environment_key }}{% endif %}</td>
+        <td data-label="{{ t('名称') }}"><a class="link-strong" href="{{ item.href }}">{{ item.name }}</a></td>
+        <td data-label="{{ t('问题') }}" class="cell-fill">{% for issue in item.issues %}{{ t(issue) }}{% if not loop.last %} / {% endif %}{% endfor %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="page-subtitle">{{ t('没有需要处理的目标') }}</p>
+{% endif %}
+
+<div class="section-head">
+  <h2>{{ t('最近操作') }}</h2>
+  <a href="/audit">{{ t('查看全部') }}</a>
+</div>
+{% if recent %}
+<div class="table-card">
+  <table class="table table--responsive table--audit table--share">
+    <thead><tr>
+      <th>{{ t('时间') }}</th><th>{{ t('操作者') }}</th><th>{{ t('动作') }}</th><th>{{ t('环境') }}</th><th>{{ t('对象') }}</th><th>{{ t('摘要') }}</th>
+    </tr></thead>
+    <tbody>
+    {% for row in recent %}
+      <tr>
+        <td data-label="{{ t('时间') }}" class="cell-when">{{ local_time(row.at) }}</td>
+        <td data-label="{{ t('操作者') }}">{{ row.actor }}</td>
+        <td data-label="{{ t('动作') }}"><span class="badge badge--quiet">{{ t(row.action_label) }}</span></td>
+        <td data-label="{{ t('环境') }}">
+          {% if row.environment_key %}
+          <span>{% if row.environment_key == 'default' and row.environment_title == '默认' %}{{ t('默认') }}{% else %}{{ row.environment_title or row.environment_key }}{% endif %}</span>
+          {% if row.environment_title and row.environment_title != row.environment_key %}<span class="mono cell-key">{{ row.environment_key }}</span>{% endif %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('摘要') }}" class="cell-summary cell-fill">
+          {% if row.summary %}
+          <button class="summary-preview" type="button" data-dialog-open="overview-summary-{{ loop.index }}">
+            <span class="summary-preview__text">{{ row.detail.preview }}</span>
+            <span class="summary-preview__action">{{ t('查看') }}</span>
+          </button>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% for row in recent %}
+{% if row.summary %}
+<dialog id="overview-summary-{{ loop.index }}" class="modal" aria-labelledby="overview-summary-title-{{ loop.index }}">
+  <div class="modal__panel modal__panel--wide">
+    <button class="modal__close" type="button" data-dialog-close aria-label="{{ t('关闭') }}">×</button>
+    <div class="audit-detail">
+      <h2 id="overview-summary-title-{{ loop.index }}">{{ t(row.action_label) }}</h2>
+      <p class="audit-detail__meta"><span>{{ local_time(row.at) }}</span><span>{{ row.actor }}</span></p>
+      {% if row.detail.kind == 'tool' %}
+      <dl class="audit-detail__stats">
+        <div><dt>{{ t('返回条数') }}</dt><dd>{{ row.detail.returned }}</dd></div>
+        <div><dt>{{ t('耗时') }}</dt><dd>{{ row.detail.elapsed_ms }} ms</dd></div>
+        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% else %}<span class="audit-detail__error">{{ t(ERROR_CODE_DISPLAY, code=row.detail.error, label=t(error_label(row.detail.error))) }}</span>{% if row.error_detail %}<span class="audit-detail__error-note">{{ row.error_detail }}</span>{% endif %}{% endif %}</dd></div>
+      </dl>
+      <h3>{{ t('调用') }}</h3>
+      <dl class="audit-detail__fields">
+        <div><dt>{{ t('工具') }}</dt><dd class="mono">{{ row.detail.tool }}</dd></div>
+        {% if row.detail.request %}<div><dt>{{ t('请求号') }}</dt><dd class="mono">{{ row.detail.request }}</dd></div>{% endif %}
+      </dl>
+      {% include "_audit_params.html" %}
+      {% else %}
+      {% if row.detail.truncated %}<p class="audit-detail__note">{{ t('参数在记录时已截短。') }}</p>{% endif %}
+      <pre class="audit-code">{{ row.summary }}</pre>
+      {% endif %}
+    </div>
+  </div>
+</dialog>
+{% endif %}
+{% endfor %}
+{% else %}
+<p class="page-subtitle">{{ t('还没有操作。') }}</p>
+{% endif %}
+{% endblock %}

@@ -105,6 +105,8 @@ class AuditRow(Base):
     # 结构化结果：ok / failed；只有 tool.call、target.test 等有成败语义的动作会写，
     # 旧行为 NULL，由 0010 迁移按 summary 回填。
     outcome: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # 失败原因摘要（已脱敏、截断），只有 tool.call 失败时写；旧行为 NULL。
+    error_detail: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class SettingRow(Base):

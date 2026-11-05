@@ -298,6 +298,7 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
                     "detail": detail,
                     "result": result,
                     "result_error": result_error,
+                    "error_detail": row.error_detail,
                 }
             )
         default_action = "tool.call" if analyst else ""

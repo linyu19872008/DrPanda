@@ -46,6 +46,11 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
         "alembic_version",
     } <= tables
     with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
+        audit_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(audit)")
+        }
+    assert {"outcome", "error_detail"} <= audit_columns
+    with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
         default_env = connection.execute(
             "SELECT key, title, enabled FROM environments"
         ).fetchall()
@@ -258,6 +263,7 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
             connection.execute("CREATE INDEX ix_targets_type ON targets (type)")
             connection.execute("ALTER TABLE audit DROP COLUMN environment_key")
             connection.execute("ALTER TABLE audit DROP COLUMN outcome")
+            connection.execute("ALTER TABLE audit DROP COLUMN error_detail")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0003_backup_keep'"
             )
@@ -279,6 +285,7 @@ async def test_audit_outcome_backfilled_on_upgrade(tmp_path: Path) -> None:
         await migrate(engine)
         with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
             connection.execute("ALTER TABLE audit DROP COLUMN outcome")
+            connection.execute("ALTER TABLE audit DROP COLUMN error_detail")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0009_user_password_gate'"
             )

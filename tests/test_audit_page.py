@@ -209,6 +209,7 @@ async def test_audit_page_shows_result_column_and_filters_by_outcome(
             ),
             environment_key="default",
             outcome="failed",
+            error_detail="连接被拒绝：mongo 探测失败",
         ),
         AuditEntry(
             actor="admin",
@@ -240,9 +241,14 @@ async def test_audit_page_shows_result_column_and_filters_by_outcome(
         page = await client.get("/audit")
         failed = await client.get("/audit", params={"outcome": "failed"})
         ok = await client.get("/audit", params={"outcome": "ok"})
+    async with _client(runtime, locale=None) as client:
+        english = await client.get("/audit")
 
     assert page.status_code == 200
     assert "结果" in page.text
+    assert "UPSTREAM_UNAVAILABLE（上游不可用）" in page.text
+    assert "连接被拒绝：mongo 探测失败" in page.text
+    assert "UPSTREAM_UNAVAILABLE (upstream unavailable)" in english.text
     assert 'class="audit-detail__ok">成功' in page.text
     assert (
         'class="audit-detail__error" title="UPSTREAM_UNAVAILABLE">失败'

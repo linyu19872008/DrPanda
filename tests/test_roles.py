@@ -69,6 +69,7 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
         ),
         "admin",
     )
+    await runtime.store.record_test(created_target.id, False, "connection refused", "admin")
     await runtime.store.create_environment("legacy", "旧环境", "admin", enabled=False)
     await runtime.store.create(
         TargetDraft(
@@ -95,8 +96,21 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             admin_home = await _login(client, "admin", "abcdefgh")
             assert admin_home.headers["location"] == "/"
             overview = await client.get("/")
-            assert "需要处理" in overview.text
+            assert "<h1>概览</h1>" in overview.text
+            assert "可查询的目标" in overview.text
+            assert "最近的工具调用" in overview.text
+            assert "最近操作" not in overview.text
+            assert "1 个目标需要处理" in overview.text
+            assert 'href="/admin/overview"' in overview.text
             assert 'href="/targets"' in overview.text
+
+            admin_overview = await client.get("/admin/overview")
+            assert admin_overview.status_code == 200
+            assert "<h1>管理概览</h1>" in admin_overview.text
+            assert "需要处理" in admin_overview.text
+            assert f'href="/targets/{created_target.id}/edit"' in admin_overview.text
+            assert "最近操作" in admin_overview.text
+            assert ">环境</th>" in admin_overview.text
 
             users = await client.get("/users")
             assert "创建成员" in users.text
@@ -167,6 +181,8 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             page = await client.get("/")
             assert "可查询的目标" in page.text
             assert "需要处理" not in page.text
+            assert "管理概览" not in page.text
+            assert 'href="/admin/overview"' not in page.text
             assert 'href="/targets"' in page.text
             assert 'href="/environments"' not in page.text
             assert "系统配置" not in page.text
@@ -204,6 +220,7 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
                 "/targets/new",
                 f"/targets/{created_target.id}/edit",
                 f"/targets/{created_target.id}/delete",
+                "/admin/overview",
                 "/settings",
                 "/users",
                 "/environments",
@@ -235,6 +252,25 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             widened = await client.get("/audit?action=all&actor=admin")
             assert "mysql-target" not in widened.text
             assert "ada" in widened.text
+
+            await runtime.store.append_audit(
+                AuditEntry(
+                    actor="ada",
+                    action="tool.call",
+                    target_name="mysql-target",
+                    summary=(
+                        "client=cursor prefix=x mysql_query env=default "
+                        'target=mysql-target params={"sql": "SELECT 1"} '
+                        "returned=1 elapsed_ms=5 error=-"
+                    ),
+                    environment_key="default",
+                    outcome="ok",
+                )
+            )
+            personal = await client.get("/")
+            assert ">环境</th>" in personal.text
+            assert "默认" in personal.text
+            assert "mysql-target" in personal.text
 
             ada = await auth.get_user_by_username(runtime.session_factory, "ada")
             assert ada is not None

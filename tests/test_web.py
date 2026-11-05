@@ -483,6 +483,7 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     async with _client(runtime) as client:
         page = await client.get("/")
         targets = await client.get("/targets")
+        admin_overview = await client.get("/admin/overview")
 
     text = page.text
     assert '<html lang="zh-Hans">' in text
@@ -492,12 +493,20 @@ async def test_index_shell_and_default_theme(runtime: Runtime) -> None:
     assert 'aria-label="主导航"' in text
     assert 'class="sidebar"' in text
     nav = text.split('aria-label="主导航"', 1)[1]
-    assert nav.index("概览") < nav.index("目标") < nav.index("环境") < nav.index("审计")
+    assert (
+        nav.index("概览")
+        < nav.index("管理概览")
+        < nav.index("目标")
+        < nav.index("环境")
+        < nav.index("审计")
+    )
     assert nav.index("审计") < nav.index("系统配置") < nav.index("用户") < nav.index("我的")
     assert 'name="mode" value="dark"' in text
     assert "/static/app.css?v=" in text
     assert 'src="/static/icon.png?v=' in text
-    assert "没有需要处理的目标" in text
+    assert "可查询的目标" in text
+    assert 'href="/admin/overview"' in text
+    assert "没有需要处理的目标" in admin_overview.text
     assert text.count("<h1") == 1
     assert 'class="brand__name">DrPanda<' in text
     assert "<title>概览 · DrPanda MCP</title>" in text

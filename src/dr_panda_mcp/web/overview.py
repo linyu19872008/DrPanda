@@ -1,4 +1,4 @@
-"""首页概览。管理员看全局健康，分析员只看自己能用的数量和调用。"""
+"""首页概览：个人概览（所有角色）+ 管理概览（仅管理员）。"""
 
 from __future__ import annotations
 
@@ -22,20 +22,22 @@ def register_overview_routes(server: FastMCP, runtime: Runtime) -> None:
     @server.custom_route("/", methods=["GET"])
     async def overview(request: Request) -> HTMLResponse:
         user = auth.current_user()
-        is_admin = user is None or user.role == auth.ROLE_ADMIN
-        if is_admin:
-            payload = await _admin_overview(runtime)
-        else:
-            payload = await _analyst_overview(runtime, user)
+        payload = await _personal_overview(runtime, user)
+        if user is None or user.role == auth.ROLE_ADMIN:
+            payload["admin_signals"] = await _admin_signals(runtime)
         response = render.render("overview.html", request=request, **payload)
         response.headers["Cache-Control"] = "no-store"
         return response
 
+    @server.custom_route("/admin/overview", methods=["GET"])
+    async def admin_overview(request: Request) -> HTMLResponse:
+        payload = await _admin_overview(runtime)
+        response = render.render("admin_overview.html", request=request, **payload)
+        response.headers["Cache-Control"] = "no-store"
+        return response
 
-async def _admin_overview(runtime: Runtime) -> dict:
-    environments = await runtime.store.list_environments()
-    all_views = views.list_views(await runtime.store.list_all())
-    totals = views.stats(all_views)
+
+def _attention_targets(all_views: list) -> list[dict]:
     problems = []
     for view in all_views:
         issues: list[str] = []
@@ -54,13 +56,30 @@ async def _admin_overview(runtime: Runtime) -> dict:
                 "issues": issues,
             }
         )
-        if len(problems) >= _ATTENTION_LIMIT:
-            break
+    return problems
+
+
+async def _admin_signals(runtime: Runtime) -> dict:
+    """管理员在个人概览上的入口摘要（不含页面细节）。"""
+    all_views = views.list_views(await runtime.store.list_all())
+    totals = views.stats(all_views)
+    attention = len(_attention_targets(all_views))
+    return {
+        "attention": attention,
+        "failed": totals.failed,
+        "key_issues": totals.key_issues,
+    }
+
+
+async def _admin_overview(runtime: Runtime) -> dict:
+    environments = await runtime.store.list_environments()
+    all_views = views.list_views(await runtime.store.list_all())
+    totals = views.stats(all_views)
+    problems = _attention_targets(all_views)[:_ATTENTION_LIMIT]
     rows, _total = await runtime.store.list_audit(since=_AUDIT_FLOOR, limit=_RECENT_LIMIT)
     titles = {item.key: item.title for item in environments}
     recent = [_audit_row(row, titles) for row in rows]
     return {
-        "overview_admin": True,
         "environment_count": len(environments),
         "enabled_targets": totals.enabled,
         "failed": totals.failed,
@@ -70,21 +89,26 @@ async def _admin_overview(runtime: Runtime) -> dict:
     }
 
 
-async def _analyst_overview(runtime: Runtime, user: auth.User) -> dict:
+async def _personal_overview(runtime: Runtime, user: auth.User | None) -> dict:
     environments = await runtime.store.list_environments()
     enabled_keys = {item.key for item in environments if item.enabled}
     all_views = views.list_views(await runtime.store.list_all())
     queryable = sum(
         1 for view in all_views if view.enabled and view.environment_key in enabled_keys
     )
-    tokens = await auth.count_mcp_tokens(runtime.session_factory, user.id)
-    since = datetime.now(UTC) - timedelta(hours=24)
-    rows, total = await runtime.store.list_audit(
-        since=since,
-        action="tool.call",
-        actor=user.username,
-        limit=_RECENT_LIMIT,
-    )
+    if user is None:
+        tokens = 0
+        rows, total = [], 0
+    else:
+        tokens = await auth.count_mcp_tokens(runtime.session_factory, user.id)
+        since = datetime.now(UTC) - timedelta(hours=24)
+        rows, total = await runtime.store.list_audit(
+            since=since,
+            action="tool.call",
+            actor=user.username,
+            limit=_RECENT_LIMIT,
+        )
+    titles = {item.key: item.title for item in environments}
     calls = []
     for row in rows:
         detail = describe_summary(row.action, row.summary or "")
@@ -92,6 +116,8 @@ async def _analyst_overview(runtime: Runtime, user: auth.User) -> dict:
         calls.append(
             {
                 "at": row.created_at,
+                "environment_key": row.environment_key,
+                "environment_title": titles.get(row.environment_key or ""),
                 "target": row.target_name or "—",
                 "tool": detail.get("tool") if parsed else "—",
                 "ok": bool(detail.get("ok")) if parsed else False,
@@ -100,7 +126,6 @@ async def _analyst_overview(runtime: Runtime, user: auth.User) -> dict:
             }
         )
     return {
-        "overview_admin": False,
         "queryable": queryable,
         "token_count": tokens,
         "call_count": total,
@@ -119,4 +144,5 @@ def _audit_row(row, titles: dict[str, str]) -> dict:
         "target_name": row.target_name,
         "summary": summary,
         "detail": describe_summary(row.action, summary),
+        "error_detail": row.error_detail,
     }

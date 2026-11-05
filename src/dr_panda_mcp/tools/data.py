@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Annotated, Any
 
@@ -109,6 +110,14 @@ def _json_array(text: str, name: str) -> list[dict[str, Any]]:
 
 def _quote(identifier: str) -> str:
     return "`" + identifier.replace("`", "``") + "`"
+
+
+_EXPLAIN_PREFIX = re.compile(r"^\s*EXPLAIN\b\s*", re.IGNORECASE)
+
+
+def _explain_inner(sql: str) -> str:
+    """``sql`` 允许自带 EXPLAIN 前缀；工具内部统一只拼一次。"""
+    return _EXPLAIN_PREFIX.sub("", sql.strip(), count=1).strip()
 
 
 def _mysql_scope(target: Target, sql: str, default_db: str) -> None:
@@ -303,19 +312,21 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_explain(
         target: str, sql: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看 SELECT 的执行计划（不使用 EXPLAIN ANALYZE）。"""
+        """查看 SELECT 的执行计划（sql 可带或不带 EXPLAIN 前缀；不使用 EXPLAIN ANALYZE）。"""
         params = {"sql": sql}
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
-            if not sql.strip():
+            inner = _explain_inner(sql)
+            if not inner:
                 raise errors.InvalidArgument("sql 不能为空")
-            require(mysql_guard.check_sql(f"EXPLAIN {sql}"))
+            statement = f"EXPLAIN {inner}"
+            require(mysql_guard.check_sql(statement))
             default_db = ensure_db(tgt, "")
-            _mysql_scope(tgt, f"EXPLAIN {sql}", default_db)
+            _mysql_scope(tgt, statement, default_db)
             connector = get_connector("mysql")
             client = await runtime.catalog.client(tgt, connector)
-            rows = await connector.fetch_rows(client, tgt, f"EXPLAIN {sql}")
+            rows = await connector.fetch_rows(client, tgt, statement)
             return finish(
                 tgt,
                 summary="EXPLAIN SELECT",

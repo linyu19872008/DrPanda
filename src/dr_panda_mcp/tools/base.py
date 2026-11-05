@@ -282,6 +282,7 @@ async def write_tool_audit(
         client_prefix=_client_prefix(),
         request_id=current_request_id(),
     )
+    error_detail = _clip_text(redact(error_message, secrets), 512) if error_message else ""
     try:
         await runtime.store.append_audit(
             AuditEntry(
@@ -291,6 +292,7 @@ async def write_tool_audit(
                 summary=summary,
                 environment_key=environment_key or None,
                 outcome="failed" if error_code else "ok",
+                error_detail=error_detail or None,
             )
         )
     except Exception:  # noqa: BLE001 - 审计写失败不影响工具结果
