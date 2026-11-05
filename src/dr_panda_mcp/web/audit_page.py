@@ -60,11 +60,12 @@ def action_label(code: str) -> str:
 
 
 _RANGE_KEYS = {key: delta for key, _label, delta in RANGES}
+_OUTCOMES = frozenset({"ok", "failed"})
 # 与 tools.base.build_tool_summary 的格式对应。params 用非贪婪匹配，
-# 这样末尾的 params_truncated=1 不会被吞进参数正文。
+# 这样末尾的 params_truncated=1 不会被吞进参数正文；env 在早期版本里没有，做成可选。
 _TOOL_SUMMARY = re.compile(
     r"^(?:client=(?P<client>.*?) prefix=(?P<prefix>\S+) )?"
-    r"(?P<tool>\S+) env=(?P<env>\S+) target=(?P<target>\S+) params=(?P<params>.*?)"
+    r"(?P<tool>\S+) (?:env=(?P<env>\S+) )?target=(?P<target>\S+) params=(?P<params>.*?)"
     r"(?: params_truncated=(?P<params_truncated>1))?"
     r" returned=(?P<returned>\d+) elapsed_ms=(?P<elapsed>\d+) error=(?P<error>\S+)"
     r"(?: request=(?P<request>[0-9a-f]{8}))?\s*$",
@@ -94,17 +95,6 @@ def _blank(value: Any) -> bool:
     return value == [] or value == {}
 
 
-def _limit_text(value: Any) -> str | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-        return None
-    if isinstance(value, str):
-        stripped = value.strip()
-        return stripped if stripped.isdigit() else None
-    if isinstance(value, float) and not value.is_integer():
-        return None
-    return str(int(value))
-
-
 def describe_summary(action: str, summary: str) -> dict[str, Any]:
     """把审计摘要拆成列表预览和弹层字段。解析失败时保留原文。"""
     text = summary or ""
@@ -113,6 +103,29 @@ def describe_summary(action: str, summary: str) -> dict[str, Any]:
         if parsed is not None:
             return parsed
     return {"kind": "plain", "preview": text, "truncated": len(text) >= 1024}
+
+
+def result_state(
+    action: str, detail: dict[str, Any], summary: str
+) -> tuple[str | None, str]:
+    """列表「结果」列用：返回 (``ok`` / ``failed`` / ``None``, 失败原因)。
+
+    优先用摘要解析结果；旧格式或解析失败时返回 ``None``，由调用方回退到
+    已落库的 ``outcome``。
+    """
+    if detail.get("kind") == "tool":
+        if detail.get("ok"):
+            return "ok", ""
+        return "failed", str(detail.get("error") or "")
+    if action == "target.test":
+        text = (summary or "").strip()
+        if text == "ok":
+            return "ok", ""
+        if text.startswith("failed:"):
+            return "failed", text[len("failed:") :].strip()
+        if text.startswith("failed"):
+            return "failed", text
+    return None, ""
 
 
 def _describe_tool_summary(summary: str) -> dict[str, Any] | None:
@@ -150,7 +163,6 @@ def _describe_tool_summary(summary: str) -> dict[str, Any] | None:
 def _describe_params(raw: str, marked: bool) -> dict[str, Any]:
     empty = {
         "params_sql": "",
-        "params_limit": "",
         "params_fields": [],
         "params_pretty": "",
         "params_raw": "",
@@ -167,21 +179,14 @@ def _describe_params(raw: str, marked: bool) -> dict[str, Any]:
         }
     sql = payload.get("sql")
     params_sql = sql if isinstance(sql, str) else ""
-    params_limit = ""
     fields: list[tuple[str, str]] = []
     for key, value in payload.items():
         if key == "sql" or _blank(value):
             continue
-        if params_sql and key == "limit":
-            limit = _limit_text(value)
-            if limit is not None:
-                params_limit = limit
-                continue
         fields.append((key, _field_text(value)))
     return {
         **empty,
         "params_sql": params_sql,
-        "params_limit": params_limit,
         "params_fields": fields,
     }
 
@@ -192,6 +197,7 @@ def _href(
     action: str,
     env: str,
     q: str,
+    outcome: str = "",
     page: int | None = None,
 ) -> str:
     params: list[tuple[str, str]] = []
@@ -203,6 +209,8 @@ def _href(
         params.append(("env", env))
     if q:
         params.append(("q", q))
+    if outcome:
+        params.append(("outcome", outcome))
     if page and page > 1:
         params.append(("page", str(page)))
     if not params:
@@ -238,6 +246,9 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
             subtitle = "查看已经发生的操作。"
         env = _clean(params.get("env", ""), 64)
         q = _clean(params.get("q", ""), 64)
+        outcome = params.get("outcome", "")
+        if outcome not in _OUTCOMES:
+            outcome = ""
         try:
             page = int(params.get("page", "1"))
         except ValueError:
@@ -255,6 +266,7 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
                 environment_key=env or None,
                 target_name=q or None,
                 actor=actor,
+                outcome=outcome or None,
                 offset=(page_no - 1) * PAGE_SIZE,
                 limit=PAGE_SIZE,
             )
@@ -266,21 +278,30 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
             rows, total = await _load(page)
         environments = await runtime.store.list_environments()
         titles = {item.key: item.title for item in environments}
-        view_rows = [
-            {
-                "at": row.created_at,
-                "actor": row.actor,
-                "action_label": _ACTION_LABELS.get(row.action, row.action),
-                "environment_key": row.environment_key,
-                "environment_title": titles.get(row.environment_key or ""),
-                "target_name": row.target_name,
-                "summary": row.summary or "",
-                "detail": describe_summary(row.action, row.summary or ""),
-            }
-            for row in rows
-        ]
+        view_rows = []
+        for row in rows:
+            summary = row.summary or ""
+            detail = describe_summary(row.action, summary)
+            result, result_error = result_state(row.action, detail, summary)
+            # 旧行没有 outcome，按摘要解析兜底；新行直接信任落库结果。
+            if row.outcome in _OUTCOMES:
+                result = row.outcome
+            view_rows.append(
+                {
+                    "at": row.created_at,
+                    "actor": row.actor,
+                    "action_label": _ACTION_LABELS.get(row.action, row.action),
+                    "environment_key": row.environment_key,
+                    "environment_title": titles.get(row.environment_key or ""),
+                    "target_name": row.target_name,
+                    "summary": summary,
+                    "detail": detail,
+                    "result": result,
+                    "result_error": result_error,
+                }
+            )
         default_action = "tool.call" if analyst else ""
-        filtered = range_key != "24h" or bool(env or q) or action != default_action
+        filtered = range_key != "24h" or bool(env or q or outcome) or action != default_action
         response = render.render(
             "audit.html",
             request=request,
@@ -296,7 +317,9 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
                     "key": key,
                     "label": label,
                     "active": key == range_key,
-                    "href": _href(range_key=key, action=action, env=env, q=q),
+                    "href": _href(
+                        range_key=key, action=action, env=env, q=q, outcome=outcome
+                    ),
                 }
                 for key, label, _delta in RANGES
             ],
@@ -305,9 +328,24 @@ def register_audit_routes(server: FastMCP, runtime: Runtime) -> None:
             environments=environments,
             env=env,
             q=q,
+            outcome=outcome,
             filtered=filtered,
-            prev_href=_href(range_key=range_key, action=action, env=env, q=q, page=page - 1),
-            next_href=_href(range_key=range_key, action=action, env=env, q=q, page=page + 1),
+            prev_href=_href(
+                range_key=range_key,
+                action=action,
+                env=env,
+                q=q,
+                outcome=outcome,
+                page=page - 1,
+            ),
+            next_href=_href(
+                range_key=range_key,
+                action=action,
+                env=env,
+                q=q,
+                outcome=outcome,
+                page=page + 1,
+            ),
         )
         response.headers["Cache-Control"] = "no-store"
         return response

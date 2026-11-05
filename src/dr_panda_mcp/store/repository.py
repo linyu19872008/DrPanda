@@ -374,6 +374,7 @@ class SqlConfigStore:
                             row.name,
                             summary,
                             environment_key=env_row.key if env_row is not None else None,
+                            outcome="ok" if ok else "failed",
                         )
                     )
                 env_row = await session.get(EnvironmentRow, row.environment_id)
@@ -394,6 +395,7 @@ class SqlConfigStore:
                         environment_key=entry.environment_key or None,
                         target_name=entry.target_name,
                         summary=_truncate(entry.summary, 1024),
+                        outcome=entry.outcome,
                     )
                 )
         except SQLAlchemyError as exc:
@@ -408,6 +410,7 @@ class SqlConfigStore:
         target_name: str | None = None,
         actor: str | None = None,
         actions: tuple[str, ...] | None = None,
+        outcome: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AuditRecord], int]:
@@ -422,6 +425,8 @@ class SqlConfigStore:
             filters.append(_contains(AuditRow.target_name, target_name))
         if actor:
             filters.append(AuditRow.actor == actor)
+        if outcome:
+            filters.append(AuditRow.outcome == outcome)
         async with self._session_factory() as session:
             total = int(
                 await session.scalar(select(func.count()).select_from(AuditRow).where(*filters))
@@ -448,6 +453,7 @@ class SqlConfigStore:
                 environment_key=row.environment_key,
                 target_name=row.target_name,
                 summary=row.summary,
+                outcome=row.outcome,
             )
             for row in rows
         ], total
@@ -639,6 +645,7 @@ class SqlConfigStore:
         target_name: str | None,
         summary: str | None,
         environment_key: str | None = None,
+        outcome: str | None = None,
     ) -> AuditRow:
         return AuditRow(
             created_at=utc_now(),
@@ -647,6 +654,7 @@ class SqlConfigStore:
             environment_key=environment_key or None,
             target_name=target_name,
             summary=_truncate(summary, 1024),
+            outcome=outcome,
         )
 
     def _to_target(self, row: TargetRow, env: EnvironmentRow | _EnvRef) -> Target:

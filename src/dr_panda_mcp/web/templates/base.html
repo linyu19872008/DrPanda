@@ -81,15 +81,15 @@
     <nav class="sidebar__nav" aria-label="{{ t('主导航') }}">
       <a class="sidebar__link{% if nav_active == 'overview' %} is-active{% endif %}" href="/"
          {% if nav_active == 'overview' %}aria-current="page"{% endif %}>{{ t('概览') }}</a>
-      {% if is_admin %}
       <div class="sidebar__group">
         <p class="sidebar__label">{{ t('排查') }}</p>
         <a class="sidebar__link{% if nav_active == 'targets' %} is-active{% endif %}" href="/targets"
            {% if nav_active == 'targets' %}aria-current="page"{% endif %}>{{ t('目标') }}</a>
+        {% if is_admin %}
         <a class="sidebar__link{% if nav_active == 'environments' %} is-active{% endif %}" href="/environments"
            {% if nav_active == 'environments' %}aria-current="page"{% endif %}>{{ t('环境') }}</a>
+        {% endif %}
       </div>
-      {% endif %}
       <div class="sidebar__group">
         <p class="sidebar__label">{{ t('记录') }}</p>
         <a class="sidebar__link{% if nav_active == 'audit' %} is-active{% endif %}" href="/audit"

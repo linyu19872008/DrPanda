@@ -177,7 +177,8 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 安装前只开放 `/setup`、`/healthz`、`/static`；`/mcp` 返回 503。安装完成后：
 
 - 网页未认证 303 → `/login`；`/mcp` 未认证 401；
-- 网页使用管理员密码 + 签名 Session Cookie；`/mcp` 使用独立 Bearer Token；
+- 网页使用账号密码 + 签名 Session Cookie；`/mcp` 使用独立 Bearer Token；
+- 角色：`admin` 可进入全部管理页；`analyst` 只能 `GET /targets`（只读目标目录，不含写操作），环境、系统配置、用户与其他目标写路由均 403；
 - 审计 actor 记录管理员身份；
 - 工具、只读规则、危险清单、目标范围与系统配置语义不变；
 - 认证失败与配置库故障区分：前者 401/303，后者 503/启动失败。
@@ -451,7 +452,7 @@ class Settings:                  # 解析并校验后的运行时策略
 | `id` | BigInteger | 主键自增 | |
 | `username` | String(64) | NOT NULL, UNIQUE | 安装时固定 `admin` |
 | `password_hash` | String(255) | NOT NULL | scrypt 哈希，不存明文 |
-| `role` | String(32) | NOT NULL | `admin` 或 `analyst`。安装时只有管理员 |
+| `role` | String(32) | NOT NULL | `admin` 或 `analyst`。安装时只有管理员；分析员只读 `/targets`，其余管理页 403 |
 | `is_enabled` | Boolean | NOT NULL | 停用后不能登录，已有 Token 也不能调用 |
 | `auth_version` | Integer | NOT NULL | 改密后递增，使旧 Session 失效 |
 | `must_change_password` | Boolean | NOT NULL | 分析员创建和重置密码后为真，本人改密成功后清除 |
@@ -512,6 +513,7 @@ class Settings:                  # 解析并校验后的运行时策略
 | `environment_key` | String(64) | NULL | 这次操作所属环境的调用标识；与环境无关时为空。旧记录不回填 |
 | `target_name` | String(64) | NULL | 工具调用与配置变更都写 |
 | `summary` | String(1024) | NULL | 已打码 |
+| `outcome` | String(8) | NULL | `ok` / `failed`；只有工具调用与测试连接有成败语义，其余为 NULL。0010 迁移按 summary 回填旧行 |
 
 索引：`ix_audit_created_at`。审计只追加，不更新；唯一的删除路径是按保留期清理（9.6）。
 
@@ -578,7 +580,7 @@ class Settings:                  # 解析并校验后的运行时策略
 | `app.start` | 进程启动完成 |
 
 - 打码规则：密钥字段永不落盘。`tool.call` 的 summary 记工具名、环境、target、参数摘要（先打码，再截到 200 字符）、返回条数、耗时、错误码。经 `/mcp` 的调用另记 Token 名称和前缀，不记完整 Token。`systems_status` 同样记 `tool.call`。summary 落盘前对手机号（`1` 开头 11 位）、18 位身份证号、`password=`/`token=`/`secret=` 形式的值替换为 `***`。
-- 网页 `/audit` 只读查看近 24 小时、7 天或 30 天的记录，可按动作、环境和对象名筛选。不提供删除。
+- 网页 `/audit` 只读查看近 24 小时、7 天或 30 天的记录，可按动作、环境、结果（成功/失败）和对象名筛选。不提供删除。
 - 审计保留期由系统配置 `audit_retention_days`（默认 90 天）控制，清理任务见 9.6。清理动作只记日志、不写审计，避免审计表自增。
 
 ### 5.5 迁移与启动

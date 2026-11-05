@@ -257,6 +257,7 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
             connection.execute("DROP TABLE targets_v7")
             connection.execute("CREATE INDEX ix_targets_type ON targets (type)")
             connection.execute("ALTER TABLE audit DROP COLUMN environment_key")
+            connection.execute("ALTER TABLE audit DROP COLUMN outcome")
             connection.execute(
                 "UPDATE alembic_version SET version_num = '0003_backup_keep'"
             )
@@ -268,3 +269,53 @@ async def test_pending_migration_uses_configured_backup_keep(tmp_path: Path) -> 
     backups = sorted((tmp_path / "backup").glob("*.sqlite"))
     assert created is not None
     assert len(backups) == 3
+
+
+async def test_audit_outcome_backfilled_on_upgrade(tmp_path: Path) -> None:
+    """0010 迁移要按 summary 回填历史行的 outcome。"""
+    url = _url(tmp_path)
+    engine = create_engine(url)
+    try:
+        await migrate(engine)
+        with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
+            connection.execute("ALTER TABLE audit DROP COLUMN outcome")
+            connection.execute(
+                "UPDATE alembic_version SET version_num = '0009_user_password_gate'"
+            )
+            samples = [
+                (
+                    "tool.call",
+                    (
+                        "mysql_query env=default target=order-mysql "
+                        'params={"sql": "SELECT 1"} returned=1 elapsed_ms=5 error=-'
+                    ),
+                ),
+                (
+                    "tool.call",
+                    (
+                        "mysql_tables target=order-mysql "
+                        'params={"db": null} returned=0 elapsed_ms=3 error=SCOPE_DENIED'
+                    ),
+                ),
+                ("target.test", "ok"),
+                ("target.test", "failed: connection refused"),
+                ("target.create", "env=default type=mysql"),
+            ]
+            for action, summary in samples:
+                connection.execute(
+                    "INSERT INTO audit (created_at, actor, action, summary) "
+                    "VALUES ('2026-11-05 12:00:00', 'admin', ?, ?)",
+                    (action, summary),
+                )
+
+        await migrate(engine)
+    finally:
+        await engine.dispose()
+
+    with sqlite3.connect(tmp_path / "dr-panda.sqlite") as connection:
+        rows = connection.execute(
+            "SELECT action, summary, outcome FROM audit ORDER BY id"
+        ).fetchall()
+
+    assert [row[2] for row in rows] == ["ok", "failed", "ok", "failed", None]
+    assert rows[1][1].endswith("error=SCOPE_DENIED")

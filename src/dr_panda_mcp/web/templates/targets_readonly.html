@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% from "_macros.html" import env_label %}
+{% block title %}{{ t('目标') }} · {{ product_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ t('目标') }}</h1>
+    <p class="page-subtitle">{{ t('只读：可查看环境与目标的连接信息；新增、修改、删除、启停、测试需要管理员。') }}</p>
+  </div>
+</div>
+
+{% if environments %}
+<nav class="env-switch" aria-label="{{ t('选择环境') }}">
+  {% for env in environments %}
+  <a class="env-switch__item{% if current_env and env.key == current_env.key %} is-active{% endif %}{% if not env.enabled %} is-disabled{% endif %}"
+     href="/targets?env={{ env.key }}"
+     {% if current_env and env.key == current_env.key %}aria-current="true"{% endif %}>
+    <span class="env-switch__title">{{ env_label(env) }}</span>
+    <span class="env-switch__meta">
+      <span class="mono">{{ env.key }}</span>
+      <span class="env-switch__count">{{ t('{count} 个目标', count=env.target_count) }}</span>
+      {% if not env.enabled %}<span class="badge badge--muted">{{ t('已停用') }}</span>{% endif %}
+    </span>
+  </a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% if current_env and not current_env.enabled %}
+<div class="alert alert--warning" role="status">
+  <span class="alert__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17v.5"/></svg>
+  </span>
+  <div class="alert__body">
+    <strong>{{ t('这个环境已停用') }}</strong>
+    <span class="alert__detail">{{ t('排查工具会拒绝使用其中的目标；需要管理员重新启用。') }}</span>
+  </div>
+</div>
+{% endif %}
+
+<div class="stats" aria-label="{{ t('概览') }}">
+  <div class="stat"><span class="stat__label">{{ t('目标总数') }}</span><span class="stat__value">{{ stats.total }}</span></div>
+  <div class="stat"><span class="stat__label">{{ t('已启用') }}</span><span class="stat__value">{{ stats.enabled }}</span></div>
+  <div class="stat{% if stats.failed %} stat--danger{% endif %}"><span class="stat__label">{{ t('最近测试失败') }}</span><span class="stat__value">{{ stats.failed }}</span></div>
+  <div class="stat{% if stats.key_issues %} stat--warning{% endif %}"><span class="stat__label">{{ t('密钥异常') }}</span><span class="stat__value">{{ stats.key_issues }}</span></div>
+</div>
+
+{% if has_targets %}
+<form class="toolbar" method="get" action="/targets" role="search">
+  <div class="toolbar__search">
+    <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('搜索名称、类型或地址') }}" aria-label="{{ t('搜索目标') }}">
+    {% if current_env %}<input type="hidden" name="env" value="{{ current_env.key }}">{% endif %}
+    {% if active_type %}<input type="hidden" name="type" value="{{ active_type }}">{% endif %}
+    <button class="btn btn--secondary" type="submit">{{ t('搜索') }}</button>
+  </div>
+  <div class="filter-chips" role="group" aria-label="{{ t('按类型筛选') }}">
+    {% for item in type_filters %}
+    <a class="chip-link{% if item.active %} is-active{% endif %}" href="{{ item.href }}"
+       {% if item.active %}aria-current="true"{% endif %}>{{ t(item.label) }}<span class="chip-link__count">{{ item.count }}</span></a>
+    {% endfor %}
+  </div>
+  {% if q or active_type %}<a class="link-reset" href="/targets{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('清除筛选') }}</a>{% endif %}
+</form>
+{% endif %}
+
+{% if not environments %}
+<section class="empty">
+  <h2>{{ t('还没有环境') }}</h2>
+  <p>{{ t('请联系管理员创建环境并登记目标。') }}</p>
+</section>
+{% elif not has_targets %}
+<section class="empty">
+  <h2>{{ t('这个环境还没有目标') }}</h2>
+  <p>{{ t('请联系管理员登记目标。') }}</p>
+</section>
+{% elif not rows %}
+<section class="empty empty--sm">
+  <h2>{{ t('没有匹配的目标') }}</h2>
+  <p>{{ t('调整搜索词或类型筛选后再试。') }}</p>
+  <a class="btn btn--secondary" href="/targets{% if current_env %}?env={{ current_env.key }}{% endif %}">{{ t('清除筛选') }}</a>
+</section>
+{% else %}
+<div class="table-card">
+  <table class="table table--responsive table--targets table--readonly">
+    <colgroup>
+      <col class="col-name">
+      <col class="col-type">
+      <col class="col-endpoint">
+      <col class="col-scope">
+      <col class="col-status">
+      <col class="col-test">
+    </colgroup>
+    <thead>
+      <tr>
+        <th scope="col">{{ t('名称') }}</th>
+        <th scope="col">{{ t('类型') }}</th>
+        <th scope="col">{{ t('端点') }}</th>
+        <th scope="col">{{ t('授权范围') }}</th>
+        <th scope="col">{{ t('状态') }}</th>
+        <th scope="col">{{ t('最近测试') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for target in rows %}
+      <tr>
+        <td data-label="{{ t('名称') }}" class="cell-name"><span class="mono">{{ target.name }}</span></td>
+        <td data-label="{{ t('类型') }}"><span class="badge badge--type">{{ t(target.type_label) }}</span></td>
+        <td data-label="{{ t('端点') }}" class="cell-endpoint"><span class="mono truncate" title="{{ target.endpoint }}">{{ t(target.endpoint) }}</span></td>
+        <td data-label="{{ t('授权范围') }}" class="cell-scope">
+          {% for group in target.scope %}
+          <div class="scope-line">
+            <span class="scope-line__label">{{ t(group.label) }}</span>
+            {% if group.unlimited %}<span class="muted">{{ t('不限') }}</span>
+            {% elif group.values %}{% for value in group.values %}<span class="scope-chip mono">{{ value }}</span>{% endfor %}
+            {% else %}<span class="muted">{{ t('未授权') }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </td>
+        <td data-label="{{ t('状态') }}">
+          <span class="badge badge--{{ 'success' if target.enabled else 'muted' }}">{{ t('已启用') if target.enabled else t('已停用') }}</span>
+        </td>
+        <td data-label="{{ t('最近测试') }}" class="cell-test">
+          <div class="test-line">
+            <span class="status status--{{ 'ok' if target.last_test_ok else ('error' if target.last_test_at_display else 'none') }}">
+              <span class="status__dot"></span>
+              <span>{{ t('成功') if target.last_test_ok else (t('失败') if target.last_test_at_display else t('未测试')) }}</span>
+            </span>
+            {% if target.last_test_at %}{{ local_time(target.last_test_at, extra='class="muted small"') }}{% endif %}
+          </div>
+          {% if target.last_test_error %}
+          <details class="details">
+            <summary>{{ t('失败详情') }}</summary>
+            <div class="details__body">
+              <p class="details__message">{{ target.last_test_message or target.last_test_error }}</p>
+              {% if target.last_test_command %}<p class="mono small">{{ target.last_test_command }}</p>{% endif %}
+            </div>
+          </details>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

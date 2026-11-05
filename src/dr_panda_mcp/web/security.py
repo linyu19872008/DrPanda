@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
 PUBLIC_PREFIXES = ("/static/",)
 _ADMIN_PREFIXES = ("/targets", "/environments", "/settings", "/users")
+# 只读页：分析员仅能 GET 这一个精确路径；/targets/new、/targets/{id}/edit 等仍为管理员专属。
+_ANALYST_READONLY_GETS = frozenset({"/targets"})
 _PASSWORD_GATE_POSTS = {"/me/password", "/logout", "/language", "/theme"}
 
 # 全局安全响应头：模板没有内联脚本/样式，脚本与网络请求只允许同源。
@@ -157,7 +159,7 @@ class AuthMiddleware:
                 response = _password_gate_response(request)
                 await response(scope, receive, send)
                 return
-            if user.role != auth.ROLE_ADMIN and _requires_admin(path):
+            if user.role != auth.ROLE_ADMIN and _requires_admin(path, request.method):
                 response = _forbidden(request)
                 await response(scope, receive, send)
                 return
@@ -282,7 +284,9 @@ async def _read_body(receive):
     return body, replay
 
 
-def _requires_admin(path: str) -> bool:
+def _requires_admin(path: str, method: str = "GET") -> bool:
+    if method in {"GET", "HEAD"} and path in _ANALYST_READONLY_GETS:
+        return False
     return path.startswith(_ADMIN_PREFIXES)
 
 

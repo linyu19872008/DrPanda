@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sqlite3
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -397,3 +397,35 @@ async def test_settings_history_keeps_old_and_new_values(runtime: Runtime) -> No
     assert latest.old_value == "32"
     assert latest.new_value == "64"
     assert latest.summary == "catalog_max_clients: 32 -> 64"
+
+
+async def test_audit_outcome_persisted_and_filterable(runtime: Runtime) -> None:
+    await runtime.store.append_audit(
+        AuditEntry(actor="admin", action="tool.call", summary="select 1", outcome="ok")
+    )
+    await runtime.store.append_audit(
+        AuditEntry(actor="admin", action="tool.call", summary="select 2", outcome="failed")
+    )
+    await runtime.store.append_audit(
+        AuditEntry(actor="admin", action="target.create", summary="created")
+    )
+
+    since = datetime(2000, 1, 1, tzinfo=UTC)
+    failed, failed_total = await runtime.store.list_audit(since=since, outcome="failed")
+    ok, ok_total = await runtime.store.list_audit(since=since, outcome="ok")
+    everything, everything_total = await runtime.store.list_audit(since=since)
+
+    assert [row.summary for row in failed] == ["select 2"]
+    assert failed_total == 1
+    assert [row.summary for row in ok] == ["select 1"]
+    assert ok_total == 1
+    assert everything_total == 3
+    assert {row.summary: row.outcome for row in everything} == {
+        "select 1": "ok",
+        "select 2": "failed",
+        "created": None,
+    }
+    assert _raw(runtime, "SELECT summary, outcome FROM audit ORDER BY id")[-1] == (
+        "created",
+        None,
+    )

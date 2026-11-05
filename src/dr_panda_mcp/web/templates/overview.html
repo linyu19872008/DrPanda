@@ -84,7 +84,7 @@
       <dl class="audit-detail__stats">
         <div><dt>{{ t('返回条数') }}</dt><dd>{{ row.detail.returned }}</dd></div>
         <div><dt>{{ t('耗时') }}</dt><dd>{{ row.detail.elapsed_ms }} ms</dd></div>
-        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}{{ t('成功') }}{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
+        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
       </dl>
       <h3>{{ t('调用') }}</h3>
       <dl class="audit-detail__fields">
@@ -134,7 +134,7 @@
         <td data-label="{{ t('时间') }}">{{ local_time(row.at) }}</td>
         <td data-label="{{ t('目标名') }}" class="mono">{{ row.target }}</td>
         <td data-label="{{ t('工具名') }}" class="mono">{{ row.tool }}</td>
-        <td data-label="{{ t('结果') }}" class="cell-fill">{% if row.known and row.ok %}{{ t('成功') }}{% elif row.error %}<span class="audit-detail__error">{{ row.error }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('结果') }}" class="cell-fill">{% if row.known and row.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% elif row.error %}<span class="audit-detail__error">{{ row.error }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>

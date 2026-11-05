@@ -81,6 +81,7 @@ class AuditEntry:
     target_name: str | None = None
     summary: str | None = None
     environment_key: str | None = None
+    outcome: str | None = None
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,7 @@ class AuditRecord:
     environment_key: str | None
     target_name: str | None
     summary: str | None
+    outcome: str | None = None
 
 
 @dataclass(frozen=True)
@@ -157,6 +159,7 @@ class ConfigStore(Protocol):
         target_name: str | None = None,
         actor: str | None = None,
         actions: tuple[str, ...] | None = None,
+        outcome: str | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AuditRecord], int]: ...

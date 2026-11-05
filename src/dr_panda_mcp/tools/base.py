@@ -290,6 +290,7 @@ async def write_tool_audit(
                 target_name=name or None,
                 summary=summary,
                 environment_key=environment_key or None,
+                outcome="failed" if error_code else "ok",
             )
         )
     except Exception:  # noqa: BLE001 - 审计写失败不影响工具结果

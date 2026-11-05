@@ -58,6 +58,48 @@ class TargetView:
 
 
 @dataclass(frozen=True)
+class ScopeDetail:
+    """一个授权范围分组的细粒度展示（用于只读目标目录）。"""
+
+    label: str
+    values: tuple[str, ...] = ()
+    unlimited: bool = False
+
+
+_SCOPE_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
+    "mysql": (("allowed_dbs", "允许的库"),),
+    "mongo": (("allowed_dbs", "允许的库"),),
+    "elasticsearch": (("allowed_indices", "允许的索引"),),
+    "gitlab": (("allowed_projects", "允许的项目"),),
+    "rabbitmq": (("allowed_vhosts", "允许的 vhost"),),
+    "kafka": (("allowed_topics", "允许的 topic"),),
+    "cls": (("allowed_topics", "允许的日志主题"),),
+}
+
+
+def scope_details(target: Target) -> list[ScopeDetail]:
+    """把授权范围拆成「标签 + 具体值」，只读目录用（不返回任何密钥）。"""
+    details: list[ScopeDetail] = []
+    if target.type == "redis":
+        prefix = str(target.options.get("key_prefix") or "").strip()
+        details.append(
+            ScopeDetail("key 前缀", (prefix,) if prefix else (), unlimited=not prefix)
+        )
+        return details
+    for key, label in _SCOPE_FIELDS.get(target.type, ()):
+        raw = target.options.get(key)
+        if isinstance(raw, (list, tuple)):
+            values = tuple(str(item).strip() for item in raw if str(item).strip())
+        elif raw is None:
+            values = ()
+        else:
+            text = str(raw).strip()
+            values = (text,) if text else ()
+        details.append(ScopeDetail(label, values))
+    return details
+
+
+@dataclass(frozen=True)
 class Stats:
     total: int = 0
     enabled: int = 0

@@ -102,6 +102,9 @@ class AuditRow(Base):
     environment_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     target_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     summary: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # 结构化结果：ok / failed；只有 tool.call、target.test 等有成败语义的动作会写，
+    # 旧行为 NULL，由 0010 迁移按 summary 回填。
+    outcome: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
 
 class SettingRow(Base):

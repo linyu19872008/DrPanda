@@ -75,13 +75,49 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         )
         current = _current_environment(environments, requested)
         env_key = current.key if current is not None else ""
-        all_views = views.list_views(await store.list_all())
+        targets = await store.list_all()
+        all_views = views.list_views(targets)
         env_views = views.filter_views(all_views, environment=env_key or None)
         q = request.query_params.get("q", "").strip()
         type_ = request.query_params.get("type", "").strip() or None
         if type_ is not None and type_ not in forms.TYPE_SPECS:
             type_ = None
         rows = views.filter_views(env_views, q=q, type_=type_)
+        user = auth.current_user()
+        if user is not None and user.role != auth.ROLE_ADMIN:
+            # 分析员只读：不走管理页模板，只渲染白名单字段与只读动作。
+            by_id = {item.id: item for item in targets}
+            role_rows = [
+                {
+                    "name": view.name,
+                    "type": view.type,
+                    "type_label": view.type_label,
+                    "endpoint": view.endpoint,
+                    "enabled": view.enabled,
+                    "scope": views.scope_details(by_id[view.id]),
+                    "last_test_at": view.last_test_at,
+                    "last_test_at_display": view.last_test_at_display,
+                    "last_test_ok": view.last_test_ok,
+                    "last_test_error": view.last_test_error,
+                    "last_test_message": view.last_test_message,
+                    "last_test_command": view.last_test_command,
+                    "environment_key": view.environment_key,
+                }
+                for view in rows
+            ]
+            return render.render(
+                "targets_readonly.html",
+                request=request,
+                rows=role_rows,
+                stats=views.stats(env_views),
+                q=q,
+                active_type=type_,
+                type_filters=_type_filters(q, type_, env_views, env_key),
+                has_targets=bool(env_views),
+                environments=environments,
+                current_env=current,
+                status_code=status,
+            )
         return render.render(
             "index.html",
             request=request,

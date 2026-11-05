@@ -28,6 +28,11 @@
     <option value="{{ item.key }}"{% if env == item.key %} selected{% endif %}>{% if item.key == 'default' and item.title == '默认' %}{{ t('默认') }}{% else %}{{ item.title }}{% endif %} · {{ item.key }}</option>
     {% endfor %}
   </select>
+  <select class="input input--compact" name="outcome" aria-label="{{ t('结果') }}">
+    <option value="">{{ t('全部结果') }}</option>
+    <option value="ok"{% if outcome == 'ok' %} selected{% endif %}>{{ t('成功') }}</option>
+    <option value="failed"{% if outcome == 'failed' %} selected{% endif %}>{{ t('失败') }}</option>
+  </select>
   <div class="toolbar__search">
     <input class="input" type="search" name="q" value="{{ q }}" placeholder="{{ t('对象名') }}" aria-label="{{ t('对象名') }}" autocomplete="off">
     <button class="btn btn--secondary" type="submit">{{ t('筛选') }}</button>
@@ -46,6 +51,7 @@
         <th scope="col">{{ t('动作') }}</th>
         <th scope="col">{{ t('所在环境') }}</th>
         <th scope="col">{{ t('对象') }}</th>
+        <th scope="col">{{ t('结果') }}</th>
         <th scope="col">{{ t('摘要') }}</th>
       </tr>
     </thead>
@@ -62,6 +68,11 @@
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
         <td data-label="{{ t('对象') }}">{% if row.target_name %}<span class="mono">{{ row.target_name }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-label="{{ t('结果') }}" class="cell-result">
+          {% if row.result == 'ok' %}<span class="audit-detail__ok">{{ t('成功') }}</span>
+          {% elif row.result == 'failed' %}<span class="audit-detail__error"{% if row.result_error %} title="{{ row.result_error }}"{% endif %}>{{ t('失败') }}</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
         <td data-label="{{ t('摘要') }}" class="cell-summary cell-fill">
           {% if row.summary %}
           <button class="summary-preview" type="button" data-dialog-open="audit-summary-{{ loop.index }}">
@@ -97,7 +108,7 @@
       <dl class="audit-detail__stats">
         <div><dt>{{ t('返回条数') }}</dt><dd>{{ row.detail.returned }}</dd></div>
         <div><dt>{{ t('耗时') }}</dt><dd>{{ row.detail.elapsed_ms }} ms</dd></div>
-        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}{{ t('成功') }}{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
+        <div><dt>{{ t('结果') }}</dt><dd>{% if row.detail.ok %}<span class="audit-detail__ok">{{ t('成功') }}</span>{% else %}<span class="audit-detail__error">{{ row.detail.error }}</span>{% endif %}</dd></div>
       </dl>
       <h3>{{ t('调用') }}</h3>
       <dl class="audit-detail__fields">

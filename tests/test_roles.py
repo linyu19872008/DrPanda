@@ -53,14 +53,31 @@ async def _login(client: httpx.AsyncClient, username: str, password: str) -> htt
 
 async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
     runtime, app = await _admin_app(tmp_path)
-    await runtime.store.create(
+    created_target = await runtime.store.create(
         TargetDraft(
             name="mysql-target",
             type="mysql",
             enabled=True,
-            options={"host": "10.1.1.1", "user": "root"},
+            options={
+                "host": "10.1.1.1",
+                "user": "root",
+                "default_db": "live",
+                "allowed_dbs": ["live", "logs"],
+            },
             secret_patch=SecretPatch(set={"password": SECRET}),
             environment_key="default",
+        ),
+        "admin",
+    )
+    await runtime.store.create_environment("legacy", "旧环境", "admin", enabled=False)
+    await runtime.store.create(
+        TargetDraft(
+            name="legacy-mysql",
+            type="mysql",
+            enabled=False,
+            options={"host": "10.9.9.9", "allowed_dbs": ["old"]},
+            secret_patch=SecretPatch(set={"password": SECRET}),
+            environment_key="legacy",
         ),
         "admin",
     )
@@ -150,19 +167,67 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             page = await client.get("/")
             assert "可查询的目标" in page.text
             assert "需要处理" not in page.text
-            assert 'href="/targets"' not in page.text
+            assert 'href="/targets"' in page.text
+            assert 'href="/environments"' not in page.text
             assert "系统配置" not in page.text
             assert SECRET not in page.text
 
-            denied = await client.get("/targets")
-            assert denied.status_code == 403
-            assert "没有权限" in denied.text
-            assert SECRET not in denied.text
-            assert "10.1.1.1" not in denied.text
-            for path in ("/settings", "/users", "/environments"):
+            readonly = await client.get("/targets")
+            assert readonly.status_code == 200
+            assert "mysql-target" in readonly.text
+            assert "10.1.1.1" in readonly.text
+            assert "允许的库" in readonly.text
+            assert "live" in readonly.text
+            assert "logs" in readonly.text
+            assert "只读" in readonly.text
+            assert SECRET not in readonly.text
+            for marker in (
+                "管理环境",
+                "新建目标",
+                "新建环境",
+                "编辑",
+                "删除目标",
+                "安装客户端",
+                "data-row-action",
+            ):
+                assert marker not in readonly.text, marker
+            for href in ("/targets/new", "/targets/1/edit", "/targets/1/delete"):
+                assert href not in readonly.text
+
+            legacy_env = await client.get("/targets", params={"env": "legacy"})
+            assert legacy_env.status_code == 200
+            assert "legacy-mysql" in legacy_env.text
+            assert "10.9.9.9" in legacy_env.text
+            assert "已停用" in legacy_env.text
+
+            for path in (
+                "/targets/new",
+                f"/targets/{created_target.id}/edit",
+                f"/targets/{created_target.id}/delete",
+                "/settings",
+                "/users",
+                "/environments",
+            ):
                 response = await client.get(path)
-                assert response.status_code == 403
+                assert response.status_code == 403, path
+                assert "没有权限" in response.text
                 assert SECRET not in response.text
+
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            for path in (
+                "/targets",
+                f"/targets/{created_target.id}/toggle",
+                f"/targets/{created_target.id}/test",
+                f"/targets/{created_target.id}/delete",
+                f"/targets/{created_target.id}/install-client",
+            ):
+                response = await client.post(path, data={"_csrf": csrf})
+                assert response.status_code == 403, path
+            json_denied = await client.post(
+                "/targets", data={"_csrf": csrf}, headers={"Accept": "application/json"}
+            )
+            assert json_denied.status_code == 403
+            assert json_denied.json()["code"] == "FORBIDDEN"
 
             audit = await client.get("/audit")
             assert 'value="tool.call" selected' in audit.text

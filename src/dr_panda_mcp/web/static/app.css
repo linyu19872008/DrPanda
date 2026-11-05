@@ -949,6 +949,13 @@ ul {
   }
 }
 
+/* 目标只读页（分析员）：授权范围要给细粒度值，列宽比管理页宽一些。 */
+.table--readonly .col-scope { width: 26%; }
+
+.scope-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin: 2px 0; }
+.scope-line__label { color: var(--text-muted); font-size: 12px; }
+.scope-chip { padding: 1px 6px; border-radius: var(--radius-pill); background: var(--surface-subtle); font-size: 12px; }
+
 .link-strong {
   color: var(--text);
   font-weight: 600;
@@ -1225,6 +1232,10 @@ ul {
     min-width: 12rem;
     white-space: normal;
   }
+
+  /* 审计表 8 列：结果列定宽，摘要列让出空间，避免窄视口裁切。 */
+  .table--audit .cell-result { width: 76px; }
+  .table--audit .cell-fill { min-width: 10rem; }
 }
 
 .summary-preview {
@@ -2837,6 +2848,8 @@ dialog.modal .modal__panel {
 
 .audit-detail__stats dd { margin: 2px 0 0; font-weight: 600; }
 
+.audit-detail__ok { color: var(--success); }
+
 .audit-detail__error { color: var(--danger); }
 
 .audit-detail h3 { margin: var(--space-4) 0 var(--space-2); font-size: 13px; }
@@ -2881,14 +2894,7 @@ dialog.modal .modal__panel {
   word-break: normal;
 }
 
-.audit-code + .audit-detail__fields,
-.audit-detail__limit + .audit-detail__fields { margin-top: var(--space-3); }
-
-.audit-detail__limit {
-  margin: var(--space-2) 0 0;
-  color: var(--text-muted);
-  font-size: 13px;
-}
+.audit-code + .audit-detail__fields { margin-top: var(--space-3); }
 
 .audit-detail__note { margin: var(--space-2) 0 0; }
 

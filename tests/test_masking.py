@@ -73,7 +73,7 @@ def test_ordinary_sql_is_stored_whole() -> None:
     assert len(summary) <= 1024
     assert "params_truncated" not in summary
     assert detail["params_sql"] == sql
-    assert detail["params_limit"] == "20"
+    assert ("limit", "20") in detail["params_fields"]
     assert detail["params_truncated"] is False
 
 
@@ -103,7 +103,6 @@ def test_huge_sql_is_cut_on_a_space_and_stays_redacted() -> None:
     assert secret not in summary
     assert detail["kind"] == "tool"
     assert detail["params_truncated"] is True
-    assert detail["params_limit"] == "20"
+    assert ("limit", "20") in detail["params_fields"]
     assert detail["params_sql"].startswith("SELECT '***'")
     assert sql.replace(secret, "***").startswith(detail["params_sql"])
-    assert detail["params_fields"] == []

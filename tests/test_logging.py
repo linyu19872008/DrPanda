@@ -124,7 +124,7 @@ def test_summary_carries_the_request_id() -> None:
     assert summary.endswith("request=ab12cd34")
     assert detail["request"] == "ab12cd34"
     assert detail["params_sql"] == "SELECT 1"
-    assert detail["params_limit"] == "20"
+    assert ("limit", "20") in detail["params_fields"]
 
 
 async def test_written_audit_uses_the_active_request_id(runtime: Runtime, caplog) -> None:
