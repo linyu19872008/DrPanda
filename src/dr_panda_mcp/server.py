@@ -107,24 +107,17 @@ def create_app(
             server,
             runtime,
             key,
-            secure_cookies=bool(config.public_url and config.public_url.startswith("https://")),
+            cookie_secure=config.cookie_secure,
         )
         register_profile_routes(server, runtime, config)
-    allowed_hosts = None
-    allowed_origins = None
-    if config.public_url:
-        from urllib.parse import urlsplit
-
-        parsed = urlsplit(config.public_url)
-        if parsed.netloc:
-            allowed_hosts = [parsed.netloc]
-            allowed_origins = [f"{parsed.scheme}://{parsed.netloc}"]
+    # PUBLIC_URL 只用于展示，不再参与 Host/Origin 白名单。
+    # 需要显式白名单时由 DR_PANDA_TRUSTED_HOSTS 提供（逗号分隔）。
+    allowed_hosts = list(config.trusted_hosts) or None
     app = server.http_app(
         path="/mcp",
         transport="http",
         host_origin_protection=True,
         allowed_hosts=allowed_hosts,
-        allowed_origins=allowed_origins,
     )
     if not auth_required:
         return RequestLogMiddleware(SecurityHeadersMiddleware(app))
@@ -137,6 +130,7 @@ def create_app(
                         runtime=runtime,
                         session_key=key or b"",
                         auth_required=True,
+                        cookie_secure=config.cookie_secure,
                     )
                 )
             )

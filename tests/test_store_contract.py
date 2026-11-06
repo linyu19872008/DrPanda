@@ -258,10 +258,56 @@ async def test_settings_defaults(runtime: Runtime) -> None:
         "catalog_max_clients": "32",
         "backup_keep_count": "20",
         "session_ttl_minutes": "720",
+        "login_max_attempts": "5",
+        "login_lockout_minutes": "5",
+        "mcp_token_max_per_user": "5",
+        "mcp_token_ttl_days": "0",
+        "global_max_concurrent_calls": "0",
+        "catalog_idle_seconds": "0",
+        "audit_cleanup_batch_size": "1000",
+        "audit_cleanup_max_seconds": "300",
     }
     assert await settings.load(runtime.store) == Settings(
         audit_retention_days=90, target_max_concurrency=10
     )
+
+
+async def test_settings_noop_update_writes_no_history_or_audit(
+    runtime: Runtime,
+) -> None:
+    audit_before = _raw(runtime, "SELECT COUNT(*) FROM audit")[0][0]
+    history_before = _raw(runtime, "SELECT COUNT(*) FROM settings_history")[0][0]
+
+    await settings.update(
+        runtime.store, {"audit_retention_days": "90"}, "anonymous"
+    )
+
+    assert _raw(runtime, "SELECT COUNT(*) FROM audit")[0][0] == audit_before
+    assert (
+        _raw(runtime, "SELECT COUNT(*) FROM settings_history")[0][0]
+        == history_before
+    )
+
+
+async def test_settings_partial_patch_records_only_changed_keys(
+    runtime: Runtime,
+) -> None:
+    await settings.update(
+        runtime.store,
+        {"audit_retention_days": "30", "target_max_concurrency": "10"},
+        "anonymous",
+    )
+
+    rows = _raw(
+        runtime,
+        "SELECT key, old_value, new_value FROM settings_history ORDER BY id",
+    )
+    assert rows == [("audit_retention_days", "90", "30")]
+    summary = _raw(
+        runtime, "SELECT summary FROM audit WHERE action = 'settings.update'"
+    )[0][0]
+    assert "audit_retention_days: 90 -> 30" in summary
+    assert "target_max_concurrency" not in summary
 
 
 async def test_settings_update_is_audited(runtime: Runtime) -> None:
@@ -305,6 +351,14 @@ async def test_settings_invalid_rejected_without_side_effects(
         "catalog_max_clients": "32",
         "backup_keep_count": "20",
         "session_ttl_minutes": "720",
+        "login_max_attempts": "5",
+        "login_lockout_minutes": "5",
+        "mcp_token_max_per_user": "5",
+        "mcp_token_ttl_days": "0",
+        "global_max_concurrent_calls": "0",
+        "catalog_idle_seconds": "0",
+        "audit_cleanup_batch_size": "1000",
+        "audit_cleanup_max_seconds": "300",
     }
     assert _raw(runtime, "SELECT COUNT(*) FROM audit")[0][0] == audit_before
 

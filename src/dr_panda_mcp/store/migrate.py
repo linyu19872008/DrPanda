@@ -114,7 +114,7 @@ async def _configured_backup_keep(engine: AsyncEngine) -> int:
             value = int(str(row[0]))
         except Exception:  # noqa: BLE001 - 表不存在或值损坏时使用默认值
             return BACKUP_KEEP
-        return min(max(value, 1), 20)
+        return min(max(value, 1), 100)
 
     async with engine.connect() as connection:
         return await connection.run_sync(read)

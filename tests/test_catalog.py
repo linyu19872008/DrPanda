@@ -165,6 +165,94 @@ async def test_close_releases_clients() -> None:
     assert connector.closed == 1
 
 
+async def test_global_concurrency_limit_from_settings() -> None:
+    targets = [
+        make_target(target_id=i, name=f"mysql-{i}") for i in range(1, 4)
+    ]
+    store = FakeStore(targets)
+
+    async def loader(_store) -> Settings:
+        return Settings(
+            audit_retention_days=90,
+            target_max_concurrency=10,
+            global_max_concurrent_calls=2,
+        )
+
+    catalog = Catalog(store, settings_loader=loader)
+    connector = FakeConnector(delay=0.03)
+    try:
+        await asyncio.gather(
+            *[
+                catalog.test_connection(target.name, connector)
+                for target in targets
+                for _ in range(3)
+            ]
+        )
+    finally:
+        await catalog.close()
+
+    assert connector.max_active <= 2
+
+
+async def test_idle_clients_are_evicted(monkeypatch: pytest.MonkeyPatch) -> None:
+    targets = [
+        make_target(target_id=1, name="mysql-1"),
+        make_target(target_id=2, name="mysql-2"),
+    ]
+    store = FakeStore(targets)
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(
+        "dr_panda_mcp.catalog.time.monotonic", lambda: clock["now"]
+    )
+
+    async def loader(_store) -> Settings:
+        return Settings(
+            audit_retention_days=90,
+            target_max_concurrency=10,
+            catalog_idle_seconds=10,
+        )
+
+    catalog = Catalog(store, settings_loader=loader)
+    connector = FakeConnector()
+    try:
+        await catalog.client(targets[0], connector)
+        clock["now"] += 11
+        await catalog.client(targets[1], connector)
+        assert len(catalog._pool) == 1
+        assert connector.closed == 1
+    finally:
+        await catalog.close()
+
+
+async def test_catalog_evicts_on_cache_hit_when_limit_shrinks() -> None:
+    targets = [
+        make_target(target_id=i, name=f"mysql-{i}") for i in range(1, 7)
+    ]
+    store = FakeStore(targets)
+    current = {"limit": 6}
+
+    async def loader(_store) -> Settings:
+        return Settings(
+            audit_retention_days=90,
+            target_max_concurrency=10,
+            catalog_max_clients=current["limit"],
+        )
+
+    catalog = Catalog(store, settings_loader=loader)
+    connector = FakeConnector()
+    try:
+        for target in targets:
+            await catalog.client(target, connector)
+        assert len(catalog._pool) == 6
+
+        current["limit"] = 4
+        # 命中缓存也要按新上限淘汰，而不是等下一次 cache miss。
+        await catalog.client(targets[0], connector)
+        assert len(catalog._pool) == 4
+    finally:
+        await catalog.close()
+
+
 async def test_catalog_evicts_by_configured_client_limit() -> None:
     targets = [
         make_target(target_id=i, name=f"mysql-{i}") for i in range(1, 6)

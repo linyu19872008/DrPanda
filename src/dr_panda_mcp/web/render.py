@@ -115,7 +115,8 @@ def _slide_auth_cookies(
     if request is None:
         return
     ttl = int(getattr(request.state, "session_ttl_seconds", 720 * 60) or 720 * 60)
-    secure = request.url.scheme == "https"
+    policy = getattr(request.state, "cookie_secure_policy", "auto")
+    secure = auth.cookie_secure_required(policy, request.url.scheme)
     csrf = request.cookies.get(auth.CSRF_COOKIE) or csrf_token
     if csrf:
         response.set_cookie(

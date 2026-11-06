@@ -15,19 +15,23 @@ from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.web import async_api, render, theme
 
 _FAILED_LOGINS: dict[str, list[float]] = {}
-_LOGIN_WINDOW = 300
-_LOGIN_LIMIT = 5
 
 
 def _client_key(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _login_limited(request: Request) -> bool:
+def _login_limited(
+    request: Request, *, max_attempts: int, window_seconds: float
+) -> bool:
     now = time.monotonic()
-    recent = [stamp for stamp in _FAILED_LOGINS.get(_client_key(request), []) if now - stamp < _LOGIN_WINDOW]
+    recent = [
+        stamp
+        for stamp in _FAILED_LOGINS.get(_client_key(request), [])
+        if now - stamp < window_seconds
+    ]
     _FAILED_LOGINS[_client_key(request)] = recent
-    return len(recent) >= _LOGIN_LIMIT
+    return len(recent) >= max_attempts
 
 
 def _record_login_failure(request: Request) -> None:
@@ -51,7 +55,7 @@ def register_auth_routes(
     runtime: Runtime,
     session_key: bytes,
     *,
-    secure_cookies: bool = False,
+    cookie_secure: str = "auto",
 ) -> None:
     @server.custom_route("/login", methods=["GET"])
     async def login_page(request: Request) -> HTMLResponse:
@@ -92,8 +96,16 @@ def register_auth_routes(
         if not cookie or not token or not hmac.compare_digest(cookie, token):
             return _login_error("请求已过期，请重试", 403)
 
-        if _login_limited(request):
-            return _login_error("登录尝试次数过多，请稍后再试", 429)
+        current = await settings_module.load(runtime.store)
+        lockout_minutes = current.login_lockout_minutes
+        if _login_limited(
+            request,
+            max_attempts=current.login_max_attempts,
+            window_seconds=lockout_minutes * 60,
+        ):
+            return _login_error(
+                f"登录尝试次数过多，请 {lockout_minutes} 分钟后再试", 429
+            )
 
         username = str(form.get("username", "")).strip()
         password = str(form.get("password", ""))
@@ -103,7 +115,6 @@ def register_auth_routes(
             return _login_error("用户名或密码错误", 401)
 
         _clear_login_failures(request)
-        current = await settings_module.load(runtime.store)
         session = auth.create_session(user, session_key, current.session_ttl_minutes * 60)
         await auth.set_last_login(runtime.session_factory, user.id)
         landing = "/me?tab=password" if user.must_change_password else next_path
@@ -120,7 +131,7 @@ def register_auth_routes(
             path="/",
             httponly=True,
             samesite="lax",
-            secure=secure_cookies or request.url.scheme == "https",
+            secure=auth.cookie_secure_required(cookie_secure, request.url.scheme),
         )
         return response
 

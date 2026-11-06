@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -8,12 +9,13 @@ from httpx import ASGITransport
 from sqlalchemy import select
 
 from dr_panda_mcp import auth
+from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.config import Config
 from dr_panda_mcp.install import load_install_state, save_install_state
 from dr_panda_mcp.runtime import Runtime, create_runtime
 from dr_panda_mcp.server import create_app
 from dr_panda_mcp.setup import SetupApp
-from dr_panda_mcp.store.models import AuditRow, UserRow
+from dr_panda_mcp.store.models import AuditRow, McpTokenRow, UserRow
 from dr_panda_mcp.store.protocol import TargetDraft
 
 BASE = "http://127.0.0.1"
@@ -260,6 +262,77 @@ async def test_mcp_token_lookup(tmp_path: Path) -> None:
         await runtime.close()
 
 
+async def test_token_limit_from_settings(tmp_path: Path) -> None:
+    runtime, cfg, key, _token = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        await settings_module.update(
+            runtime.store, {"mcp_token_max_per_user": "1"}, "anonymous"
+        )
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url=BASE
+        ) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+                follow_redirects=False,
+            )
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            response = await client.post(
+                "/me/tokens", data={"_csrf": csrf, "name": "second"}
+            )
+        assert response.status_code == 400
+        assert "最多保留 1 个 Token" in response.text
+    finally:
+        await runtime.close()
+
+
+async def test_mcp_token_ttl_from_settings(tmp_path: Path) -> None:
+    runtime, cfg, key, token = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    inner = app
+    while not hasattr(inner, "router") and hasattr(inner, "app"):
+        inner = inner.app
+    try:
+        await settings_module.update(
+            runtime.store, {"mcp_token_ttl_days": "1"}, "anonymous"
+        )
+        async with runtime.session_factory() as session, session.begin():
+            row = await session.scalar(select(McpTokenRow))
+            assert row is not None
+            row.created_at = datetime.now(UTC) - timedelta(days=2)
+
+        async with (
+            inner.router.lifespan_context(inner),
+            httpx.AsyncClient(
+                transport=ASGITransport(app=app), base_url=BASE
+            ) as client,
+        ):
+            response = await client.post(
+                "/mcp",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1"},
+                    },
+                },
+            )
+        assert response.status_code == 401
+    finally:
+        await runtime.close()
+
+
 async def test_install_state_is_encrypted(tmp_path: Path) -> None:
     cfg = _config(tmp_path)
     save_install_state(
@@ -400,7 +473,7 @@ async def test_my_page_tokens_and_password_change(tmp_path: Path) -> None:
 
             me = await client.get("/me")
             assert me.status_code == 200
-            assert "http://127.0.0.1:8111/mcp" in me.text
+            assert "http://127.0.0.1/mcp" in me.text
             assert old_token[:12] in me.text
             assert old_token not in me.text
 

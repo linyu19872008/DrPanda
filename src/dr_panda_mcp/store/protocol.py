@@ -122,6 +122,14 @@ class Settings:
     catalog_max_clients: int = 32
     backup_keep_count: int = 20
     session_ttl_minutes: int = 720
+    login_max_attempts: int = 5
+    login_lockout_minutes: int = 5
+    mcp_token_max_per_user: int = 5
+    mcp_token_ttl_days: int = 0
+    global_max_concurrent_calls: int = 0
+    catalog_idle_seconds: int = 0
+    audit_cleanup_batch_size: int = 1000
+    audit_cleanup_max_seconds: int = 300
 
 
 @runtime_checkable

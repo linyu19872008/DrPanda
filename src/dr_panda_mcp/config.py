@@ -25,6 +25,7 @@ DEFAULT_DATA_DIR = "data"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+COOKIE_SECURE_POLICIES = frozenset({"auto", "always", "never"})
 
 
 @dataclass(frozen=True)
@@ -39,8 +40,9 @@ class Config:
     install_file: Path = Path("data/install.json")
     install_key_file: Path = Path("data/install.key")
     session_key_file: Path = Path("data/session.key")
-    allow_remote: bool = False
     public_url: str | None = None
+    cookie_secure: str = "auto"
+    trusted_hosts: tuple[str, ...] = ()
 
 
 def load_config(environ: Mapping[str, str] | None = None) -> Config:
@@ -60,13 +62,18 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
 
     secret_key_b64 = _parse_secret_key(env.get("DR_PANDA_SECRET_KEY"))
 
-    allow_remote = env.get("DR_PANDA_ALLOW_REMOTE", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
     public_url = env.get("DR_PANDA_PUBLIC_URL", "").strip() or None
+    cookie_secure = env.get("DR_PANDA_COOKIE_SECURE", "auto").strip().lower()
+    if cookie_secure not in COOKIE_SECURE_POLICIES:
+        raise ConfigError(
+            "DR_PANDA_COOKIE_SECURE 必须是 auto/always/never 之一，"
+            f"当前：{cookie_secure or '(空)'}"
+        )
+    trusted_hosts = tuple(
+        part.strip()
+        for part in env.get("DR_PANDA_TRUSTED_HOSTS", "").split(",")
+        if part.strip()
+    )
 
     log_level = env.get("DR_PANDA_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
     if log_level not in LOG_LEVELS:
@@ -80,8 +87,9 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
         database_url=database_url,
         secret_key_b64=secret_key_b64,
         log_level=log_level,
-        allow_remote=allow_remote,
         public_url=public_url,
+        cookie_secure=cookie_secure,
+        trusted_hosts=trusted_hosts,
     )
 
 

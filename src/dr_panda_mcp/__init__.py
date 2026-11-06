@@ -48,13 +48,12 @@ def main() -> int:
 
 async def _run(config: Config) -> int:
     if not is_loopback_host(config.host):
-        if not config.allow_remote:
-            raise StartupError(
-                "当前只允许监听 127.0.0.1 / ::1 / localhost；"
-                "远程访问需显式设置 DR_PANDA_ALLOW_REMOTE=1、HTTPS 反向代理和 DR_PANDA_PUBLIC_URL"
+        logger.warning(
+            format_event(
+                "app.warning",
+                "服务监听非 loopback 地址；请确保网络可信，并建议通过 HTTPS 反向代理访问",
             )
-        if not config.public_url or not config.public_url.startswith("https://"):
-            raise StartupError("远程访问必须配置 HTTPS 的 DR_PANDA_PUBLIC_URL")
+        )
     check_port_available(config.host, config.port)
     install_state = load_install_state(config.install_file, config.install_key_file)
     if install_state is None and not is_loopback_host(config.host):

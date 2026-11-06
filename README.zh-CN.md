@@ -1,3 +1,16 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/jacklin_zjut/dr-panda-mcp/master/docs/assets/logo.png" width="96" alt="DrPanda MCP">
+</p>
+
+<p align="center">
+  <a href="https://github.com/jacklin_zjut/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jacklin_zjut/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
+</p>
+
+<p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
+
 # DrPanda MCP
 
 面向线上故障排查的**只读 MCP 服务**。
@@ -6,7 +19,7 @@
 
 **模型不能自行传入主机、账号或密码。**
 
-![配置台](docs/verify/assets/ui/light-index.png)
+![配置台](https://raw.githubusercontent.com/jacklin_zjut/dr-panda-mcp/master/docs/verify/assets/ui/light-index.png)
 
 ---
 
@@ -36,7 +49,7 @@ M0–M7 已落地并通过测试：
 | M7 | 首次安装、登录、多 Token、审计到人 | 完成 |
 
 - 工具总数：**28**
-- 当前测试：**465 passed**，`ruff check .` 通过
+- 质量门禁：GitHub Actions（pytest / ruff / 文档链接检查），状态见顶部 CI 徽标
 - 默认监听：`127.0.0.1:8111`
 - 首次安装支持 SQLite / MySQL / PostgreSQL 配置库
 - 前端采用服务端渲染；配置台交互需要 JavaScript，认证与校验仍只在服务端执行
@@ -57,12 +70,27 @@ M0–M7 已落地并通过测试：
 - [uv](https://docs.astral.sh/uv/)
 - 首次启动默认使用 SQLite，无需额外数据库
 
+从源码运行（推荐参与开发）：
+
 ```bash
-git clone <repo-url>
+git clone https://github.com/jacklin_zjut/dr-panda-mcp.git
 cd dr-panda-mcp
 uv sync
-uv run dr-panda-mcp
+cp .env.example .env   # 可选；不建则使用环境变量与默认值
+uv run dr-panda-mcp    # 自动加载当前目录 ./.env
 ```
+
+或从 PyPI 安装为命令行工具（首次发布后可用）：
+
+```bash
+uv tool install dr-panda-mcp
+# 需要 MySQL/PostgreSQL 配置库时：
+# uv tool install 'dr-panda-mcp[mysql]'
+# uv tool install 'dr-panda-mcp[postgres]'
+dr-panda-mcp
+```
+
+PyPI 安装会在当前工作目录使用 `data/`，建议在专用目录启动。
 
 浏览器打开：
 
@@ -83,7 +111,7 @@ http://127.0.0.1:8111/
 
 ```bash
 curl -fsS http://127.0.0.1:8111/healthz
-# {"ok":true,"version":"0.1.0","db":"ok"}
+# {"ok":true,"version":"1.0.0","db":"ok"}
 ```
 
 ### 可选依赖
@@ -232,7 +260,7 @@ mcp__drpanda__systems_status
 - 表单：CSRF 双提交校验；
 - `/mcp`：独立 Bearer Token，只存 SHA-256 哈希；
 - Host/Origin 校验：拒绝异常 Origin；
-- 非 loopback 监听必须显式设置 `DR_PANDA_ALLOW_REMOTE=1` 和 HTTPS `DR_PANDA_PUBLIC_URL`；
+- 默认只监听 loopback；改为 `0.0.0.0` 或指定网卡 IP 即对外监听，建议通过 HTTPS 反向代理访问；
 - 配置库变更写审计，审计 actor 为真实管理员。
 
 ### 前端
@@ -251,7 +279,7 @@ mcp__drpanda__systems_status
 
 ## 系统配置
 
-登录后进入 `/settings` 修改。配置存在配置库中，带范围校验，修改即写审计和 `settings_history`。
+登录后进入 `/settings` 修改。配置存在配置库中，带范围校验；只把实际变化的配置项写审计和 `settings_history`。
 
 | 配置键 | 默认 | 范围 | 说明 |
 |---|---:|---:|---|
@@ -259,11 +287,19 @@ mcp__drpanda__systems_status
 | `default_target_max_rows` | 100 行 | 1–1000 | 新建目标默认行数 |
 | `default_target_max_bytes` | 102400 字节 | 4096–1048576 | 新建目标默认字节上限 |
 | `target_max_concurrency` | 10 | 1–50 | 每 target 并发上限 |
+| `global_max_concurrent_calls` | 0 | 0–200 | 进程内全局并发上限（0=不限） |
 | `audit_retention_days` | 90 天 | 1–3650 | 审计保留期 |
 | `audit_cleanup_interval_minutes` | 60 | 5–1440 | 审计清理间隔 |
+| `audit_cleanup_batch_size` | 1000 | 100–5000 | 审计清理每批条数 |
+| `audit_cleanup_max_seconds` | 300 | 10–3600 | 单轮清理最长秒数 |
 | `catalog_max_clients` | 32 | 4–128 | 进程内连接器缓存上限 |
+| `catalog_idle_seconds` | 0 | 0–3600 | 连接器空闲回收秒数（0=不回收） |
 | `session_ttl_minutes` | 720 | 30–10080 | 网页 Session 有效期（分钟） |
-| `backup_keep_count` | 20 | 1–20 | SQLite 迁移前备份保留数量 |
+| `login_max_attempts` | 5 | 1–50 | 同一来源 IP 的登录失败次数上限 |
+| `login_lockout_minutes` | 5 | 1–1440 | 达到上限后的拒绝时长（分钟） |
+| `mcp_token_max_per_user` | 5 | 1–50 | 每个账号最多保留的 Token 数量 |
+| `mcp_token_ttl_days` | 0 | 0–3650 | Token 有效期（天，0 表示不过期） |
+| `backup_keep_count` | 20 | 1–100 | SQLite 迁移前备份保留数量 |
 
 系统配置只能调整运行策略，**不能放宽只读规则、危险规则、密钥管理或目标范围**。
 
@@ -275,17 +311,37 @@ mcp__drpanda__systems_status
 |---|---|---|
 | `DR_PANDA_HOST` | `127.0.0.1` | 监听地址 |
 | `DR_PANDA_PORT` | `8111` | 网页与 `/mcp` 共用端口 |
-| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库 URL；安装完成后以 `install.json` 为准 |
+| `DR_PANDA_DATABASE_URL` | 未使用 | 当前版本不参与实际建库：配置库由首次安装向导选择，之后以 `data/install.json` 为准；设置后仅做启动校验，不建议配置 |
 | `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥；未设置时使用 `data/secret.key` |
 | `DR_PANDA_LOG_LEVEL` | `INFO` | 日志级别 |
-| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听 |
-| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
+| `DR_PANDA_PUBLIC_URL` | 未设置 | 仅用于展示的访问地址（MCP 地址/页面显示），不参与安全判断 |
+| `DR_PANDA_COOKIE_SECURE` | `auto` | Cookie Secure 策略：auto（按请求 scheme）/ always / never |
+| `DR_PANDA_TRUSTED_HOSTS` | 未设置 | `/mcp` Host 白名单（逗号分隔），不设则按 FastMCP 默认策略 |
+
+仓库根目录提供 [`.env.example`](.env.example)，默认值以注释形式给出；本地不配置任何变量即可启动。
+
+服务启动时会**自动加载当前工作目录的 `./.env`**；文件不存在时直接使用环境变量与代码默认值。需要覆盖时：
+
+```bash
+cp .env.example .env
+# 按需修改 .env（.env 已被 .gitignore 忽略，不要提交）
+uv run dr-panda-mcp
+```
+
+规则：
+
+- 优先级：**真实环境变量 > `.env` > 代码默认值**（systemd/Docker/CI 注入的变量始终优先）；
+- 只认当前目录的 `.env`，不向上级目录或家目录查找；
+- `.env` 权限过宽（如 0644）、不是普通文件、行格式非法时**启动失败**，避免密钥文件被他人读取或配置静默不生效；
+- 没有“禁用自动加载”开关；Docker/systemd 不挂载 `.env` 即可。
+
+修改监听地址/端口/公网地址后需重启进程生效；配置库不要通过环境变量指定（见上表说明）。
 
 远程部署建议：
 
-- 使用 HTTPS 反向代理，并设置 `DR_PANDA_PUBLIC_URL`；
-- 不要直接暴露 `8111` 到公网；
-- 先在本机完成安装，再切换远程监听；
+- 推荐使用 HTTPS 反向代理；`DR_PANDA_PUBLIC_URL` 只影响页面/复制出来的地址，不影响安全策略；
+- 不要直接把管理台暴露到公网；首次安装仍必须在本机 loopback 完成；
+- 如需 `/mcp` 的 Host 白名单，设置 `DR_PANDA_TRUSTED_HOSTS`（例如 `mcp.example.com`）；
 - 反向代理的真实 TLS 环境仍需自行验收。
 
 ---
@@ -329,7 +385,7 @@ uv run python scripts/smoke.py
 
 - 测试使用临时 SQLite 和临时密钥，不连接真实线上系统；
 - Docker 联调脚本在 `scripts/integration/`；
-- 当前全量：**442 passed**。
+- 全量测试数量不写死在 README，以 CI 徽标和实际运行结果为准。
 
 ### 项目结构
 
@@ -395,3 +451,14 @@ scripts/              冒烟与 Docker 联调脚本
 - [docs/verify/form-ux-01.md](docs/verify/form-ux-01.md)：目标表单重组与保存前测试连接
 - [docs/verify/settings-03.md](docs/verify/settings-03.md)：系统配置结构化
 - [docs/verify/](docs/verify/)：全部里程碑、集成与硬化验证记录
+
+
+## 贡献与安全
+
+- [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)：开发环境、测试、PR 与双语文档同步规则；
+- [SECURITY.zh-CN.md](SECURITY.zh-CN.md)：漏洞上报渠道与范围；
+- [CODE_OF_CONDUCT.zh-CN.md](CODE_OF_CONDUCT.zh-CN.md)：行为准则；
+- [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)：版本变更；
+- [LICENSE](LICENSE)：MIT。
+
+> 中文设计/验证文档目前是主要设计资料；英文 README 面向国际读者，设计文档暂不逐篇翻译。

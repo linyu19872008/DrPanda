@@ -1154,6 +1154,17 @@ def _startup_rows(runtime: Runtime) -> list[dict[str, str]]:
     return [
         {"label": "监听地址", "value": f"{config.host}:{config.port}", "note": "环境变量"},
         {"label": "配置库", "value": db_label, "note": "环境变量"},
+        {
+            "label": "公网地址",
+            "value": config.public_url or "未设置",
+            "note": "仅展示",
+        },
+        {"label": "Cookie Secure", "value": config.cookie_secure, "note": "环境变量"},
+        {
+            "label": "受信 Host",
+            "value": "、".join(config.trusted_hosts) or "未设置",
+            "note": "环境变量",
+        },
         {"label": "日志级别", "value": config.log_level, "note": "环境变量"},
         {"label": "加密密钥来源", "value": secret_source, "note": "只读"},
     ]

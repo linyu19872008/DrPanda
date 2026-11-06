@@ -136,7 +136,7 @@
         {% for row in startup_rows %}
         <div class="settings-readonly__row">
           <dt>{{ t(row.label) }}</dt>
-          <dd><span class="mono">{{ row.value }}</span><span class="badge badge--quiet">{{ t(row.note) }}</span></dd>
+          <dd><span class="mono">{{ t(row.value) }}</span><span class="badge badge--quiet">{{ t(row.note) }}</span></dd>
         </div>
         {% endfor %}
       </dl>

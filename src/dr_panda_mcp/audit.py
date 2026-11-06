@@ -17,13 +17,18 @@ logger = logging.getLogger(__name__)
 
 INITIAL_DELAY_SECONDS = 60.0
 INTERVAL_SECONDS = 3600.0
+SLEEP_SLICE_SECONDS = 60.0
 
 
 async def cleanup_once(runtime: Runtime) -> int:
     """执行一轮清理，返回删除条数。"""
     current = await settings_module.load(runtime.store)
     started = time.perf_counter()
-    deleted = await runtime.store.cleanup_audit(current.audit_retention_days)
+    deleted = await runtime.store.cleanup_audit(
+        current.audit_retention_days,
+        batch_size=current.audit_cleanup_batch_size,
+        max_seconds=float(current.audit_cleanup_max_seconds),
+    )
     if deleted:
         logger.info(
             format_event(
@@ -52,10 +57,25 @@ async def run_cleanup_loop(
         if interval is not None:
             await asyncio.sleep(interval)
             continue
-        try:
-            current = await settings_module.load(runtime.store)
-            delay = current.audit_cleanup_interval_minutes * 60
-        except Exception:  # noqa: BLE001 - 读不到间隔时用默认值
-            logger.warning(failure_text("store.error", "读取审计清理间隔失败，使用默认间隔"))
-            delay = INTERVAL_SECONDS
-        await asyncio.sleep(delay)
+        await _sleep_with_configured_interval(runtime)
+
+
+async def _sleep_with_configured_interval(runtime: Runtime) -> None:
+    """按系统配置睡眠；分片醒来，把改小间隔的生效延迟控制在 60 秒内。"""
+    started = time.monotonic()
+    delay = await _configured_interval(runtime)
+    while True:
+        elapsed = time.monotonic() - started
+        if elapsed >= delay:
+            return
+        await asyncio.sleep(min(SLEEP_SLICE_SECONDS, delay - elapsed))
+        delay = await _configured_interval(runtime)
+
+
+async def _configured_interval(runtime: Runtime) -> float:
+    try:
+        current = await settings_module.load(runtime.store)
+        return current.audit_cleanup_interval_minutes * 60
+    except Exception:  # noqa: BLE001 - 读不到间隔时用默认值
+        logger.warning(failure_text("store.error", "读取审计清理间隔失败，使用默认间隔"))
+        return INTERVAL_SECONDS

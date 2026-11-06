@@ -112,7 +112,7 @@ FastMCP 4.1.4 的 `custom_route` 就是用来挂这类协议之外的 HTTP 端�
 
 已于 FastMCP 4.1.4 核对（仓库未用该结论写代码）：`custom_route` 注册的路由会并入 `http_app` 返回的 Starlette 应用，因此网页与 `/mcp` 可由同一个 uvicorn 进程提供。
 
-默认监听 `127.0.0.1:8111`。端口用 `DR_PANDA_PORT` 修改，监听网卡用 `DR_PANDA_HOST` 修改。首次安装必须在 loopback 完成；安装后远程访问需 `DR_PANDA_ALLOW_REMOTE=1` + HTTPS `DR_PANDA_PUBLIC_URL`。不要直接暴露未完成安装的实例。
+默认监听 `127.0.0.1:8111`。端口用 `DR_PANDA_PORT` 修改，监听网卡用 `DR_PANDA_HOST` 修改（`127.0.0.1` / `0.0.0.0` / 指定 IP）。首次安装必须在 loopback 完成；安装后改为非 loopback 即对外监听，建议通过 HTTPS 反向代理访问。`DR_PANDA_PUBLIC_URL` 仅用于展示，不参与安全判断；Cookie Secure 由 `DR_PANDA_COOKIE_SECURE` 控制，`/mcp` 的 Host 白名单由 `DR_PANDA_TRUSTED_HOSTS` 控制。
 
 stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式使用时客户端只配置 URL，例如 `http://127.0.0.1:8111/mcp`。端口改过时，客户端 URL 使用同一个端口。DeepSeek Harness 的 `serverName` 用短名 `drpanda`，模型看到的工具名会是 `mcp__drpanda__mysql_query` 这种形式，所以工具名保持短且稳定。
 
@@ -134,13 +134,14 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 |---|---|---|
 | `DR_PANDA_HOST` | `127.0.0.1` | 监听网卡 |
 | `DR_PANDA_PORT` | `8111` | 网页与 `/mcp` 共用 |
-| `DR_PANDA_DATABASE_URL` | `sqlite:///data/dr-panda.sqlite` | 配置库；支持 sqlite/mysql/postgresql |
+| `DR_PANDA_DATABASE_URL` | 未使用 | 当前版本不参与实际建库：配置库由安装向导选择，之后以 `data/install.json` 为准；设置后仅做启动校验 |
 | `DR_PANDA_SECRET_KEY` | 未设置 | base64 编码的 32 字节密钥，用于加密 `secret_json`；未设置时用 `data/secret.key` |
 | `DR_PANDA_LOG_LEVEL` | `INFO` | 进程日志级别 |
-| `DR_PANDA_ALLOW_REMOTE` | 未设置 | 显式允许非 loopback 监听；必须已完成安装 |
-| `DR_PANDA_PUBLIC_URL` | 未设置 | 远程访问的 HTTPS 公开地址 |
+| `DR_PANDA_PUBLIC_URL` | 未设置 | 仅展示用访问地址（MCP 地址/页面显示），不参与安全判断 |
+| `DR_PANDA_COOKIE_SECURE` | `auto` | Cookie Secure：auto/always/never |
+| `DR_PANDA_TRUSTED_HOSTS` | 未设置 | `/mcp` Host 白名单（逗号分隔） |
 
-除此之外不引入其他环境变量。目标的主机、账号、密钥、范围全部来自配置库，不读环境变量；加密密钥是例外，它不描述任何目标，只用于本地解密。
+启动入口会自动加载**当前工作目录的 `./.env`**（文件不存在则跳过；真实环境变量优先；权限过宽或格式非法时启动失败）。除此之外不引入其他环境变量。目标的主机、账号、密钥、范围全部来自配置库，不读环境变量；加密密钥是例外，它不描述任何目标，只用于本地解密。
 
 ### 3.4 客户端接入
 
@@ -164,7 +165,7 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 
 ### 3.5 安全基线
 
-- 默认只监听回环地址；远程访问需 `DR_PANDA_ALLOW_REMOTE=1`、HTTPS `DR_PANDA_PUBLIC_URL`，并先完成本机安装。
+- 默认只监听回环地址；改为非 loopback 即对外监听（建议 HTTPS 反代），首次安装必须先在本机完成。
 - 网页与 `/mcp` 共用 `host_origin_protection=True`：Host 头不在允许列表返回 421（防 DNS rebinding），Origin 不同源返回 403。
 - 网页 POST 使用双提交 Cookie CSRF（`drpanda_csrf` + `_csrf`），失败 403；`/mcp` 使用 Bearer，不使用 CSRF。
 - 全局安全响应头：`Content-Security-Policy`（`script-src 'self'`、`connect-src 'self'`、`form-action 'self'`、`frame-ancestors 'none'` 等）、`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy: same-origin`。
@@ -292,20 +293,24 @@ stdio 只用于本机调试 MCP 工具，不作为三端的正式接法。正式
 | 新建目标默认值 | `default_target_max_rows` | 新建目标默认行数上限 | 100 | 1–1000 | 新建目标表单 |
 | 新建目标默认值 | `default_target_max_bytes` | 新建目标默认字节上限 | 102400 | 4096–1048576 | 新建目标表单 |
 | 并发与审计 | `target_max_concurrency` | 每 target 并发上限 | 10 | 1–50 | 下一次取槽 |
+| 并发与审计 | `global_max_concurrent_calls` | 进程内全局并发上限（0=不限） | 0 | 0–200 | 下一次取槽 |
 | 并发与审计 | `audit_retention_days` | 审计保留天数 | 90 | 1–3650 | 下一轮清理任务 |
 | 并发与审计 | `audit_cleanup_interval_minutes` | 审计清理间隔 | 60 | 5–1440 | 下一轮清理周期 |
+| 并发与审计 | `audit_cleanup_batch_size` | 审计清理每批条数 | 1000 | 100–5000 | 下一轮清理 |
+| 并发与审计 | `audit_cleanup_max_seconds` | 单轮清理最长秒数 | 300 | 10–3600 | 下一轮清理 |
 | 高级资源 | `catalog_max_clients` | 进程内连接器客户端缓存上限 | 32 | 4–128 | 下一次取客户端 |
+| 高级资源 | `catalog_idle_seconds` | 连接器空闲回收秒数（0=不回收） | 0 | 0–3600 | 下一次取客户端 |
 | 认证与会话 | `session_ttl_minutes` | Web Session 有效期 | 720 | 30–10080 | 下一次请求 |
 | 高级资源 | `backup_keep_count` | SQLite 备份保留数量 | 20 | 1–20 | 下一次启动迁移 |
 
 - 新建目标默认值只作用于新建表单；既有 target 已保存的 `timeout_s` / `max_rows` / `max_bytes` 不因系统配置改变。
-- 页面使用左侧子菜单切换分组：可编辑的“新建目标默认值 / 并发与审计 / 认证与会话 / 高级资源”，只读的“安全边界 / 启动配置 / 最近变更”；每次只渲染当前分组，保存只提交当前分组并保留 `section`。
+- 页面使用左侧子菜单切换分组：可编辑的“新建目标默认值 / 并发与审计 / 认证与会话（Session、登录保护、MCP Token）/ 高级资源”，只读的“安全边界 / 启动配置 / 最近变更”；每次只渲染当前分组，保存只提交当前分组并保留 `section`。启动配置展示监听地址、配置库、公网地址、远程监听、日志级别和密钥来源。
 - “恢复默认值”走独立确认页，支持全局或单项恢复，并写审计。
 - 字段级错误、`aria-invalid`/`aria-describedby`、顶部错误摘要锚点；保存失败保留输入。
 
 - 只能改这里列出的键；键白名单写死在 `settings.py`，未知键返回 400，不做"任意键值"配置。
 - 校验：整数、闭区间；非整数或越界返回 400，回显当前值，不落库。
-- 保存：一次事务内更新 `settings` 并写一条 `settings.update` 审计，summary 记录 `键: 旧值 -> 新值`。
+- 保存：一次事务内更新 `settings`；只把实际变化的键写入 `settings_history` 与一条 `settings.update` 审计（summary 记录 `键: 旧值 -> 新值`），没有变化时不写。
 - 保存后按各项自己的生效时机读取：并发上限在下一次取槽时读取，已经在跑的调用不取消；Session 在下一次请求续期或失效。
 - 系统配置不能放开只读、危险命令、密钥与目标范围，这些键不在白名单里。
 - 页面不涉及密钥。恢复默认会列出当前值与默认值，并写审计；目标、密钥和只读边界不受影响。
@@ -1289,7 +1294,7 @@ scripts/smoke.py       冒烟：启动进程并探活
 - `.gitignore` 补 `data/`（含 `data/backup/` 与 `data/secret.key`），与 5.1 的"`data/` 不进 git"一致。
 - `README.md` 至少写明：一句话定位、启动命令、环境变量表（含 `DR_PANDA_SECRET_KEY` 与密钥备份提醒）、三个客户端配置示例、八类目标登记要点、系统配置页与两个可调项、绝对只读与危险命令规则、测试命令。
 - 提交信息按 `feat: 配置台（第一期）` 这类格式；当前那次 `1` 只作历史保留，不回写。
-- 第一期完成后打 tag `v0.1.0`，作为配置台可用的里程碑。
+- 第一期完成后打 tag `v1.0.0`，作为配置台可用的里程碑。
 
 ### 11.5 明确不引入
 

@@ -65,6 +65,14 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
         "catalog_max_clients": "32",
         "backup_keep_count": "20",
         "session_ttl_minutes": "720",
+        "login_max_attempts": "5",
+        "login_lockout_minutes": "5",
+        "mcp_token_max_per_user": "5",
+        "mcp_token_ttl_days": "0",
+        "global_max_concurrent_calls": "0",
+        "catalog_idle_seconds": "0",
+        "audit_cleanup_batch_size": "1000",
+        "audit_cleanup_max_seconds": "300",
     }
 
 
@@ -149,6 +157,14 @@ async def test_settings_metadata_is_seeded(tmp_path: Path) -> None:
         "session_ttl_minutes",
         "catalog_max_clients",
         "backup_keep_count",
+        "login_max_attempts",
+        "login_lockout_minutes",
+        "mcp_token_max_per_user",
+        "mcp_token_ttl_days",
+        "global_max_concurrent_calls",
+        "audit_cleanup_batch_size",
+        "audit_cleanup_max_seconds",
+        "catalog_idle_seconds",
     ]
     catalog = next(row for row in rows if row[0] == "backup_keep_count")
     assert catalog[2:] == (
@@ -157,7 +173,7 @@ async def test_settings_metadata_is_seeded(tmp_path: Path) -> None:
         "SQLite 备份保留数量",
         "20",
         1,
-        20,
+        100,
         "个",
         "下一次启动迁移",
         1,
@@ -194,7 +210,7 @@ async def test_settings_migration_preserves_existing_values(tmp_path: Path) -> N
         count = connection.execute("SELECT COUNT(*) FROM settings").fetchone()[0]
 
     assert row == ("30", "runtime", "审计保留天数")
-    assert count == 9
+    assert count == 17
 
 
 async def test_no_backup_when_no_pending_migration(tmp_path: Path) -> None:

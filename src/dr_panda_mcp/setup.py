@@ -239,7 +239,11 @@ class SetupApp:
                 "setup_complete.html",
                 request,
                 mcp_token=token,
-                mcp_url=f"http://{cfg.host}:{cfg.port}/mcp",
+                mcp_url=(
+                    cfg.public_url.rstrip("/") + "/mcp"
+                    if cfg.public_url
+                    else f"http://{cfg.host}:{cfg.port}/mcp"
+                ),
             )
             response.headers["Cache-Control"] = "no-store"
         response.set_cookie(
@@ -249,7 +253,9 @@ class SetupApp:
             path="/",
             httponly=True,
             samesite="lax",
-            secure=request.url.scheme == "https",
+            secure=auth.cookie_secure_required(
+                self.config.cookie_secure, request.url.scheme
+            ),
         )
         return response
 

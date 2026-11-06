@@ -508,11 +508,21 @@ class SqlConfigStore:
                     select(SettingRow).where(SettingRow.key.in_(list(patch)))
                 )
                 existing = {row.key: row for row in result.scalars()}
+                missing = [key for key in patch if key not in existing]
+                if missing:
+                    raise StorageUnavailable(
+                        f"系统配置缺少定义：{missing[0]}；请先执行迁移"
+                    )
+                changed = {
+                    key: value
+                    for key, value in patch.items()
+                    if existing[key].value != value
+                }
+                if not changed:
+                    return await self.get_settings()
                 changes: list[str] = []
-                for key, value in patch.items():
-                    row = existing.get(key)
-                    if row is None:
-                        raise StorageUnavailable(f"系统配置缺少定义：{key}；请先执行迁移")
+                for key, value in changed.items():
+                    row = existing[key]
                     old = row.value
                     row.value = value
                     row.updated_at = now

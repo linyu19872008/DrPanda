@@ -121,6 +121,35 @@ def test_catalog_max_clients_and_cleanup_interval_validation() -> None:
     ) == {"catalog_max_clients": "64", "audit_cleanup_interval_minutes": "15"}
 
 
+def test_security_settings_validation() -> None:
+    patch = {
+        "login_max_attempts": "10",
+        "login_lockout_minutes": "15",
+        "mcp_token_max_per_user": "3",
+        "mcp_token_ttl_days": "30",
+        "backup_keep_count": "100",
+        "global_max_concurrent_calls": "20",
+        "catalog_idle_seconds": "300",
+        "audit_cleanup_batch_size": "2000",
+        "audit_cleanup_max_seconds": "120",
+    }
+    assert settings.validate_patch(patch) == patch
+
+    for bad in (
+        {"login_max_attempts": "0"},
+        {"login_lockout_minutes": "1441"},
+        {"mcp_token_max_per_user": "51"},
+        {"mcp_token_ttl_days": "-1"},
+        {"backup_keep_count": "101"},
+        {"global_max_concurrent_calls": "201"},
+        {"catalog_idle_seconds": "3601"},
+        {"audit_cleanup_batch_size": "99"},
+        {"audit_cleanup_max_seconds": "9"},
+    ):
+        with pytest.raises(InvalidSettings):
+            settings.validate_patch(bad)
+
+
 def test_setting_groups_cover_all_specs() -> None:
     grouped = {
         spec.key for group in settings.SETTING_GROUPS for spec in settings.SETTING_SPECS

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -30,6 +31,7 @@ class _Pooled:
     updated_at: datetime
     connector: Any
     client: Any
+    last_used: float = 0.0
 
 
 class Catalog:
@@ -48,6 +50,8 @@ class Catalog:
         self._pool: OrderedDict[int, _Pooled] = OrderedDict()
         self._semaphores: dict[int, asyncio.Semaphore] = {}
         self._limits: dict[int, int] = {}
+        self._global_semaphore: asyncio.Semaphore | None = None
+        self._global_limit: int | None = None
         self._pool_lock = asyncio.Lock()
 
     async def resolve(
@@ -90,13 +94,17 @@ class Catalog:
                 and pooled.connector.name == connector.name
             ):
                 self._pool.move_to_end(target.id)
+                pooled.last_used = time.monotonic()
+                await self._evict_if_needed()
                 return pooled.client
 
             if pooled is not None:
                 await self._close_pooled(target.id, pooled)
 
             client = connector.create_client(target)
-            self._pool[target.id] = _Pooled(target.updated_at, connector, client)
+            self._pool[target.id] = _Pooled(
+                target.updated_at, connector, client, last_used=time.monotonic()
+            )
             await self._evict_if_needed()
             return client
 
@@ -112,15 +120,29 @@ class Catalog:
 
     @asynccontextmanager
     async def slot(self, target: Target) -> AsyncIterator[None]:
-        """按系统配置限制同一 target 的并发调用。"""
-        limit = await self._concurrency_limit()
-        semaphore = self._semaphores.get(target.id)
-        if semaphore is None or self._limits.get(target.id) != limit:
-            semaphore = asyncio.Semaphore(limit)
-            self._semaphores[target.id] = semaphore
-            self._limits[target.id] = limit
-        async with semaphore:
-            yield
+        """按系统配置限制同一 target 的并发调用，并叠加全局并发上限。"""
+        current = await self._settings_loader(self._store)
+        global_limit = int(getattr(current, "global_max_concurrent_calls", 0))
+        limit = int(current.target_max_concurrency)
+        if global_limit > 0:
+            if (
+                self._global_semaphore is None
+                or self._global_limit != global_limit
+            ):
+                self._global_semaphore = asyncio.Semaphore(global_limit)
+                self._global_limit = global_limit
+            await self._global_semaphore.acquire()
+        try:
+            semaphore = self._semaphores.get(target.id)
+            if semaphore is None or self._limits.get(target.id) != limit:
+                semaphore = asyncio.Semaphore(limit)
+                self._semaphores[target.id] = semaphore
+                self._limits[target.id] = limit
+            async with semaphore:
+                yield
+        finally:
+            if global_limit > 0 and self._global_semaphore is not None:
+                self._global_semaphore.release()
 
     async def test_connection(
         self,
@@ -169,7 +191,21 @@ class Catalog:
             value = self._max_clients
         return min(max(value, 4), 128)
 
+    async def _idle_limit(self) -> int:
+        try:
+            current = await self._settings_loader(self._store)
+            return int(getattr(current, "catalog_idle_seconds", 0))
+        except Exception:  # noqa: BLE001 - 配置读取失败时回退为不回收
+            return 0
+
     async def _evict_if_needed(self) -> None:
+        idle_seconds = await self._idle_limit()
+        if idle_seconds > 0:
+            now = time.monotonic()
+            for target_id, pooled in list(self._pool.items()):
+                if now - pooled.last_used >= idle_seconds:
+                    self._pool.pop(target_id, None)
+                    await self._close_client(pooled)
         limit = await self._max_clients_limit()
         while len(self._pool) > limit:
             _target_id, pooled = self._pool.popitem(last=False)

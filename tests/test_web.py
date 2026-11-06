@@ -447,7 +447,7 @@ async def test_settings_page_and_update(runtime: Runtime) -> None:
     stored = await runtime.store.get_settings()
     assert stored["audit_retention_days"] == "30"
     assert stored["target_max_concurrency"] == "5"
-    assert len(stored) == 9
+    assert len(stored) == 17
     assert invalid.status_code == 400
 
 
@@ -1080,6 +1080,7 @@ async def test_english_pages_are_fully_translated(runtime: Runtime) -> None:
         "/targets/new?type=elasticsearch",
         "/settings",
         "/settings?section=runtime",
+        "/settings?section=auth",
         "/settings?section=advanced",
         "/settings?section=security",
         "/settings?section=startup",

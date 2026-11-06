@@ -10,6 +10,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
 from dr_panda_mcp import auth
+from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.config import Config
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.store.protocol import AuditEntry
@@ -31,13 +32,12 @@ def _profile_tab(request: Request, *, password_error: str | None, modal_open: bo
     return "mcp"
 
 
-def _mcp_url(config: Config) -> str:
+def _mcp_url(config: Config, request: Request) -> str:
+    """展示用地址：优先 PUBLIC_URL，否则按当前请求的协议与 Host 推导。"""
     if config.public_url:
         return config.public_url.rstrip("/") + "/mcp"
-    host = config.host
-    if host in {"0.0.0.0", "::"}:
-        host = "127.0.0.1"
-    return f"http://{host}:{config.port}/mcp"
+    host = request.url.netloc or f"{config.host}:{config.port}"
+    return f"{request.url.scheme}://{host}/mcp"
 
 
 def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -> None:
@@ -74,7 +74,7 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
             "me.html",
             request=request,
             profile=profile,
-            mcp_url=_mcp_url(config),
+            mcp_url=_mcp_url(config, request),
             page=page,
             page_size=PAGE_SIZE,
             total=total,
@@ -150,6 +150,19 @@ def register_profile_routes(server: FastMCP, runtime: Runtime, config: Config) -
                 modal_open=True,
                 modal_error="Token 名称已存在，请换一个",
                 token_name=name,
+                status_code=400,
+            )
+        current = await settings_module.load(runtime.store)
+        total = await auth.count_mcp_tokens(runtime.session_factory, profile.user.id)
+        if total >= current.mcp_token_max_per_user:
+            return await _render_me_with_tokens(
+                request,
+                profile,
+                modal_open=True,
+                modal_error=(
+                    f"最多保留 {current.mcp_token_max_per_user} 个 Token，请先删除旧 Token"
+                ),
+                token_name=raw_name,
                 status_code=400,
             )
         token = auth.generate_token()

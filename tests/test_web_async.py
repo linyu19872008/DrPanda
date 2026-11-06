@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 
 import httpx
 import pytest
 from httpx import ASGITransport
 
 from dr_panda_mcp import auth
+from dr_panda_mcp import settings as settings_module
 from dr_panda_mcp.runtime import Runtime
 from dr_panda_mcp.server import create_app
 
@@ -351,6 +353,69 @@ async def test_duplicate_name_reported_before_probe(
     body = response.json()
     assert body["code"] == "INVALID_INPUT"
     assert "已存在" in body["errors"]["_form"]
+
+
+async def test_login_lockout_follows_settings(runtime: Runtime) -> None:
+    from dr_panda_mcp.web import auth_routes as auth_routes_module
+
+    auth_routes_module._FAILED_LOGINS.clear()
+    await settings_module.update(
+        runtime.store,
+        {"login_max_attempts": "2", "login_lockout_minutes": "1"},
+        "anonymous",
+    )
+    app = create_app(runtime.config, runtime, auth_required=True)
+    try:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url=BASE_URL,
+            cookies={"drpanda_lang": "zh-Hans"},
+        ) as client:
+            page = await client.get("/login")
+            csrf = re.search(r'name="_csrf" value="([^"]+)"', page.text).group(1)
+            for _ in range(2):
+                response = await client.post(
+                    "/login",
+                    data={
+                        "_csrf": csrf,
+                        "username": "admin",
+                        "password": "wrong",
+                    },
+                    headers=JSON,
+                )
+                assert response.status_code == 401
+            blocked = await client.post(
+                "/login",
+                data={"_csrf": csrf, "username": "admin", "password": "wrong"},
+                headers=JSON,
+            )
+        assert blocked.status_code == 429
+        assert "1 分钟" in blocked.json()["message"]
+    finally:
+        auth_routes_module._FAILED_LOGINS.clear()
+
+
+async def test_login_cookie_secure_policy(runtime: Runtime) -> None:
+    await auth.create_admin(
+        runtime.session_factory, password_hash=auth.hash_password("abcdefgh")
+    )
+    cfg = replace(runtime.config, cookie_secure="never")
+    app = create_app(cfg, runtime, auth_required=True)
+    async with httpx.AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url=BASE_URL,
+        cookies={"drpanda_lang": "zh-Hans"},
+    ) as client:
+        page = await client.get("/login")
+        csrf = re.search(r'name="_csrf" value="([^"]+)"', page.text).group(1)
+        response = await client.post(
+            "/login",
+            data={"_csrf": csrf, "username": "admin", "password": "abcdefgh"},
+            follow_redirects=False,
+        )
+
+    assert response.status_code == 303
+    assert "Secure" not in response.headers.get("set-cookie", "")
 
 
 async def test_login_json_success_redirects(runtime: Runtime) -> None:

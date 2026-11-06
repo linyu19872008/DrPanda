@@ -95,6 +95,7 @@ class TokenPrincipal:
     token_id: int
     token_name: str | None = None
     token_prefix: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,18 @@ class ClientIdentity:
 
     name: str | None
     prefix: str | None
+
+
+COOKIE_SECURE_POLICIES = frozenset({"auto", "always", "never"})
+
+
+def cookie_secure_required(policy: str, scheme: str) -> bool:
+    """auto 按请求 scheme；always/never 显式控制。"""
+    if policy == "always":
+        return True
+    if policy == "never":
+        return False
+    return (scheme or "").lower() == "https"
 
 
 def current_actor() -> str:
@@ -345,6 +358,7 @@ async def authenticate_mcp_token(
             token_id=token_row.id,
             token_name=token_row.name,
             token_prefix=token_row.token_prefix,
+            created_at=token_row.created_at,
         )
 
 

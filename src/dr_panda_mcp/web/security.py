@@ -5,6 +5,7 @@ from __future__ import annotations
 import hmac
 import logging
 import time
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs
 
 from starlette.datastructures import MutableHeaders
@@ -99,11 +100,13 @@ class AuthMiddleware:
         runtime: Runtime,
         session_key: bytes,
         auth_required: bool = True,
+        cookie_secure: str = "auto",
     ) -> None:
         self.app = app
         self.runtime = runtime
         self.session_key = session_key
         self.auth_required = auth_required
+        self.cookie_secure = cookie_secure
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] != "http" or not self.auth_required:
@@ -111,6 +114,7 @@ class AuthMiddleware:
             return
 
         request = Request(scope, receive)
+        request.state.cookie_secure_policy = self.cookie_secure
         path = request.url.path
         if path in PUBLIC_PATHS or path.startswith(PUBLIC_PREFIXES):
             await self.app(scope, receive, send)
@@ -175,6 +179,17 @@ class AuthMiddleware:
         )
         if principal is None:
             return None
+        try:
+            current = await settings_module.load(self.runtime.store)
+        except Exception:
+            logger.warning("读取 MCP Token 有效期失败", exc_info=True)
+            current = None
+        if current is not None and current.mcp_token_ttl_days > 0:
+            created = principal.created_at
+            if created is not None and datetime.now(UTC) - created > timedelta(
+                days=current.mcp_token_ttl_days
+            ):
+                return None
         try:
             await auth.touch_mcp_token_used(self.runtime.session_factory, principal.token_id)
         except Exception:  # 元数据更新失败不影响已认证的工具调用

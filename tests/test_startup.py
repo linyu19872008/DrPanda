@@ -9,8 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from dr_panda_mcp import main
+from dr_panda_mcp import _run, main
 from dr_panda_mcp.config import Config
+from dr_panda_mcp.errors import StartupError
 from dr_panda_mcp.install import save_install_state
 from dr_panda_mcp.runtime import create_runtime
 from dr_panda_mcp.store.protocol import SecretPatch, TargetDraft
@@ -40,6 +41,22 @@ def test_main_exits_2_on_bad_config(monkeypatch: pytest.MonkeyPatch, capsys) -> 
     assert main() == 2
     stderr = capsys.readouterr().err
     assert "DR_PANDA_PORT" in stderr
+
+
+async def test_non_loopback_requires_completed_install(tmp_path: Path) -> None:
+    cfg = Config(
+        host="0.0.0.0",
+        port=0,
+        database_url=f"sqlite+aiosqlite:///{tmp_path / 'db.sqlite'}",
+        secret_key_b64=None,
+        log_level="INFO",
+        install_file=tmp_path / "install.json",
+        install_key_file=tmp_path / "install.key",
+        session_key_file=tmp_path / "session.key",
+    )
+
+    with pytest.raises(StartupError, match="首次安装必须在"):
+        await _run(cfg)
 
 
 def test_main_exits_non_zero_when_port_taken() -> None:

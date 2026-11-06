@@ -4,6 +4,7 @@ import base64
 
 import pytest
 
+from dr_panda_mcp import auth
 from dr_panda_mcp.config import load_config
 from dr_panda_mcp.errors import ConfigError
 from dr_panda_mcp.store import url as url_module
@@ -22,6 +23,32 @@ def test_defaults() -> None:
     assert cfg.database_url.startswith("sqlite+aiosqlite://")
     assert cfg.secret_key_b64 is None
     assert cfg.log_level == "INFO"
+    assert cfg.public_url is None
+    assert cfg.cookie_secure == "auto"
+    assert cfg.trusted_hosts == ()
+
+
+def test_cookie_secure_and_trusted_hosts() -> None:
+    cfg = load_config(
+        _env(
+            DR_PANDA_COOKIE_SECURE="always",
+            DR_PANDA_TRUSTED_HOSTS="mcp.example.com, 127.0.0.1",
+        )
+    )
+    assert cfg.cookie_secure == "always"
+    assert cfg.trusted_hosts == ("mcp.example.com", "127.0.0.1")
+
+
+def test_invalid_cookie_secure_rejected() -> None:
+    with pytest.raises(ConfigError, match="DR_PANDA_COOKIE_SECURE"):
+        load_config(_env(DR_PANDA_COOKIE_SECURE="sometimes"))
+
+
+def test_cookie_secure_policy() -> None:
+    assert auth.cookie_secure_required("auto", "http") is False
+    assert auth.cookie_secure_required("auto", "https") is True
+    assert auth.cookie_secure_required("always", "http") is True
+    assert auth.cookie_secure_required("never", "https") is False
 
 
 def test_host_and_port_override() -> None:
