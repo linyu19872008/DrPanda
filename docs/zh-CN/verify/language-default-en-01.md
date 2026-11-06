@@ -23,7 +23,7 @@
 ## 验证
 
 - `ruff check .`：通过；
-- 全量 `pytest`：**566 passed, 1 failed**（既有 `test_healthz.py::test_mcp_route_mounted`，中间件嵌套问题，与本次无关）；
+- 全量 `pytest`：**567 passed, 0 failed**；
 - `python scripts/check_docs_links.py`：OK（68 个 Markdown 文件）；
 - `tests/test_language_defaults.py`：英文 catalog 覆盖页面/表单/设置元数据 key；英文 catalog 值无中文；英文 README/docs 无中文；中文 README 只链中文文档；英文缺翻译不回退；
 - `tests/test_mcp_inprocess.py`：MCP instructions/tool descriptions/参数 schema/prompt 无中文；

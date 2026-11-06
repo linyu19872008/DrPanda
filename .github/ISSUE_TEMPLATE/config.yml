@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/linyu19872008/dr-panda-mcp/security/advisories/new
+    url: https://github.com/linyu19872008/DrPanda/security/advisories/new
     about: Report vulnerabilities privately; do not open a public issue.
   - name: Documentation
-    url: https://github.com/linyu19872008/dr-panda-mcp/tree/master/docs
-    about: Read the design and verification documents (mostly Chinese).
+    url: https://github.com/linyu19872008/DrPanda/tree/main/docs
+    about: Read the English documentation (Chinese docs are under docs/zh-CN/).

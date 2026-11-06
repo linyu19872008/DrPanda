@@ -10,7 +10,7 @@ Thanks for taking the time to contribute. DrPanda MCP is a read-only MCP service
 - [uv](https://docs.astral.sh/uv/)
 
 ```bash
-git clone https://github.com/linyu19872008/dr-panda-mcp.git
+git clone https://github.com/linyu19872008/DrPanda.git
 cd dr-panda-mcp
 uv sync --all-extras --dev
 cp .env.example .env   # optional; the app loads ./.env automatically

@@ -24,18 +24,18 @@
   `License-Expression: MIT`、`License-File: LICENSE`、`Project-URL` 与 classifiers。
 - `uv run ruff check .`：通过。
 - 全量 `pytest`：**561 passed, 1 failed**（既有的 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
-- GitHub Actions 尚未在 GitHub 实际运行（仓库当前只有 Gitee remote）；工作流内容按本地等价命令编写。
+- GitHub Actions 已在 GitHub 实际运行；早期 test job 因 `test_healthz.py::test_mcp_route_mounted` 只解开一层中间件导致失败，已修复，本地全量 **567 passed, 0 failed**；修复推送后 CI 应通过。
 
-## 假设与待调整
+## 仓库信息与待办
 
-- GitHub 仓库路径按 `github.com/linyu19872008/dr-panda-mcp`（GitHub 用户/提交作者）编写，默认分支按 `master`；如果实际仓库名/分支不同，需要同步替换：
+- GitHub 仓库已确认：`github.com/linyu19872008/DrPanda`，默认分支 `main`；README、模板、SECURITY、CONTRIBUTING、pyproject 已按此更新：
   - README/README.zh-CN 顶部徽标链接；
   - `.github/ISSUE_TEMPLATE/config.yml` 的 SECURITY/文档链接；
   - `pyproject.toml` 的 `[project.urls]`；
   - `CONTRIBUTING*` 的 clone 地址。
 - PyPI 尚未实际发布：已通过 `uv build` 验证元数据与包结构；发布前需要配置 PyPI 项目与（可选）可信发布。
 - GitHub Issue/PR 模板保持英文（GitHub 无按语言切换机制），正文可用中英文填写；治理文档提供中英双版本。
-- README 中文设计文档链接仍指向中文 `docs/`；英文 README 已标注 "currently written in Chinese"。
+- 文档默认英文在 `docs/`，中文在 `docs/zh-CN/`；英文 README 只链英文文档，中文 README 只链中文文档。
 
 
 ## 关于 README 裂图的修复

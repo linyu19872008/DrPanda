@@ -4,7 +4,7 @@
 
 <p align="center">
   <!-- CI / PyPI badges are re-enabled once the GitHub repository is public and the first PyPI release exists:
-  <a href="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
   -->
   <a href="LICENSE"><img alt="License: MIT" src="docs/assets/badge-license.png" height="20"></a>
@@ -76,7 +76,7 @@ M0–M7 已落地并通过测试：
 从源码运行（推荐参与开发）：
 
 ```bash
-git clone https://github.com/linyu19872008/dr-panda-mcp.git
+git clone https://github.com/linyu19872008/DrPanda.git
 cd dr-panda-mcp
 uv sync
 cp .env.example .env   # 可选；不建则使用环境变量与默认值
