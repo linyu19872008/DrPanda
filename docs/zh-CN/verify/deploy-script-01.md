@@ -41,3 +41,43 @@
 - 首次安装的浏览器交互未自动化（按决策保持网页交互）；
 - 脚本不会自动创建管理员密码，也不会修改已存在的 `.env`/data/密钥；
 - Docker 不在本脚本范围。
+
+## 优化 02（真实部署问题修复）
+
+真实服务器部署暴露了两个问题，已回写脚本：
+
+1. **systemd 路径指令不能加引号**
+   - `WorkingDirectory`、`ReadWritePaths` 改为裸路径；
+   - 含空格的目录在 `service` 阶段直接拒绝；
+   - 写 unit 后执行 `systemd-analyze verify`，失败即退出。
+
+2. **root 的 uv managed Python 不能被 `drpanda` 使用**
+   - 新增 Python 自动选择：优先系统 Python >=3.11；
+   - 没有系统 Python 且以 root 安装时，uv Python 放到 `/opt/uv-python`，不再落到 `/root`；
+   - 安装前检查已有 `.venv/bin/python`，如果指向 `/root` 直接报错并提示删除重建；
+   - `service` 安装前用目标用户验证 binary 和 shebang interpreter 可执行；
+   - `check` 也会检查 venv Python/解释器是否在 `/root`、服务用户能否执行。
+
+3. **启动结果判定**
+   - `systemctl start/restart` 失败立即退出；
+   - 启动后检查 `is-active`，再检查 `/healthz`；
+   - 只有健康检查通过才打印“安装成功”。
+
+4. **生产依赖**
+   - source 安装默认 `--no-dev`；
+   - 新增 `--dev` 给开发机；
+   - 支持 `--python`、`--index-url`、`--python-mirror`。
+
+## 优化后验证
+
+- `bash -n scripts/setup.sh`：通过；
+- source 安装（临时本地副本）：使用系统 Python，`uv sync --no-dev` 成功，`.venv/bin/python` 不在 `/root`；
+- `check`：通过，新增解释器/服务用户/unit 检查；
+- 首次安装 guard 与前台 `/healthz` 此前已验证；
+- systemd 的 `assert_service_exec`、`systemd-analyze verify` 和启动失败退出逻辑需在 Ubuntu 服务器上再跑一次端到端验收。
+
+## 仍未自动化验证
+
+- 真实 Ubuntu systemd 服务安装（当前验证环境是 macOS，无法安全执行 systemd）；
+- `service` 在旧 systemd 版本上的兼容性；
+- `--dev` 与镜像参数的组合。

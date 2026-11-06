@@ -2,7 +2,7 @@
 
 `scripts/setup.sh` 是新机器部署入口，支持两种安装方式：
 
-- **source**：`git clone` + `uv sync`（适合开发、需要使用配置台里的“安装客户端”功能）
+- **source**：`git clone` + `uv sync`（适合开发、需要使用配置台里的“安装客户端”功能）；生产默认 `--no-dev`
 - **pypi**：`uv tool install dr-panda-mcp==<版本>`（适合只运行、不改代码的机器）
 
 首次安装必须在 loopback（`127.0.0.1` / `localhost`）完成，再启用远程监听。
@@ -15,6 +15,9 @@
 
 # 源码安装（默认；在仓库目录内执行时使用当前 checkout）
 ./scripts/setup.sh install --method source --extras mysql,redis
+
+# 开发机安装（包含 pytest/ruff）
+./scripts/setup.sh install --method source --dev
 
 # PyPI 安装到专用目录
 sudo ./scripts/setup.sh install --method pypi --version 1.0.0 --dir /opt/dr-panda-mcp
@@ -34,15 +37,34 @@ sudo ./scripts/setup.sh upgrade --dir /opt/dr-panda-mcp --version 1.0.1
 
 ## `check` 检查什么
 
-- OS/架构、`curl`、`git`、`uv`；
-- Linux 的 systemd 是否可用；
+- OS/架构、`curl`、`git`、`uv`、Python >=3.11；
+- Linux 的 systemd 是否可用、unit 是否合法；
 - `.env` 是否存在、权限是否过宽；
 - `data/` 与四个密钥/安装文件；
 - 监听地址、端口是否被占用；
 - 首次安装规则：`data/install.json` 不存在时，非 loopback 监听会直接失败；
-- 已记录的安装方式对应的可执行文件是否存在。
+- 已记录安装方式的可执行文件、解释器，以及服务用户能否执行；
+- venv Python 是否误指向 `/root`。
 
 安装前后都可以跑，完全只读。
+
+## Python 选择
+
+安装器优先使用系统 Python >=3.11（`/usr/bin/python3.12`、`/usr/bin/python3.11` 或 `python3`）。如果系统没有且以 root 安装，uv managed Python 会放到 `/opt/uv-python`，不会落到 `/root`，避免 `drpanda` 无法执行。
+
+可以用 `--python /path/to/python` 强制指定解释器。
+
+## 镜像
+
+可以直接设置 uv 标准环境变量：
+
+```bash
+export UV_DEFAULT_INDEX=https://mirrors.ustc.edu.cn/pypi/simple
+export UV_PYTHON_INSTALL_MIRROR=https://mirrors.ustc.edu.cn/github-release/astral-sh/python-build-standalone/
+./scripts/setup.sh install --method source --no-dev
+```
+
+uv 二进制本身建议用 USTC 的 GitHub Release 镜像安装。
 
 ## 首次安装
 
@@ -90,6 +112,10 @@ journalctl -u dr-panda-mcp -f
 | `--method source\|pypi` | 安装方式 |
 | `--version VER` | PyPI 版本 |
 | `--extras LIST` | `mysql,postgres,mongo,redis,kafka,cls` 或 `all` |
+| `--python PYTHON` | Python 解释器或 `auto`（默认） |
+| `--dev` | 安装 dev 组（仅 source） |
+| `--index-url URL` | PyPI 镜像（设置 `UV_DEFAULT_INDEX`） |
+| `--python-mirror URL` | python-build-standalone 镜像 |
 | `--user USER` | systemd 服务用户（默认 `drpanda`） |
 | `--service-name NAME` | systemd unit 名 |
 | `--repo URL` | Git 仓库地址 |

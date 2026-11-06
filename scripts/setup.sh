@@ -37,6 +37,11 @@ COMMAND="check"
 DIR=""
 METHOD=""
 EXTRAS=""
+PYTHON_SPEC="auto"
+DEV=0
+INDEX_URL=""
+PYTHON_MIRROR=""
+PYTHON_BIN=""
 SERVICE_USER="$DEFAULT_USER"
 SERVICE_NAME="$DEFAULT_SERVICE_NAME"
 REPO_URL_OVERRIDE=""
@@ -58,6 +63,10 @@ Options:
                           /opt/dr-panda-mcp for pypi/service)
   --method source|pypi    Installation method (install/upgrade)
   --version VERSION       PyPI version (default 1.0.0)
+  --python PYTHON         Python interpreter (default: auto; system >=3.11 first)
+  --dev                   Install the dev dependency group (source only)
+  --index-url URL         PyPI index (sets UV_DEFAULT_INDEX)
+  --python-mirror URL     python-build-standalone mirror (sets UV_PYTHON_INSTALL_MIRROR)
   --extras LIST           Comma-separated extras: mysql,postgres,mongo,redis,kafka,cls
                           Use "all" for --all-extras (source) / all extras (pypi)
   --user USER             systemd service user (default drpanda)
@@ -103,6 +112,8 @@ parse_args() {
     esac
   done
   [[ -n "$REPO_URL_OVERRIDE" ]] && REPO_URL="$REPO_URL_OVERRIDE"
+  [[ -n "$INDEX_URL" ]] && export UV_DEFAULT_INDEX="$INDEX_URL"
+  [[ -n "$PYTHON_MIRROR" ]] && export UV_PYTHON_INSTALL_MIRROR="$PYTHON_MIRROR"
   if [[ -z "$DIR" ]]; then
     case "$COMMAND" in
       service|start|status) DIR="/opt/dr-panda-mcp" ;;
@@ -170,7 +181,8 @@ save_meta() {
   local extras="${1:-}" version="${2:-}"
   printf '%s\n' "$extras" > "$DIR/.drpanda-extras"
   printf '%s\n' "$version" > "$DIR/.drpanda-version"
-  chmod 600 "$DIR/.drpanda-extras" "$DIR/.drpanda-version"
+  printf '%s\n' "$DEV" > "$DIR/.drpanda-dev"
+  chmod 600 "$DIR/.drpanda-extras" "$DIR/.drpanda-version" "$DIR/.drpanda-dev"
 }
 
 file_mode() {
@@ -232,6 +244,38 @@ ensure_git() {
   have git || die "git is required for --method source"
 }
 
+select_python() {
+  local candidate version
+  if [[ "$PYTHON_SPEC" != "auto" ]]; then
+    [[ -x "$PYTHON_SPEC" ]] || die "Python interpreter is not executable: $PYTHON_SPEC"
+    printf '%s' "$PYTHON_SPEC"
+    return 0
+  fi
+  for candidate in /usr/bin/python3.12 /usr/bin/python3.11 "$(command -v python3 2>/dev/null || true)"; do
+    [[ -n "$candidate" && -x "$candidate" ]] || continue
+    version="$("$candidate" -c 'import sys; print("%d%02d" % sys.version_info[:2])' 2>/dev/null || true)"
+    if [[ "$version" =~ ^[0-9]+$ ]] && (( version >= 311 )); then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  # No system Python >=3.11. Keep uv-managed Python outside /root when root,
+  # otherwise the service user cannot execute the venv interpreter.
+  if [[ "$EUID" -eq 0 ]]; then
+    export UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-/opt/uv-python}"
+    mkdir -p "$UV_PYTHON_INSTALL_DIR"
+    chmod 755 "$UV_PYTHON_INSTALL_DIR"
+  fi
+  info "No system Python >=3.11 found; installing uv-managed Python 3.11"
+  uv python install 3.11
+  version="$(uv python find 3.11 2>/dev/null || true)"
+  [[ -n "$version" && -x "$version" ]] || die "could not locate uv-managed Python 3.11"
+  if [[ "$EUID" -eq 0 && "$UV_PYTHON_INSTALL_DIR" == /opt/* ]]; then
+    chmod -R a+rX "$UV_PYTHON_INSTALL_DIR"
+  fi
+  printf '%s' "$version"
+}
+
 ensure_dir() {
   mkdir -p "$DIR"
 }
@@ -269,7 +313,15 @@ ensure_data_dir() {
 install_source() {
   ensure_git
   install_uv
+  PYTHON_BIN="$(select_python)"
   ensure_dir
+  if [[ -e "$DIR/.venv/bin/python" ]]; then
+    local existing_python
+    existing_python="$(readlink -f "$DIR/.venv/bin/python" 2>/dev/null || true)"
+    if [[ "$existing_python" == /root/* ]]; then
+      die "existing venv uses /root ($existing_python); remove $DIR/.venv and rerun (data is unaffected)"
+    fi
+  fi
   if ! source_dir; then
     if [[ -n "$(ls -A "$DIR" 2>/dev/null || true)" ]]; then
       die "$DIR is not empty and is not a DrPanda MCP source checkout"
@@ -278,7 +330,8 @@ install_source() {
     git clone "$REPO_URL" "$DIR"
   fi
   cd "$DIR"
-  local args=(--python 3.11)
+  local args=(--python "$PYTHON_BIN")
+  [[ "$DEV" -eq 1 ]] || args+=(--no-dev)
   if [[ "$EXTRAS" == "all" ]]; then
     args+=(--all-extras)
   elif [[ -n "$EXTRAS" ]]; then
@@ -297,11 +350,12 @@ install_source() {
 
 install_pypi() {
   install_uv
+  PYTHON_BIN="$(select_python)"
   ensure_dir
   local spec
   spec="$(extras_package_name "$EXTRAS")==${VERSION:-$DEFAULT_VERSION}"
   info "Installing $spec into $DIR/tool (bin: $DIR/bin)"
-  UV_TOOL_DIR="$DIR/tool" UV_TOOL_BIN_DIR="$DIR/bin" uv tool install --python 3.11 --force "$spec"
+  UV_TOOL_DIR="$DIR/tool" UV_TOOL_BIN_DIR="$DIR/bin" uv tool install --python "$PYTHON_BIN" --force "$spec"
   save_method pypi
   save_meta "$EXTRAS" "${VERSION:-$DEFAULT_VERSION}"
   ensure_env_file
@@ -359,6 +413,26 @@ service_exec_start() {
   printf '%s' "$binary"
 }
 
+assert_service_exec() {
+  local binary="$1" interpreter
+  [[ -x "$binary" ]] || die "binary is not executable: $binary"
+  if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    sudo -u "$SERVICE_USER" test -x "$binary" || die "service user $SERVICE_USER cannot execute $binary"
+    if head -1 "$binary" | grep -q '^#!'; then
+      interpreter="$(head -1 "$binary" | sed 's/^#!//' | awk '{print $1}')"
+      if [[ -n "$interpreter" && "$interpreter" != "/usr/bin/env" ]]; then
+        sudo -u "$SERVICE_USER" test -x "$interpreter" || die "service user $SERVICE_USER cannot execute interpreter: $interpreter"
+      fi
+    fi
+  fi
+  if [[ -f "$DIR/.venv/bin/python" ]]; then
+    interpreter="$(readlink -f "$DIR/.venv/bin/python" 2>/dev/null || true)"
+    if [[ "$interpreter" == /root/* ]]; then
+      die "venv Python points into /root ($interpreter); rebuild the venv with a system or shared Python"
+    fi
+  fi
+}
+
 install_service() {
   is_linux || die "systemd service installation is only supported on Linux"
   have systemctl || die "systemctl not found"
@@ -367,6 +441,9 @@ install_service() {
   method="$(current_method)"
   [[ -n "$method" ]] || die "no DrPanda installation found in $DIR; run install first"
   binary="$(service_exec_start)"
+  if [[ "$DIR" == *[[:space:]]* ]]; then
+    die "service directory must not contain whitespace: $DIR"
+  fi
   if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
     info "creating system user $SERVICE_USER"
     useradd --system --home-dir "$DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -376,6 +453,7 @@ install_service() {
   chown -R "$SERVICE_USER:$service_group" "$DIR"
   [[ -f "$DIR/.env" ]] && chmod 600 "$DIR/.env"
   [[ -d "$DIR/data" ]] && chmod 700 "$DIR/data"
+  assert_service_exec "$binary"
   tmp_dir="$(mktemp -d)"
   tmpfile="$tmp_dir/unit"
   {
@@ -389,14 +467,14 @@ Wants=network-online.target
 Type=simple
 User=$SERVICE_USER
 Group=$service_group
-WorkingDirectory="$DIR"
-ExecStart="$binary"
+WorkingDirectory=$DIR
+ExecStart=$binary
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths="$DIR/data"
+ReadWritePaths=$DIR/data
 UMask=0077
 EOF
     if [[ "$DIR" != /home/* ]]; then
@@ -411,6 +489,9 @@ EOF
   install -m 0644 "$tmpfile" "$(service_unit_path)"
   rm -rf "$tmp_dir"
   systemctl daemon-reload
+  if have systemd-analyze; then
+    systemd-analyze verify "$(service_unit_path)" || die "systemd unit verification failed"
+  fi
   if [[ "$NO_START" -eq 1 ]]; then
     systemctl enable "$SERVICE_NAME"
     info "service enabled but not started (--no-start)"
@@ -421,9 +502,20 @@ EOF
     warn "service enabled but not started; complete first installation on loopback, then run: systemctl start $SERVICE_NAME"
     return 1
   fi
-  systemctl enable --now "$SERVICE_NAME"
-  info "service installed: $SERVICE_NAME"
-  wait_health || { systemctl status "$SERVICE_NAME" --no-pager || true; die "service failed health check"; }
+  systemctl enable "$SERVICE_NAME"
+  systemctl restart "$SERVICE_NAME" || die "systemctl restart $SERVICE_NAME failed"
+  sleep 1
+  systemctl is-active --quiet "$SERVICE_NAME" || {
+    systemctl status "$SERVICE_NAME" --no-pager -l || true
+    journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
+    die "service failed to start"
+  }
+  wait_health || {
+    systemctl status "$SERVICE_NAME" --no-pager -l || true
+    journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
+    die "service failed health check"
+  }
+  info "service installed and healthy: $SERVICE_NAME"
 }
 
 start_app() {
@@ -436,13 +528,20 @@ start_app() {
   url="http://$(health_host):$(configured_port)/"
   if unit_installed; then
     is_root || die "run as root to start the systemd service: sudo systemctl start $SERVICE_NAME"
-    systemctl restart "$SERVICE_NAME"
-    info "service restarted: $SERVICE_NAME"
-    wait_health || { systemctl status "$SERVICE_NAME" --no-pager || true; exit 1; }
+    systemctl restart "$SERVICE_NAME" || die "systemctl restart $SERVICE_NAME failed"
+    wait_health || {
+      systemctl status "$SERVICE_NAME" --no-pager -l || true
+      journalctl -u "$SERVICE_NAME" -n 20 --no-pager || true
+      exit 1
+    }
+    info "service running: $SERVICE_NAME"
     return 0
   fi
   info "no systemd service found; starting in foreground"
   info "open: $url"
+  if is_loopback "$(configured_host)"; then
+    info "headless server: ssh -L $(configured_port):127.0.0.1:$(configured_port) <user>@<server>"
+  fi
   exec "$binary"
 }
 
@@ -518,6 +617,42 @@ check_environment() {
   fi
   if [[ -n "$method" && ! -x "$(binary_path)" ]]; then
     fail "installed binary is missing/not executable: $(binary_path)"; failures=$((failures+1))
+  elif [[ -n "$method" && -x "$(binary_path)" ]]; then
+    local interp
+    interp="$(head -1 "$(binary_path)" 2>/dev/null | sed 's/^#!//' | awk '{print $1}')"
+    if [[ -n "$interp" && "$interp" != "/usr/bin/env" ]]; then
+      if [[ "$interp" == /root/* ]]; then
+        fail "binary interpreter points into /root ($interp)"; failures=$((failures+1))
+      elif [[ "$(id -u "$SERVICE_USER" 2>/dev/null || echo 1)" != "1" ]] && ! sudo -u "$SERVICE_USER" test -x "$interp" 2>/dev/null; then
+        fail "service user $SERVICE_USER cannot execute interpreter $interp"; failures=$((failures+1))
+      fi
+    fi
+  fi
+  if [[ -f "$DIR/.venv/bin/python" ]]; then
+    local venv_python
+    venv_python="$(readlink -f "$DIR/.venv/bin/python" 2>/dev/null || true)"
+    if [[ "$venv_python" == /root/* ]]; then
+      fail "venv Python points into /root ($venv_python); the service user cannot execute it"; failures=$((failures+1))
+    else
+      info "venv Python: $venv_python"
+    fi
+  fi
+  if [[ -n "$method" && -e "$(binary_path)" && "$(id -u "$SERVICE_USER" 2>/dev/null || echo 1)" != "1" ]]; then
+    if ! sudo -u "$SERVICE_USER" test -x "$(binary_path)" 2>/dev/null; then
+      fail "service user $SERVICE_USER cannot execute $(binary_path)"; failures=$((failures+1))
+    fi
+  fi
+  if unit_installed; then
+    if have systemd-analyze; then
+      if ! systemd-analyze verify "$(service_unit_path)" >/dev/null 2>&1; then
+        fail "systemd unit verification failed: $(service_unit_path)"; failures=$((failures+1))
+      else
+        info "systemd unit: valid"
+      fi
+    fi
+    if have systemctl; then
+      if systemctl is-active --quiet "$SERVICE_NAME"; then info "service: active"; else warn "service: inactive"; warnings=$((warnings+1)); fi
+    fi
   fi
   if [[ "$failures" -gt 0 ]]; then
     log ""
@@ -542,7 +677,8 @@ upgrade_app() {
       ensure_git; install_uv
       git -C "$DIR" pull --ff-only
       cd "$DIR"
-      local args=(--python 3.11)
+      local args=(--python "${PYTHON_BIN:-$(select_python)}")
+      [[ "$(cat "$DIR/.drpanda-dev" 2>/dev/null || echo 0)" -eq 1 ]] || args+=(--no-dev)
       if [[ "$extras" == "all" ]]; then args+=(--all-extras)
       elif [[ -n "$extras" ]]; then local item; IFS=',' read -r -a items <<< "$extras"; for item in "${items[@]}"; do args+=(--extra "$item"); done; fi
       uv sync "${args[@]}"
@@ -550,13 +686,14 @@ upgrade_app() {
       ;;
     pypi)
       install_uv
+      PYTHON_BIN="$(select_python)"
       local spec
       if [[ -n "$VERSION" ]]; then
         spec="$(extras_package_name "$extras")==$VERSION"
       else
         spec="$(extras_package_name "$extras")"
       fi
-      UV_TOOL_DIR="$DIR/tool" UV_TOOL_BIN_DIR="$DIR/bin" uv tool install --python 3.11 --force "$spec"
+      UV_TOOL_DIR="$DIR/tool" UV_TOOL_BIN_DIR="$DIR/bin" uv tool install --python "$PYTHON_BIN" --force "$spec"
       save_meta "$extras" "${VERSION:-latest}"
       ;;
     *) die "unknown installation method: $method" ;;

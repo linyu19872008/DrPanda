@@ -2,7 +2,7 @@
 
 `scripts/setup.sh` is the supported deployment helper for a new machine. It supports both installation methods:
 
-- **source**: `git clone` + `uv sync` (recommended for development / the console's client-install feature)
+- **source**: `git clone` + `uv sync` (recommended for development / the console's client-install feature); production installs use `--no-dev` by default
 - **pypi**: `uv tool install dr-panda-mcp==<version>` (recommended for a runtime-only host)
 
 The first installation must be completed on loopback (`127.0.0.1` / `localhost`), then remote access can be enabled.
@@ -13,8 +13,11 @@ The first installation must be completed on loopback (`127.0.0.1` / `localhost`)
 # Read-only checks; changes nothing
 ./scripts/setup.sh check
 
-# Source installation (default; current checkout if run inside the repo)
+# Source installation (default; production uses --no-dev)
 ./scripts/setup.sh install --method source --extras mysql,redis
+
+# Development source install (includes pytest/ruff)
+./scripts/setup.sh install --method source --dev
 
 # PyPI installation into a dedicated directory
 sudo ./scripts/setup.sh install --method pypi --version 1.0.0 --dir /opt/dr-panda-mcp
@@ -34,15 +37,34 @@ sudo ./scripts/setup.sh upgrade --dir /opt/dr-panda-mcp --version 1.0.1
 
 ## What `check` verifies
 
-- OS/architecture, `curl`, `git`, `uv`;
-- systemd availability (Linux);
+- OS/architecture, `curl`, `git`, `uv`, Python >=3.11;
+- systemd availability (Linux) and unit syntax;
 - `.env` existence and mode (must not be group/other-readable);
 - `data/` and key/install files;
 - listen address/port and whether the port is in use;
 - first-install rule: non-loopback listen is rejected until `data/install.json` exists;
-- installed binary for the recorded method.
+- installed binary and its interpreter, including whether the service user can execute them;
+- whether the Python came from `/root` (the dedicated service user cannot access it).
 
 Use it before and after installation; it is read-only.
+
+## Python selection
+
+The installer prefers a system Python >=3.11 (`/usr/bin/python3.12`, `/usr/bin/python3.11`, or `python3`). If none exists and the installer runs as root, uv-managed Python is placed under `/opt/uv-python`, not `/root`, so the `drpanda` service user can execute it.
+
+Use `--python /path/to/python` to force an interpreter.
+
+## Mirrors (China / offline)
+
+Pass the standard uv environment variables or the helper flags:
+
+```bash
+export UV_DEFAULT_INDEX=https://mirrors.ustc.edu.cn/pypi/simple
+export UV_PYTHON_INSTALL_MIRROR=https://mirrors.ustc.edu.cn/github-release/astral-sh/python-build-standalone/
+./scripts/setup.sh install --method source --no-dev
+```
+
+For the uv binary itself, use the USTC mirror installer documented in the project docs.
 
 ## First installation
 
@@ -90,6 +112,10 @@ journalctl -u dr-panda-mcp -f
 | `--method source\|pypi` | Install method |
 | `--version VER` | PyPI version |
 | `--extras LIST` | `mysql,postgres,mongo,redis,kafka,cls` or `all` |
+| `--python PYTHON` | Python interpreter or `auto` (default) |
+| `--dev` | Install the dev dependency group (source only) |
+| `--index-url URL` | PyPI index (sets `UV_DEFAULT_INDEX`) |
+| `--python-mirror URL` | python-build-standalone mirror |
 | `--user USER` | systemd service user (default `drpanda`) |
 | `--service-name NAME` | systemd unit name |
 | `--repo URL` | Git repository URL |
