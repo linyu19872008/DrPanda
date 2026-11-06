@@ -7,8 +7,8 @@
   <a href="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
   -->
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
+  <a href="LICENSE"><img alt="License: MIT" src="docs/assets/badge-license.svg" height="20"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="docs/assets/badge-python.svg" height="20"></a>
 </p>
 
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
@@ -21,7 +21,7 @@
 
 **模型不能自行传入主机、账号或密码。**
 
-![配置台](docs/verify/assets/ui/light-index.png)
+![中文配置台](docs/zh-CN/assets/screenshot-zh.png)
 
 ---
 
@@ -53,6 +53,7 @@ M0–M7 已落地并通过测试：
 - 工具总数：**28**
 - 质量门禁：GitHub Actions（pytest / ruff / 文档链接检查），状态见顶部 CI 徽标
 - 默认监听：`127.0.0.1:8111`
+- 默认语言：英文（界面、MCP、CLI、文档）；中文文档在 `docs/zh-CN/`
 - 首次安装支持 SQLite / MySQL / PostgreSQL 配置库
 - 前端采用服务端渲染；配置台交互需要 JavaScript，认证与校验仍只在服务端执行
 
@@ -211,7 +212,7 @@ mcp__drpanda__systems_status
 
 目标属于一个环境。环境有展示名和调用标识。展示名可以改；调用标识创建后不能改，排查时要传这个值。不同环境可以有同名目标；同一个环境里同一种类型可以有多台，靠名称区分，不会自动挑一台。
 
-只有一个环境时，工具可以省略 `environment`，迁移种下的就是 `default`（展示名「默认」）。登记了多个环境之后，每次调用都要传 `environment`。先调用不带参数的 `systems_status` 看环境，再带上调用标识看这个环境里的目标。网页「排查目标」按环境切换；停用的环境不能查，配置仍保留。
+只有一个环境时，工具可以省略 `environment`，迁移种下的就是 `default`（展示名 `Default`）。登记了多个环境之后，每次调用都要传 `environment`。先调用不带参数的 `systems_status` 看环境，再带上调用标识看这个环境里的目标。网页「排查目标」按环境切换；停用的环境不能查，配置仍保留。
 
 工具调用时只传 `environment` 和 `target` 名称，不能传主机、账号或密码。
 
@@ -275,7 +276,7 @@ mcp__drpanda__systems_status
 - 不引入前端框架、Node 构建链、第三方 CDN；
 - 无 JS 时提供独立表单/确认页或手动复制提示，不显示假按钮。
 
-详见 [frontend-js-policy.md](docs/verify/frontend-js-policy.md)。
+详见 [frontend-js-policy.md](docs/zh-CN/verify/frontend-js-policy.md)。
 
 ---
 
@@ -408,7 +409,8 @@ src/dr_panda_mcp/
   web/                routes/templates/static/渲染
   store/              SQLAlchemy 模型、仓储、Alembic 迁移
 tests/                单元、契约、网页、工具与迁移测试
-docs/                 规划、里程碑、UI 规范与验证记录
+docs/                 英文文档（默认）
+docs/zh-CN/           中文规划、里程碑、UI 规范与验证记录
 scripts/              冒烟与 Docker 联调脚本
 ```
 
@@ -443,16 +445,17 @@ scripts/              冒烟与 Docker 联调脚本
 
 ## 文档
 
-- [docs/planning.md](docs/planning.md)：方案、接口、数据模型、只读/危险规则
-- [docs/milestones.md](docs/milestones.md)：里程碑与验收口径
-- [docs/ui-design.md](docs/ui-design.md)：配置台设计系统与页面规格
-- [docs/verify/m7-01.md](docs/verify/m7-01.md)：M7 安装、登录、多 Token
-- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md)：前端 JS 约束 v3（配置台需要 JavaScript，校验仍在服务端）
-- [docs/verify/async-ux-01.md](docs/verify/async-ux-01.md)：异步交互与保存门槛、真实 Chrome 验证
-- [docs/verify/ux-audit-01.md](docs/verify/ux-audit-01.md)：全站交互审计与修复
-- [docs/verify/form-ux-01.md](docs/verify/form-ux-01.md)：目标表单重组与保存前测试连接
-- [docs/verify/settings-03.md](docs/verify/settings-03.md)：系统配置结构化
-- [docs/verify/](docs/verify/)：全部里程碑、集成与硬化验证记录
+- [docs/zh-CN/README.md](docs/zh-CN/README.md)：中文文档索引
+- [docs/zh-CN/planning.md](docs/zh-CN/planning.md)：方案、接口、数据模型、只读/危险规则
+- [docs/zh-CN/milestones.md](docs/zh-CN/milestones.md)：里程碑与验收口径
+- [docs/zh-CN/ui-design.md](docs/zh-CN/ui-design.md)：配置台设计系统与页面规格
+- [docs/zh-CN/verify/m7-01.md](docs/zh-CN/verify/m7-01.md)：M7 安装、登录、多 Token
+- [docs/zh-CN/verify/frontend-js-policy.md](docs/zh-CN/verify/frontend-js-policy.md)：前端 JS 约束 v3（配置台需要 JavaScript，校验仍在服务端）
+- [docs/zh-CN/verify/async-ux-01.md](docs/zh-CN/verify/async-ux-01.md)：异步交互与保存门槛、真实 Chrome 验证
+- [docs/zh-CN/verify/ux-audit-01.md](docs/zh-CN/verify/ux-audit-01.md)：全站交互审计与修复
+- [docs/zh-CN/verify/form-ux-01.md](docs/zh-CN/verify/form-ux-01.md)：目标表单重组与保存前测试连接
+- [docs/zh-CN/verify/settings-03.md](docs/zh-CN/verify/settings-03.md)：系统配置结构化
+- [docs/zh-CN/verify/](docs/zh-CN/verify/)：全部里程碑、集成与硬化验证记录
 
 
 ## 贡献与安全

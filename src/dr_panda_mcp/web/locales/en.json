@@ -423,7 +423,7 @@
   "TLS、证书、运行限制": "TLS, certificates, run limits",
   "填写说明": "Filling guide",
   "测试通过": "Connection OK",
-  "测试失败": "Connection failed",
+  "测试失败": "Test failed",
   "连接测试通过": "Connection test passed",
   "连接测试失败": "Connection test failed",
   "新建时必填；保存后只存密文，不回显。": "Required for a new target; stored encrypted and never displayed.",
@@ -597,7 +597,6 @@
   "查看全部": "View all",
   "还没有操作。": "Nothing has happened yet.",
   "问题": "Issue",
-  "测试失败": "Test failed",
   "密钥不可用": "Key unavailable",
   "可查询的目标": "Targets you can query",
   "我的 Token": "My tokens",
@@ -713,5 +712,7 @@
   "连接器缓存上限与空闲回收在下一次取客户端时生效。SQLite 备份份数只在下次启动迁移前生效。": "Connector cache limit and idle reclamation apply on the next client fetch. SQLite backup retention applies before the next startup migration.",
   "每轮清理后按该间隔休眠；分片检查配置，改小最多 60 秒内生效，改大从当前轮开始使用。": "Sleeps for this interval after each cleanup; the setting is re-read in slices, so a smaller value applies within 60 seconds and a larger one from the current round.",
   "仅展示": "Display only",
-  "受信 Host": "Trusted hosts"
+  "受信 Host": "Trusted hosts",
+  "请求已过期": "Request expired",
+  "页面已过期，请刷新后重试": "This page has expired. Refresh and try again."
 }

@@ -45,7 +45,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         offset: int = 0,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """按条件检索 CLS 日志；必须带时间窗，单次不超过 24 小时。"""
+        """Search CLS logs by condition; a time window is required and a single query may not exceed 24 hours."""
         params = {
             "query": query,
             "topic": topic,
@@ -58,9 +58,9 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             if not query.strip():
-                raise errors.InvalidArgument("query 不能为空")
+                raise errors.InvalidArgument("query must not be empty")
             if offset < 0 or offset > 10_000:
-                raise errors.InvalidArgument("offset 必须在 0–10000 之间")
+                raise errors.InvalidArgument("offset must be between 0 and 10000")
             max_window = int(tgt.options.get("max_window_minutes", 1440) or 1440)
             window = require(
                 cls_guard.check_cls(
@@ -117,7 +117,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         after: int = 10,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """读取一条日志前后的上下文（PkgId + BTime + PkgLogId）。"""
+        """Read the context around one log entry (PkgId + BTime + PkgLogId)."""
         params = {
             "topic": topic,
             "log_id": log_id,
@@ -132,13 +132,20 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             require(cls_guard.check_cls("describe_log_context", {}))
             chosen_topic = ensure_topic(tgt, topic)
             if not log_id.strip():
-                raise errors.InvalidArgument("log_id 不能为空")
+                raise errors.InvalidArgument("log_id must not be empty")
             if not btime.strip():
-                raise errors.InvalidArgument("btime 不能为空（取 cls_search 返回的 btime）")
+                raise errors.InvalidArgument(
+                    "btime must not be empty (use the btime returned by cls_search)"
+                )
             if pkg_log_id < 1:
-                raise errors.InvalidArgument("pkg_log_id 必须是正整数（取 cls_search 返回的 package_log_id）")
+                raise errors.InvalidArgument(
+                    "pkg_log_id must be a positive integer "
+                    "(use the package_log_id returned by cls_search)"
+                )
             if not 0 <= before <= 20 or not 0 <= after <= 20:
-                raise errors.InvalidArgument("before / after 必须在 0–20 之间")
+                raise errors.InvalidArgument(
+                    "before / after must be between 0 and 20"
+                )
             connector = get_connector("cls")
             client = await runtime.catalog.client(tgt, connector)
             rows = await connector.describe_context(
@@ -183,7 +190,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         page: int = 1,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """在 GitLab 项目里搜索代码；project 省略时只在授权项目内搜索。"""
+        """Search code in GitLab projects; when project is omitted, only authorized projects are searched."""
         params = {
             "query": query,
             "project": project or None,
@@ -195,13 +202,13 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             if not query.strip():
-                raise errors.InvalidArgument("query 不能为空")
+                raise errors.InvalidArgument("query must not be empty")
             require(gitlab_guard.check_gitlab("GET", "/api/v4/projects/search"))
             projects = (
                 [ensure_project(tgt, project)] if project else allowed_projects(tgt)
             )
             if page < 1 or page > 10_000:
-                raise errors.InvalidArgument("page 必须在 1–10000 之间")
+                raise errors.InvalidArgument("page must be between 1 and 10000")
             cap = clamp_limit(limit, tgt, 20)
             connector = get_connector("gitlab")
             client = await runtime.catalog.client(tgt, connector)
@@ -255,7 +262,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         ref: str = "",
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """读取 GitLab 项目里的一个文件（按字节上限截断）。"""
+        """Read one file from a GitLab project (truncated at the byte limit)."""
         params = {"project": project, "path": path, "ref": ref or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -263,7 +270,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             chosen_project = ensure_project(tgt, project)
             require(gitlab_guard.check_gitlab("GET", "/api/v4/projects/repository/files"))
             if not path.strip():
-                raise errors.InvalidArgument("path 不能为空")
+                raise errors.InvalidArgument("path must not be empty")
             connector = get_connector("gitlab")
             client = await runtime.catalog.client(tgt, connector)
             content, upstream_truncated = await connector.get_file(
@@ -306,7 +313,7 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
         line_to: int = 0,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """查看文件最近的改动（可按行号范围）。"""
+        """Show recent changes to a file (optionally restricted to a line range)."""
         params = {
             "project": project,
             "path": path,
@@ -320,9 +327,9 @@ def register_logs_tools(server: FastMCP, runtime: Runtime) -> None:
             chosen_project = ensure_project(tgt, project)
             require(gitlab_guard.check_gitlab("GET", "/api/v4/projects/repository/blame"))
             if not path.strip():
-                raise errors.InvalidArgument("path 不能为空")
+                raise errors.InvalidArgument("path must not be empty")
             if line_from < 0 or line_to < 0 or (line_to and line_from and line_to < line_from):
-                raise errors.InvalidArgument("行号范围不合法")
+                raise errors.InvalidArgument("invalid line number range")
             connector = get_connector("gitlab")
             client = await runtime.catalog.client(tgt, connector)
             payload = await connector.blame(

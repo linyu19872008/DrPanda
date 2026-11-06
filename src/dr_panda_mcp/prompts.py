@@ -6,28 +6,31 @@ from fastmcp import FastMCP
 
 PROMPT_NAME = "investigate_error"
 
-_TEMPLATE = """你是线上故障排查助手。全部工具只读，不能修改任何线上状态。
+_TEMPLATE = """You are a production incident investigation assistant. All tools are read-only and cannot modify any production state.
 
-已知信息：
+Known information:
 {context}
 
-排查顺序：
-1. 先确认环境。用户说的是展示名（如乐畅生产）时，用 systems_status 对照 title，得到调用标识 key。登记了多个环境时，每次工具调用都传 environment；只有一个环境时可以省略。不要查到别的环境。
-2. 再用 systems_status 并传入 environment，确认该环境里哪些目标已登记、已启用、最近是否连通。同一种类型有多台时，向用户确认 target 名称，不要自行挑选。
-3. 需要写查询前先看结构：MySQL 用 mysql_tables、mysql_describe，Mongo 用 mongo_collections，Elasticsearch 用 es_mapping。不要凭猜写表名和字段名。
-4. 有 trace id 时先 cls_search 按 trace id + 时间窗检索；没有就按服务名与时间窗检索。
-5. 用异常类名、堆栈或日志原文调用 gitlab_search_code；命中后用 gitlab_get_file 读代码，gitlab_blame 看最近改动。
-6. 现象像慢查询或数据不一致，走 mysql_explain、mysql_query；缓存放 redis_get、redis_scan、redis_info；搜索放 es_search、es_health。
-7. 现象像堆积或延迟，走 rabbit_queues、kafka_lag、kafka_peek。
-8. 结论必须写明环境、时间窗、目标与证据（具体条目）；结果被截断要说明。
-9. 证据不足就明确说缺什么，不猜、不编造行号与数值。
-10. 全程只读，不尝试写操作。"""
+Investigation order:
+1. Confirm the environment first. When the user gives a display name (for example "Lechang Production"), call systems_status and match it against title to get the call key. When multiple environments are registered, pass environment on every tool call; with only one environment it can be omitted. Never investigate a different environment.
+2. Then call systems_status with environment to confirm which targets in that environment are registered, enabled, and recently reachable. When there is more than one target of the same type, ask the user for the target name; do not pick one yourself.
+3. Before writing a query, inspect the structure: mysql_tables and mysql_describe for MySQL, mongo_collections for Mongo, es_mapping for Elasticsearch. Do not guess table or field names.
+4. If you have a trace id, start with cls_search using trace id + time window; otherwise search by service name and time window.
+5. Call gitlab_search_code with the exception class name, stack trace, or raw log text. Once you get a hit, read the code with gitlab_get_file and check recent changes with gitlab_blame.
+6. For symptoms like slow queries or data inconsistency, use mysql_explain and mysql_query; for cache use redis_get, redis_scan, and redis_info; for search use es_search and es_health.
+7. For symptoms like backlog or delay, use rabbit_queues, kafka_lag, and kafka_peek.
+8. Conclusions must state the environment, time window, target, and evidence (specific entries); explain it when results were truncated.
+9. If the evidence is insufficient, state exactly what is missing; do not guess or fabricate line numbers or values.
+10. Stay read-only throughout; never attempt a write operation."""
 
 
 def register_prompts(server: FastMCP) -> None:
     @server.prompt(
         name=PROMPT_NAME,
-        description="按日志→代码→数据/消息的顺序排查线上报错，全程只读",
+        description=(
+            "Investigate a production error in log → code → data/message order; "
+            "read-only throughout"
+        ),
     )
     def investigate_error(
         description: str = "",
@@ -36,17 +39,21 @@ def register_prompts(server: FastMCP) -> None:
         time_range: str = "",
         environment: str = "",
     ) -> str:
-        """把推荐排查顺序与已知信息交给模型。"""
+        """Hand the recommended investigation order and known information to the model."""
         lines: list[str] = []
         if environment:
-            lines.append(f"- 环境：{environment}")
+            lines.append(f"- Environment: {environment}")
         if description:
-            lines.append(f"- 现象：{description}")
+            lines.append(f"- Symptom: {description}")
         if service:
-            lines.append(f"- 服务：{service}")
+            lines.append(f"- Service: {service}")
         if trace_id:
-            lines.append(f"- trace id：{trace_id}")
+            lines.append(f"- trace id: {trace_id}")
         if time_range:
-            lines.append(f"- 时间窗：{time_range}")
-        context = "\n".join(lines) if lines else "（调用方未提供，先向用户确认现象、服务与时间窗）"
+            lines.append(f"- Time window: {time_range}")
+        context = (
+            "\n".join(lines)
+            if lines
+            else "(not provided by the caller; confirm the symptom, service, and time window with the user first)"
+        )
         return _TEMPLATE.format(context=context)

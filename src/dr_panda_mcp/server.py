@@ -44,13 +44,18 @@ SERVER_NAME = "dr-panda-mcp"
 
 # 服务器说明与 planning 8.8 的纪律一致；M3 起注册 tools 后仍复用这段文本。
 SERVER_INSTRUCTIONS = (
-    f"{PRODUCT_NAME} 是线上排查用的只读工具集。调用只接受 environment（环境调用标识）"
-    "和 target 名，不接受主机、DSN、账号或密码。目标按环境隔离，不同环境可以有同名目标。"
-    "登记了多个环境时必须传入 environment；只有一个环境时可以省略。"
-    "同一种类型有多台时必须传入 target，不会自动挑选。"
-    "八个排查组件绝对只读，日志与搜索必须带时间窗，优先使用 trace id，"
-    "拒绝全表扫描与无上限拉取，结果被截断时必须向用户说明。"
-    "先调用 systems_status 了解有哪些环境；要看某个环境里的目标时再传入 environment。"
+    f"{PRODUCT_NAME} is a read-only toolkit for production incident investigation. "
+    "Calls accept only environment (the environment call key) and a target name; "
+    "hosts, DSNs, accounts, and passwords are never accepted. Targets are isolated "
+    "per environment, and different environments may have targets with the same name. "
+    "When multiple environments are registered you must pass environment; with only "
+    "one environment it can be omitted. When there is more than one target of the "
+    "same type you must pass target; nothing is selected automatically. All eight "
+    "investigation components are strictly read-only. Log and search calls require a "
+    "time window and should prefer a trace id; full-table scans and unbounded fetches "
+    "are rejected, and you must tell the user whenever results are truncated. Call "
+    "systems_status first to see which environments exist; to see the targets inside "
+    "an environment, pass its environment key."
 )
 
 
@@ -75,7 +80,7 @@ def create_server(config: Config, runtime: Runtime) -> FastMCP:
             await runtime.store.ping()
         except Exception:  # noqa: BLE001 - 探活失败只反映配置库状态
             logger.warning(
-                failure_text("store.error", "配置库不可用", request=current_request_id())
+                failure_text("store.error", "config store unavailable", request=current_request_id())
             )
             return JSONResponse(
                 {"ok": False, "version": package_version(), "db": "error"},
@@ -148,10 +153,10 @@ def check_port_available(host: str, port: int) -> None:
     except OSError as exc:
         if exc.errno == errno.EADDRINUSE:
             raise StartupError(
-                f"端口 {port} 已被占用，请用 DR_PANDA_PORT 换一个端口"
+                f"port {port} is already in use; choose another port with DR_PANDA_PORT"
             ) from exc
         raise StartupError(
-            f"无法监听 {host}:{port}（{exc.strerror}），请检查 DR_PANDA_HOST / DR_PANDA_PORT"
+            f"cannot bind {host}:{port} ({exc.strerror}); check DR_PANDA_HOST / DR_PANDA_PORT"
         ) from exc
     finally:
         sock.close()

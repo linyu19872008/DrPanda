@@ -16,7 +16,7 @@ SQLite 配置库使用 WAL 模式。主文件在未 checkpoint 时可能只有 4
 - 非 SQLite/内存库跳过；checkpoint 失败只记日志，不阻断启动或关闭。
 - 保持 WAL 模式不变，继续保留并发读写收益。
 
-实现位置：[store/url.py](../../src/dr_panda_mcp/store/url.py) / [runtime.py](../../src/dr_panda_mcp/runtime.py)。
+实现位置：[store/url.py](../../../src/dr_panda_mcp/store/url.py) / [runtime.py](../../../src/dr_panda_mcp/runtime.py)。
 
 ## 验证
 

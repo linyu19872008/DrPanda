@@ -44,6 +44,6 @@ def dangerous(reason: str, detail: str) -> Decision:
 def require(decision: Decision) -> Any:
     """放行则返回规范化结果；拒绝则抛 ``GuardRejected``（带错误码）。"""
     if not decision.allowed:
-        message = decision.detail or decision.reason or "请求被拒绝"
+        message = decision.detail or decision.reason or "request rejected"
         raise errors.GuardRejected(message, code=decision.error_code)
     return decision.normalized

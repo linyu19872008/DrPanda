@@ -64,7 +64,7 @@ class SecretBox:
         environment: str | None = None,
     ) -> dict:
         if not isinstance(value, str):
-            raise SecretUnavailable(f"字段 {field} 的密钥必须是字符串")
+            raise SecretUnavailable(f"secret value for field {field} must be a string")
         version = ENVELOPE_VERSION_V2 if environment else ENVELOPE_VERSION
         nonce = os.urandom(NONCE_BYTES)
         ciphertext = AESGCM(self.key).encrypt(
@@ -90,18 +90,18 @@ class SecretBox:
             aad = _aad(target_name, field, None)
         elif version == ENVELOPE_VERSION_V2:
             if not environment:
-                raise SecretUnavailable(f"目标 {target_name} 的密钥版本不支持")
+                raise SecretUnavailable(f"secret version for target {target_name} is not supported")
             aad = _aad(target_name, field, environment)
         else:
-            raise SecretUnavailable(f"目标 {target_name} 的密钥版本不支持")
+            raise SecretUnavailable(f"secret version for target {target_name} is not supported")
         if envelope.get("kid") != self.kid:
-            raise SecretUnavailable(f"目标 {target_name} 的密钥版本与当前密钥不匹配")
+            raise SecretUnavailable(f"secret version for target {target_name} does not match the current key")
         nonce = _unb64(str(envelope.get("nonce", "")), target_name)
         ciphertext = _unb64(str(envelope.get("ct", "")), target_name)
         try:
             plaintext = AESGCM(self.key).decrypt(nonce, ciphertext, aad)
         except InvalidTag as exc:
-            raise SecretUnavailable(f"目标 {target_name} 的密钥无法解密") from exc
+            raise SecretUnavailable(f"secret for target {target_name} cannot be decrypted") from exc
         return plaintext.decode("utf-8")
 
 
@@ -119,16 +119,16 @@ def _unb64(value: str, target_name: str) -> bytes:
     try:
         return base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise SecretUnavailable(f"目标 {target_name} 的密钥密文损坏") from exc
+        raise SecretUnavailable(f"secret ciphertext for target {target_name} is corrupted") from exc
 
 
 def decode_key(encoded: str) -> bytes:
     try:
         key = base64.b64decode(encoded.strip(), validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise StartupError("加密密钥必须是 base64 编码的字符串") from exc
+        raise StartupError("encryption key must be a base64-encoded string") from exc
     if len(key) != KEY_BYTES:
-        raise StartupError(f"加密密钥解码后必须是 {KEY_BYTES} 字节，当前 {len(key)} 字节")
+        raise StartupError(f"encryption key must decode to {KEY_BYTES} bytes; got {len(key)} bytes")
     return key
 
 
@@ -147,13 +147,13 @@ def load_or_create_secret_box(
 
     if has_ciphertext:
         raise StartupError(
-            f"配置库里已有加密数据，但没有找到密钥文件 {key_file}，"
-            "也没有设置 DR_PANDA_SECRET_KEY。请恢复密钥备份后再启动"
+            f"encrypted data exists in the config store but the key file {key_file} is missing; "
+            "DR_PANDA_SECRET_KEY is not set either. Restore the key backup and restart"
         )
 
     key = os.urandom(KEY_BYTES)
     _write_key_file(key_file, key)
-    logger.warning("已生成新的加密密钥：%s（请与配置库一起备份）", key_file)
+    logger.warning("generated a new encryption key: %s (back it up together with the config store)", key_file)
     return SecretBox(key)
 
 

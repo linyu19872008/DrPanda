@@ -17,7 +17,7 @@ def _load_env() -> bool:
     try:
         load_env_file()
     except EnvFileError as exc:
-        print(f"dr-panda-mcp: 启动失败：{exc}", file=sys.stderr)
+        print(f"dr-panda-mcp: startup failed: {exc}", file=sys.stderr)
         return False
     return True
 

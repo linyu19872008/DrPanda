@@ -55,7 +55,7 @@ async def test_non_loopback_requires_completed_install(tmp_path: Path) -> None:
         session_key_file=tmp_path / "session.key",
     )
 
-    with pytest.raises(StartupError, match="首次安装必须在"):
+    with pytest.raises(StartupError, match="first installation"):
         await _run(cfg)
 
 
@@ -147,4 +147,5 @@ async def test_startup_fails_when_key_file_missing(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     output = result.stdout + result.stderr
-    assert "密钥文件" in output
+    assert "key file" in output
+    assert "startup failed" in output

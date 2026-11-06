@@ -76,7 +76,7 @@ def _is_this_project(pyproject: Path) -> bool:
 async def install_extra(extra: str) -> None:
     """补装 ``extra``。忙、找不到项目、没有 uv 或 uv 失败时抛异常。"""
     if extra not in INSTALL_EXTRAS:
-        raise InstallError("不支持安装该客户端")
+        raise InstallError("this client cannot be installed")
     async with _gate.lock:
         if _gate.running:
             raise InstallBusy()
@@ -91,11 +91,11 @@ async def install_extra(extra: str) -> None:
 async def _sync(extra: str) -> None:
     root = project_root()
     if root is None:
-        raise InstallError("找不到本服务的项目目录，无法安装")
+        raise InstallError("cannot find the project directory for this service; installation aborted")
     uv = shutil.which("uv")
     if uv is None:
-        raise InstallError("当前环境没有 uv，无法安装")
-    logger.info("安装客户端 extra=%s root=%s", extra, root)
+        raise InstallError("uv is not available in this environment; installation aborted")
+    logger.info("installing client extra=%s root=%s", extra, root)
     try:
         process = await asyncio.create_subprocess_exec(
             uv,
@@ -109,17 +109,17 @@ async def _sync(extra: str) -> None:
             start_new_session=True,
         )
     except OSError as exc:
-        raise InstallError(f"无法启动 uv：{exc.strerror or exc}") from exc
+        raise InstallError(f"cannot start uv: {exc.strerror or exc}") from exc
     try:
         stdout, stderr = await asyncio.wait_for(
             process.communicate(), INSTALL_TIMEOUT_SECONDS
         )
     except TimeoutError:
         _kill(process)
-        raise InstallError("安装超时，请稍后重试或手动执行命令") from None
+        raise InstallError("installation timed out; retry later or run the command manually") from None
     if process.returncode != 0:
-        detail = _tail(stderr) or _tail(stdout) or f"uv sync 退出码 {process.returncode}"
-        logger.warning("安装客户端失败 extra=%s: %s", extra, detail)
+        detail = _tail(stderr) or _tail(stdout) or f"uv sync exited with code {process.returncode}"
+        logger.warning("client installation failed extra=%s: %s", extra, detail)
         raise InstallError(detail)
 
 

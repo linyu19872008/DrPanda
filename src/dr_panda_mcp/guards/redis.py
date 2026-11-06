@@ -20,11 +20,11 @@ from dr_panda_mcp.guards.protocol import (
 def check_redis(command: str, args: Sequence[Any] = ()) -> Decision:
     """检查一条 Redis 命令。"""
     if not isinstance(command, str) or not command:
-        return guard_rejected("redis.empty_command", "命令不能为空")
+        return guard_rejected("redis.empty_command", "command must not be empty")
     upper = command.upper()
     if upper not in forbidden.REDIS_READ_COMMANDS:
         return guard_rejected(
-            "redis.command_not_allowed", f"只允许只读命令，收到 {upper}"
+            "redis.command_not_allowed", f"only read-only commands are allowed, got {upper}"
         )
 
     values = list(args)
@@ -32,13 +32,13 @@ def check_redis(command: str, args: Sequence[Any] = ()) -> Decision:
     if upper == "SLOWLOG":
         sub = str(values[0]).upper() if values else ""
         if sub != "GET":
-            return guard_rejected("redis.slowlog_subcommand", "SLOWLOG 只允许 GET")
+            return guard_rejected("redis.slowlog_subcommand", "SLOWLOG only allows GET")
         return allow({"command": upper, "args": values})
 
     if upper == "MEMORY":
         sub = str(values[0]).upper() if values else ""
         if sub != "USAGE":
-            return guard_rejected("redis.memory_subcommand", "MEMORY 只允许 USAGE")
+            return guard_rejected("redis.memory_subcommand", "MEMORY only allows USAGE")
         return allow({"command": upper, "args": values})
 
     if upper in {"SCAN", "HSCAN"}:
@@ -46,11 +46,11 @@ def check_redis(command: str, args: Sequence[Any] = ()) -> Decision:
         if not present:
             return allow({"command": upper, "args": values, "count": 10})
         if count is None:
-            return guard_rejected("redis.invalid_count", "COUNT 必须是整数")
+            return guard_rejected("redis.invalid_count", "COUNT must be an integer")
         if count > forbidden.REDIS_MAX_SCAN_COUNT:
             return dangerous(
                 "redis.scan_count_too_large",
-                f"SCAN COUNT 不能超过 {forbidden.REDIS_MAX_SCAN_COUNT}",
+                f"SCAN COUNT must not exceed {forbidden.REDIS_MAX_SCAN_COUNT}",
             )
         return allow({"command": upper, "args": values, "count": count})
 
@@ -69,18 +69,19 @@ def check_redis(command: str, args: Sequence[Any] = ()) -> Decision:
 def _check_range(command: str, values: list[Any]) -> Decision:
     if len(values) < 3:
         return guard_rejected(
-            "redis.invalid_range", f"{command} 需要 key 与起止下标"
+            "redis.invalid_range", f"{command} requires a key and start/stop indices"
         )
     start, stop = _to_int(values[1]), _to_int(values[2])
     if start is None or stop is None:
-        return guard_rejected("redis.invalid_range", "起止下标必须是整数")
+        return guard_rejected("redis.invalid_range", "start and stop indices must be integers")
     if stop < 0:
         return dangerous(
             "redis.unbounded_range",
-            f"{command} 的 end 不能是 {stop}（到集合末尾即无界）",
+            f"{command} end must not be {stop} "
+            "(going to the end of the collection is unbounded)",
         )
     if stop < start:
-        return guard_rejected("redis.invalid_range", "end 不能小于 start")
+        return guard_rejected("redis.invalid_range", "end must not be less than start")
     return allow({"command": command, "args": values, "span": stop - start + 1})
 
 

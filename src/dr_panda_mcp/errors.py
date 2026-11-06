@@ -175,7 +175,7 @@ def sync_extra_command(extra: str) -> str:
 
 def missing_client_message(extra: str) -> str:
     """排查客户端不在当前服务环境时的说明。命令留在句末，页面只用来判断能否安装。"""
-    return f"{extra} 客户端未安装：{sync_extra_command(extra)}"
+    return f"{extra} client is not installed: {sync_extra_command(extra)}"
 
 
 _SYNC_EXTRA = re.compile(r"uv sync --extra [A-Za-z0-9_-]+(?: --inexact)?")
@@ -189,5 +189,5 @@ def install_failed_message(extra: str, reason: str) -> str:
     if len(cleaned) > 300:
         cleaned = cleaned[:300].rstrip() + "…"
     if not cleaned:
-        cleaned = "uv sync 没有成功"
-    return f"{extra} 客户端未安装。安装没有完成：{cleaned}：{sync_extra_command(extra)}"
+        cleaned = "uv sync did not succeed"
+    return f"{extra} client is not installed. Installation did not finish: {cleaned}: {sync_extra_command(extra)}"

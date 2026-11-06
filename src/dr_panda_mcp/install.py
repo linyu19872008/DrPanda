@@ -42,9 +42,9 @@ def load_or_create_install_key(path: Path) -> bytes:
         try:
             key = base64.b64decode(path.read_text(encoding="utf-8").strip(), validate=True)
         except (ValueError, OSError) as exc:
-            raise StartupError(f"安装状态密钥文件损坏：{path}") from exc
+            raise StartupError(f"installation key file is corrupted: {path}") from exc
         if len(key) != INSTALL_KEY_BYTES:
-            raise StartupError(f"安装状态密钥必须是 {INSTALL_KEY_BYTES} 字节：{path}")
+            raise StartupError(f"installation key must be {INSTALL_KEY_BYTES} bytes: {path}")
         return key
 
     key = os.urandom(INSTALL_KEY_BYTES)
@@ -64,7 +64,7 @@ def load_install_state(install_file: Path, key_file: Path) -> InstallState | Non
     try:
         raw = json.loads(install_file.read_text(encoding="utf-8"))
         if raw.get("v") != INSTALL_VERSION:
-            raise StartupError("安装状态版本不受支持")
+            raise StartupError("unsupported installation state version")
         envelope = raw["database_url"]
         nonce = _unb64(envelope["nonce"])
         ciphertext = _unb64(envelope["ct"])
@@ -73,7 +73,7 @@ def load_install_state(install_file: Path, key_file: Path) -> InstallState | Non
         ).decode("utf-8")
         return InstallState(database_url=database_url, installed_at=str(raw.get("installed_at", "")))
     except (KeyError, TypeError, ValueError, InvalidTag) as exc:
-        raise StartupError(f"安装状态文件损坏：{install_file}") from exc
+        raise StartupError(f"installation state file is corrupted: {install_file}") from exc
 
 
 def save_install_state(install_file: Path, key_file: Path, database_url: str) -> None:

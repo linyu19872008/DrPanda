@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Audit log with outcome/failure details, filters and retention cleanup.
 - System settings for target defaults, concurrency, audit maintenance, session/token limits and backup retention.
 - Automatic loading of `./.env`, strict permission/format validation and environment-variable precedence.
+- English is the default language for the web UI, MCP, CLI and documentation; Chinese docs live under `docs/zh-CN/`.
 - GitHub open-source documentation: bilingual README, contribution/security/conduct policies, issue/PR templates and CI.
 
 ### Security

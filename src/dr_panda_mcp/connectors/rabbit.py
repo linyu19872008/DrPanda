@@ -22,7 +22,7 @@ class _RabbitClient:
         options = self.target.options
         base_url = str(options.get("management_url", "")).rstrip("/")
         if not base_url:
-            raise errors.UpstreamUnavailable("rabbitmq 目标没有配置 management_url")
+            raise errors.UpstreamUnavailable("rabbitmq target has no management_url configured")
         return httpx.AsyncClient(
             base_url=base_url,
             auth=(options.get("user", ""), self.target.secret.get("password", "")),
@@ -44,9 +44,9 @@ class _RabbitClient:
         except errors.DrPandaError:
             raise
         except ValueError as exc:
-            raise errors.UpstreamUnavailable("rabbitmq 返回的不是 JSON") from exc
+            raise errors.UpstreamUnavailable("rabbitmq returned non-JSON content") from exc
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"rabbitmq 请求失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"rabbitmq request failed: {exc}") from exc
         finally:
             await client.aclose()
 
@@ -57,14 +57,14 @@ class _RabbitClient:
         path = "/api/queues" if not vhost else f"/api/queues/{quote(vhost, safe='')}"
         payload = await self._get(path)
         if not isinstance(payload, list):
-            raise errors.UpstreamUnavailable("rabbitmq 队列列表格式不符合预期")
+            raise errors.UpstreamUnavailable("rabbitmq queue list has an unexpected format")
         return [base.to_jsonable(item) for item in payload if isinstance(item, dict)]
 
     async def queue(self, vhost: str, queue: str) -> dict[str, Any]:
         path = f"/api/queues/{quote(vhost, safe='')}/{quote(queue, safe='')}"
         payload = await self._get(path)
         if not isinstance(payload, dict):
-            raise errors.UpstreamUnavailable("rabbitmq 队列详情格式不符合预期")
+            raise errors.UpstreamUnavailable("rabbitmq queue detail has an unexpected format")
         return base.to_jsonable(payload)
 
 

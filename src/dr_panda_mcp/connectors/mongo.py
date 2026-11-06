@@ -91,7 +91,8 @@ def _normalize_uri_credentials(uri: str) -> str:
     user, password_separator, password = userinfo.partition(":")
     if not user:
         raise errors.UpstreamUnavailable(
-            "mongo 连接 URI 的用户名为空；格式应为 mongodb://用户名:密码@主机:端口/"
+            "mongo connection URI has an empty user name; the format is "
+            "mongodb://user:password@host:port/"
         )
     encoded_user = _escape_credential(user)
     if not password_separator:
@@ -117,21 +118,21 @@ def _build_uri(target: Target) -> str:
     if mode == "uri":
         uri = str(target.secret.get("uri") or "").strip()
         if not uri:
-            raise errors.UpstreamUnavailable("mongo 目标未配置连接 URI")
+            raise errors.UpstreamUnavailable("mongo target has no connection URI configured")
         scheme = urlsplit(uri).scheme
         if scheme not in {"mongodb", "mongodb+srv"}:
-            raise errors.UpstreamUnavailable("mongo 连接 URI 必须以 mongodb:// 或 mongodb+srv:// 开头")
+            raise errors.UpstreamUnavailable("mongo connection URI must start with mongodb:// or mongodb+srv://")
         return _normalize_uri_credentials(uri)
 
     host = str(options.get("host") or "").strip()
     if not host:
-        raise errors.UpstreamUnavailable("mongo 目标未配置主机")
+        raise errors.UpstreamUnavailable("mongo target has no host configured")
     port = int(options.get("port", 27017))
     if mode == "password":
         user = str(options.get("user") or "").strip()
         password = target.secret.get("password", "")
         if not user or not password:
-            raise errors.UpstreamUnavailable("mongo 密码模式缺少用户或密码")
+            raise errors.UpstreamUnavailable("mongo password mode is missing a user or password")
         auth_source = quote(str(options.get("auth_source") or "admin"), safe="")
         return (
             f"mongodb://{quote(user, safe='')}:{quote(str(password), safe='')}"
@@ -154,9 +155,9 @@ class _MongoClient:
             return {}, []
 
         if not tls:
-            raise errors.UpstreamUnavailable("mongo 配置 TLS 材料时必须启用 TLS")
+            raise errors.UpstreamUnavailable("TLS must be enabled when TLS material is configured for mongo")
         if not (client_cert and client_key) and (client_cert or client_key):
-            raise errors.UpstreamUnavailable("mongo 客户端证书与私钥必须同时提供")
+            raise errors.UpstreamUnavailable("mongo client certificate and private key must be provided together")
 
         kwargs: dict[str, Any] = {"tls": True}
         paths: list[str] = []
@@ -199,7 +200,7 @@ class _MongoClient:
             except Exception as exc:
                 # 驱动在构造阶段就解析 URI；把 InvalidURI 之类的异常转成可读错误，
                 # 否则会以“未预期错误”直出网页。
-                raise errors.UpstreamUnavailable(f"mongo 连接串无法解析：{exc}") from exc
+                raise errors.UpstreamUnavailable(f"mongo connection string cannot be parsed: {exc}") from exc
             yield client
         finally:
             if client is not None:
@@ -212,7 +213,7 @@ class _MongoClient:
             try:
                 await client.admin.command("ping")
             except Exception as exc:
-                raise classify.mongo_error(exc, "mongo 探测失败") from exc
+                raise classify.mongo_error(exc, "mongo probe failed") from exc
 
     async def collections(self, db_name: str, limit: int) -> list[dict[str, Any]]:
         require(mongo_guard.check_mongo_command("listCollections", {}))
@@ -237,7 +238,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise classify.mongo_error(exc, "mongo 集合列表失败") from exc
+                raise classify.mongo_error(exc, "mongo collection listing failed") from exc
 
     async def find(
         self,
@@ -266,7 +267,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise classify.mongo_error(exc, "mongo find 失败") from exc
+                raise classify.mongo_error(exc, "mongo find failed") from exc
 
     async def aggregate(
         self,
@@ -287,7 +288,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise classify.mongo_error(exc, "mongo aggregate 失败") from exc
+                raise classify.mongo_error(exc, "mongo aggregate failed") from exc
 
     async def stats(
         self, db_name: str, collection: str | None
@@ -306,7 +307,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise classify.mongo_error(exc, "mongo stats 失败") from exc
+                raise classify.mongo_error(exc, "mongo stats failed") from exc
 
 
 def _temp_text(content: str, suffix: str, mode: int) -> str:

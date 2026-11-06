@@ -9,7 +9,7 @@
 | CSS | `app.css` 的 `.sidebar__brand`：36px 图标列、10px 列间距、2px 行距；图标改为圆角容器（3px 内边距、`object-fit: contain`、浅底 + 1px 描边、10px 圆角）；标题 16px/行高 1.2、副标题 11.5px/1.2，分别对齐行首/行尾 |
 | 间距 | `.sidebar__nav` 顶部 padding 由 8px 调到 12px，品牌块与导航之间增加呼吸 |
 | 文档 | `ui-design.md` 侧栏说明补充 36px 圆角容器与"品牌/导航左对齐" |
-| 视觉稿 | 保留 `docs/verify/brand-visual-options-01.md` 与三张方案图供对照 |
+| 视觉稿 | 保留 `docs/zh-CN/verify/brand-visual-options-01.md` 与三张方案图供对照 |
 
 未改模板/HTML、Logo 资源、行为或 i18n。
 

@@ -102,7 +102,7 @@ def test_existing_key_file_loaded(tmp_path: Path) -> None:
 
 
 def test_missing_key_with_ciphertext_refuses(tmp_path: Path) -> None:
-    with pytest.raises(StartupError, match="密钥文件"):
+    with pytest.raises(StartupError, match="key file"):
         load_or_create_secret_box(None, tmp_path / "secret.key", has_ciphertext=True)
 
 
@@ -115,5 +115,5 @@ def test_invalid_key_file_refuses(tmp_path: Path) -> None:
 
 
 def test_decode_key_length_checked() -> None:
-    with pytest.raises(StartupError, match="32 字节"):
+    with pytest.raises(StartupError, match="32 bytes"):
         decode_key(base64.b64encode(b"short").decode())

@@ -11,7 +11,7 @@
 
 真实 Chrome 156（CDP）复现：修复前 POST body 只有 `name=mongo-x`；加 submitter 镜像隐藏域后为 `name=mongo-x&action=test`。
 
-同时确认了约束前提问题：`docs/verify/frontend-js-policy.md` 原来禁止“脚本发额外网络请求”，导致探测/保存只能整页重渲染。v2 允许同源 fetch，改为“服务端为准 + 前端体验”。
+同时确认了约束前提问题：`docs/zh-CN/verify/frontend-js-policy.md` 原来禁止“脚本发额外网络请求”，导致探测/保存只能整页重渲染。v2 允许同源 fetch，改为“服务端为准 + 前端体验”。
 
 ## 改造内容
 

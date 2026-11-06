@@ -70,7 +70,7 @@ class _CLSClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls 探测失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"cls probe failed: {exc}") from exc
 
     async def search_log(
         self,
@@ -100,7 +100,7 @@ class _CLSClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls 检索失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"cls search failed: {exc}") from exc
 
         rows: list[dict[str, Any]] = []
         for item in getattr(response, "Results", None) or []:
@@ -146,7 +146,7 @@ class _CLSClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls 上下文读取失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"cls context read failed: {exc}") from exc
 
         items = (
             getattr(response, "LogContextInfos", None)

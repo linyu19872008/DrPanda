@@ -131,6 +131,6 @@ async def test_timeout_kills_the_process(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(client_install, "INSTALL_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(client_install, "_kill", lambda process: killed.append(process.pid))
 
-    with pytest.raises(InstallError, match="安装超时"):
+    with pytest.raises(InstallError, match="installation timed out"):
         await client_install.install_extra("redis")
     assert killed == [99]

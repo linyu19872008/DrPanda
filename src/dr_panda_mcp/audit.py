@@ -33,7 +33,7 @@ async def cleanup_once(runtime: Runtime) -> int:
         logger.info(
             format_event(
                 "audit.cleanup",
-                f"保留 {current.audit_retention_days} 天",
+                f"retention {current.audit_retention_days} days",
                 elapsed_ms=int((time.perf_counter() - started) * 1000),
                 returned=deleted,
             )
@@ -53,7 +53,7 @@ async def run_cleanup_loop(
         try:
             await cleanup_once(runtime)
         except Exception:  # noqa: BLE001 - 清理失败留到下一轮，不打断进程
-            logger.warning(failure_text("store.error", "审计清理失败，下一轮重试"))
+            logger.warning(failure_text("store.error", "audit cleanup failed; retrying next round"))
         if interval is not None:
             await asyncio.sleep(interval)
             continue
@@ -77,5 +77,5 @@ async def _configured_interval(runtime: Runtime) -> float:
         current = await settings_module.load(runtime.store)
         return current.audit_cleanup_interval_minutes * 60
     except Exception:  # noqa: BLE001 - 读不到间隔时用默认值
-        logger.warning(failure_text("store.error", "读取审计清理间隔失败，使用默认间隔"))
+        logger.warning(failure_text("store.error", "failed to read the audit cleanup interval; using the default"))
         return INTERVAL_SECONDS

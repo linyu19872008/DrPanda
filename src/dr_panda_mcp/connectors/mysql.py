@@ -49,7 +49,7 @@ class _MySQLClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise classify.mysql_error(exc, "mysql 探测失败") from exc
+            raise classify.mysql_error(exc, "mysql probe failed") from exc
         finally:
             await _close(connection)
 
@@ -85,7 +85,7 @@ class _MySQLClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise classify.mysql_error(exc, "mysql 查询失败") from exc
+            raise classify.mysql_error(exc, "mysql query failed") from exc
 
 
 async def _connect(asyncmy: Any, target: Target) -> Any:

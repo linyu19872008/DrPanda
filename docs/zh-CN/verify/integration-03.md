@@ -5,7 +5,7 @@
 ## 环境
 
 - 在 [integration-02](integration-02.md) 的 5 个容器基础上新增 `drpanda-elasticsearch-2`（host 19201），共 6 个 `drpanda-*` 容器。
-- MySQL 使用 [scripts/integration/mysql-tls/gen-certs.sh](../../scripts/integration/mysql-tls/gen-certs.sh) 生成的测试 CA/服务端证书（SAN `DNS:localhost,IP:127.0.0.1`），挂载到 `/certs`，启动参数为 `--ssl-ca/--ssl-cert/--ssl-key`。
+- MySQL 使用 [scripts/integration/mysql-tls/gen-certs.sh](../../../scripts/integration/mysql-tls/gen-certs.sh) 生成的测试 CA/服务端证书（SAN `DNS:localhost,IP:127.0.0.1`），挂载到 `/certs`，启动参数为 `--ssl-ca/--ssl-cert/--ssl-key`。
 - 应用启动时设置 `SSL_CERT_FILE=/tmp/drpanda-mysql-certs/ca.pem`，让默认 `ssl.create_default_context()` 信任测试 CA。
 - 目标：`drpanda-mysql-tls`（`ssl=on`）与 `drpanda-es-multi`（hosts 19200、19201）。
 

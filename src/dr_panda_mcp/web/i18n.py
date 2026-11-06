@@ -1,7 +1,7 @@
 """Web i18n：语言解析、Cookie 与翻译函数。
 
 英文是默认 UI 语言；``zh-Hans`` 通过 catalog 覆盖。模板/表单先用中文源文案
-过渡，再逐步改为英文源；找不到翻译时回退源文案，避免页面出现空白。
+过渡，再逐步改为英文源；英文缺翻译时直接报错，禁止回退中文源。
 """
 
 from __future__ import annotations
@@ -116,6 +116,9 @@ def _dynamic_english(source: str, catalog: dict[str, str]) -> str | None:
     if match:
         key = catalog.get(match.group(1), match.group(1))
         return f"{key} must be an integer between {match.group(2)} and {match.group(3)}"
+    match = re.match(r"^最多保留 (\d+) 个 Token，请先删除旧 Token$", source)
+    if match:
+        return f"At most {match.group(1)} MCP token(s) can be kept. Delete an old token first."
     return None
 
 
@@ -125,8 +128,16 @@ def t(source: str, **params: Any) -> str:
     catalog = _CATALOGS.get(locale, {})
     template = catalog.get(source)
     if template is None and locale == "en":
-        template = _dynamic_english(source, catalog)
-    template = template or source
+        if not re.search(r"[\u4e00-\u9fff]", source):
+            # 已经是英文/专有名词（MySQL、Token 等），无需再翻译。
+            template = source
+        else:
+            template = _dynamic_english(source, catalog)
+    if template is None:
+        if locale == "en":
+            # 英文是默认语言：缺翻译时不能静默回退中文源文案。
+            raise KeyError(f"missing English translation: {source}")
+        template = source
     try:
         return template.format(**params) if params else template
     except (KeyError, ValueError, IndexError):

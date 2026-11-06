@@ -24,7 +24,17 @@ FILES = [
     "CODE_OF_CONDUCT.zh-CN.md",
     "CHANGELOG.md",
     "CHANGELOG.zh-CN.md",
+    "docs/README.md",
+    "docs/architecture.md",
+    "docs/security.md",
+    "docs/ui-design.md",
+    "docs/verification.md",
 ]
+FILES += sorted(
+    path.relative_to(ROOT).as_posix()
+    for path in (ROOT / "docs").rglob("*.md")
+    if path.name not in {Path(name).name for name in FILES}
+)
 MD_LINK = re.compile(r"!?\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HTML_LINK = re.compile(r'(?:src|href)="([^"]+)"')
 

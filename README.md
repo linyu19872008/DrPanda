@@ -7,8 +7,8 @@
   <a href="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
   -->
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
+  <a href="LICENSE"><img alt="License: MIT" src="docs/assets/badge-license.svg" height="20"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="docs/assets/badge-python.svg" height="20"></a>
 </p>
 
 <p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
@@ -21,7 +21,7 @@ Register MySQL, MongoDB, Elasticsearch, Redis, GitLab, RabbitMQ, Kafka and CLS c
 
 **The model never supplies hosts, accounts, or passwords itself.**
 
-![Web console](docs/verify/assets/ui/light-index.png)
+![Web console in English](docs/assets/screenshot-en.png)
 
 ---
 
@@ -53,6 +53,7 @@ M0–M7 are implemented and tested:
 - Tools: **28**
 - Quality gate: GitHub Actions (pytest / ruff / docs link check); see the CI badge above
 - Default listen: `127.0.0.1:8111`
+- Default languages: English (UI, MCP, CLI, docs); Chinese docs live under `docs/zh-CN/`
 - First-run setup supports SQLite / MySQL / PostgreSQL config stores
 - Server-rendered web console; interactive features require JavaScript, while authentication and validation stay server-side
 
@@ -211,7 +212,7 @@ Notes:
 
 A target belongs to an environment. Environments have a display title and a key. The title can change; the key is immutable and must be passed when troubleshooting. Different environments may contain targets with the same name; within one environment, multiple targets of the same type are distinguished by name and never selected automatically.
 
-With a single environment, tools may omit `environment`; the migration creates `default` (title "默认"). After adding more environments, every call must pass `environment`. Call `systems_status` without arguments to list environments, then pass the key to list targets in that environment. The web console switches targets by environment; disabled environments cannot be queried but their configuration is retained.
+With a single environment, tools may omit `environment`; the migration creates `default` with the title `Default`. After adding more environments, every call must pass `environment`. Call `systems_status` without arguments to list environments, then pass the key to list targets in that environment. The web console switches targets by environment; disabled environments cannot be queried but their configuration is retained.
 
 Tool calls only accept `environment` and `target` names — never hosts, accounts or passwords.
 
@@ -275,7 +276,7 @@ Target names allow lowercase letters, digits and hyphens only, and are immutable
 - no frontend framework, Node build chain or third-party CDN;
 - without JavaScript, dedicated form/confirmation pages or manual copy hints are shown — no fake buttons.
 
-See [frontend-js-policy.md](docs/verify/frontend-js-policy.md) (Chinese).
+See [Security](docs/security.md) and [Verification](docs/verification.md) for the full policy and boundaries.
 
 ---
 
@@ -410,7 +411,8 @@ src/dr_panda_mcp/
   web/                routes/templates/static/rendering
   store/              SQLAlchemy models, repository, Alembic migrations
 tests/                unit, contract, web, tool and migration tests
-docs/                 design, milestones, UI specs and verification records
+docs/                 English documentation (default)
+docs/zh-CN/           Chinese design and verification documents
 scripts/              smoke tests, integration scripts and docs link check
 ```
 
@@ -445,14 +447,15 @@ Unverified capabilities are never treated as available just because other compon
 
 ## Documentation
 
-The design and verification documents are currently written in Chinese:
+English documentation:
 
-- [docs/planning.md](docs/planning.md): design, interfaces, data model, read-only/dangerous rules
-- [docs/milestones.md](docs/milestones.md): milestones and acceptance criteria
-- [docs/ui-design.md](docs/ui-design.md): web console design system and page specs
-- [docs/verify/m7-01.md](docs/verify/m7-01.md): install, login and multiple tokens
-- [docs/verify/frontend-js-policy.md](docs/verify/frontend-js-policy.md): frontend JS policy v3
-- [docs/verify/](docs/verify/): all milestone, integration and hardening records
+- [docs/README.md](docs/README.md): English documentation index
+- [docs/architecture.md](docs/architecture.md): components, request flow, data model and deployment
+- [docs/security.md](docs/security.md): security model, authentication, secrets and remote access
+- [docs/ui-design.md](docs/ui-design.md): web console design system and page behavior
+- [docs/verification.md](docs/verification.md): testing strategy, verified and unverified capabilities
+
+The Chinese README links the Chinese design and verification docs.
 
 ---
 

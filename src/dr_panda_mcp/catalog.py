@@ -67,20 +67,24 @@ class Catalog:
         target = await getter(name, environment=environment)
         if target is None:
             if environment:
-                raise errors.TargetNotFound(f"环境 {environment} 中没有目标 {name}")
-            raise errors.TargetNotFound(f"目标 {name} 未登记")
+                raise errors.TargetNotFound(
+                    f"target {name} not found in environment {environment}"
+                )
+            raise errors.TargetNotFound(f"target {name} is not registered")
         if not target.environment_enabled and not allow_disabled_environment:
             label = target.environment_title or target.environment_key
-            raise errors.EnvironmentDisabled(f"环境 {target.environment_key}（{label}）已停用")
+            raise errors.EnvironmentDisabled(
+                f"environment {target.environment_key} ({label}) is disabled"
+            )
         if not target.enabled:
-            raise errors.TargetDisabled(f"目标 {name} 已停用")
+            raise errors.TargetDisabled(f"target {name} is disabled")
         if expected_type is not None and target.type != expected_type:
             raise errors.TargetTypeMismatch(
-                f"目标 {name} 的类型是 {target.type}，不是 {expected_type}"
+                f"target {name} has type {target.type}, not {expected_type}"
             )
         if target.secret_fields and not target.secret_ok:
             raise errors.SecretUnavailable(
-                f"目标 {name} 的密钥不可用，请在网页重新录入"
+                f"secret for target {name} is unavailable; re-enter it in the web UI"
             )
         return target
 
@@ -180,7 +184,7 @@ class Catalog:
             await pooled.connector.close_client(pooled.client)
         except Exception:
             logger.warning(
-                "关闭 %s 客户端失败", pooled.connector.name, exc_info=True
+                "failed to close %s client", pooled.connector.name, exc_info=True
             )
 
     async def _max_clients_limit(self) -> int:

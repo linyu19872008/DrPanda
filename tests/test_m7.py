@@ -284,7 +284,7 @@ async def test_token_limit_from_settings(tmp_path: Path) -> None:
                 "/me/tokens", data={"_csrf": csrf, "name": "second"}
             )
         assert response.status_code == 400
-        assert "最多保留 1 个 Token" in response.text
+        assert "At most 1 MCP token" in response.text
     finally:
         await runtime.close()
 

@@ -83,7 +83,7 @@ async def _assert_secrets_decryptable(store: SqlConfigStore) -> None:
     ]
     if broken:
         raise StartupError(
-            "配置库中以下目标的密钥无法解密："
+            "secrets for the following targets cannot be decrypted: "
             + "、".join(broken)
-            + "；请恢复 data/secret.key 或 DR_PANDA_SECRET_KEY 备份后再启动"
+            + "; restore data/secret.key or the DR_PANDA_SECRET_KEY backup and restart"
         )

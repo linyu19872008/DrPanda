@@ -22,7 +22,7 @@ class _GitLabClient:
         options = self.target.options
         base_url = str(options.get("base_url", "")).rstrip("/")
         if not base_url:
-            raise errors.UpstreamUnavailable("gitlab 目标没有配置 base_url")
+            raise errors.UpstreamUnavailable("gitlab target has no base_url configured")
         return httpx.AsyncClient(
             base_url=base_url,
             headers={"PRIVATE-TOKEN": self.target.secret.get("token", "")},
@@ -51,7 +51,7 @@ class _GitLabClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"gitlab 请求失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"gitlab request failed: {exc}") from exc
         finally:
             await client.aclose()
 
@@ -82,9 +82,9 @@ class _GitLabClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise errors.UpstreamUnavailable("gitlab 返回的不是 JSON") from exc
+            raise errors.UpstreamUnavailable("gitlab returned non-JSON content") from exc
         if not isinstance(payload, list):
-            raise errors.UpstreamUnavailable("gitlab 搜索结果格式不符合预期")
+            raise errors.UpstreamUnavailable("gitlab search results have an unexpected format")
         return [item for item in payload if isinstance(item, dict)]
 
     async def get_file(
@@ -123,9 +123,9 @@ class _GitLabClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise errors.UpstreamUnavailable("gitlab blame 返回的不是 JSON") from exc
+            raise errors.UpstreamUnavailable("gitlab blame returned non-JSON content") from exc
         if not isinstance(payload, list):
-            raise errors.UpstreamUnavailable("gitlab blame 结果格式不符合预期")
+            raise errors.UpstreamUnavailable("gitlab blame results have an unexpected format")
         return [item for item in payload if isinstance(item, dict)]
 
 

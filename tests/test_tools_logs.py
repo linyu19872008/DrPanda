@@ -499,4 +499,4 @@ async def test_prompt_contains_order(runtime: Runtime) -> None:
     assert "systems_status" in text
     assert "trace-1" in text
     assert "mysql_tables" in text and "mongo_collections" in text
-    assert "全程只读" in text
+    assert "Stay read-only throughout" in text

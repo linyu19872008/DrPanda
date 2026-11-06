@@ -60,7 +60,7 @@ def test_malformed_env_file_fails(
 ) -> None:
     _write_env(env_dir / ".env", "NOT A KEY VALUE LINE\n")
 
-    with pytest.raises(EnvFileError, match="不是合法的"):
+    with pytest.raises(EnvFileError, match="not a valid KEY=VALUE"):
         load_env_file()
 
 
@@ -69,7 +69,7 @@ def test_env_directory_fails(
 ) -> None:
     (env_dir / ".env").mkdir()
 
-    with pytest.raises(EnvFileError, match="不是普通文件"):
+    with pytest.raises(EnvFileError, match="not a regular file"):
         load_env_file()
 
 
@@ -81,7 +81,7 @@ def test_env_file_with_loose_permissions_fails(
     path.write_text("DRPANDA_TEST_A=1\n", encoding="utf-8")
     path.chmod(0o644)
 
-    with pytest.raises(EnvFileError, match="权限过宽"):
+    with pytest.raises(EnvFileError, match="permissions are too open"):
         load_env_file()
 
     assert path.stat().st_mode & stat.S_IMODE(0o777) == 0o644

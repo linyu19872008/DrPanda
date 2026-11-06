@@ -31,7 +31,7 @@ class _KafkaClient:
         if isinstance(servers, str):
             servers = [part.strip() for part in servers.split(",") if part.strip()]
         if not servers:
-            raise errors.UpstreamUnavailable("kafka 目标没有配置 bootstrap_servers")
+            raise errors.UpstreamUnavailable("kafka target has no bootstrap_servers configured")
         protocol = str(options.get("security_protocol", "PLAINTEXT"))
         kwargs: dict[str, Any] = {
             "bootstrap_servers": servers,
@@ -50,7 +50,7 @@ class _KafkaClient:
                 )
         elif options.get("ca_pem") or self.target.secret.get("client_cert"):
             raise errors.UpstreamUnavailable(
-                "kafka TLS 材料只允许用于 SSL / SASL_SSL"
+                "kafka TLS material is only allowed with SSL / SASL_SSL"
             )
         if protocol.startswith("SASL"):
             mechanism = str(options.get("sasl_mechanism") or "").strip()
@@ -58,7 +58,7 @@ class _KafkaClient:
             password = self.target.secret.get("sasl_password", "")
             if not mechanism or not user or not password:
                 raise errors.UpstreamUnavailable(
-                    "kafka SASL 协议缺少机制、用户或密码"
+                    "kafka SASL protocol is missing a mechanism, user, or password"
                 )
             kwargs["sasl_mechanism"] = mechanism
             kwargs["sasl_plain_username"] = user
@@ -90,7 +90,7 @@ class _KafkaClient:
             await admin.start()
             await admin.describe_cluster()
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"kafka 探测失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"kafka probe failed: {exc}") from exc
         finally:
             await admin.close()
 
@@ -102,7 +102,7 @@ class _KafkaClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"kafka 消费组读取失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"kafka consumer group read failed: {exc}") from exc
         finally:
             await admin.close()
 
@@ -116,7 +116,7 @@ class _KafkaClient:
             await consumer.start()
             high = await consumer.end_offsets(partitions)
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"kafka 位点读取失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"kafka offset read failed: {exc}") from exc
         finally:
             await consumer.stop()
 
@@ -144,7 +144,7 @@ class _KafkaClient:
             await consumer.start()
             partition_ids = sorted(consumer.partitions_for_topic(topic) or [])
             if not partition_ids:
-                raise errors.UpstreamNotFound(f"topic {topic} 不存在或没有分区")
+                raise errors.UpstreamNotFound(f"topic {topic} does not exist or has no partitions")
             from aiokafka import TopicPartition
 
             partitions = [TopicPartition(topic, partition) for partition in partition_ids]
@@ -153,7 +153,7 @@ class _KafkaClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"kafka 位点读取失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"kafka offset read failed: {exc}") from exc
         finally:
             await consumer.stop()
         return [
@@ -181,12 +181,12 @@ class _KafkaClient:
             await consumer.start()
             partition_ids = consumer.partitions_for_topic(topic) or set()
             if partition not in partition_ids:
-                raise errors.UpstreamNotFound(f"topic {topic} 没有分区 {partition}")
+                raise errors.UpstreamNotFound(f"topic {topic} has no partition {partition}")
             low = (await consumer.beginning_offsets([tp]))[tp]
             high = (await consumer.end_offsets([tp]))[tp]
             if offset < low:
                 raise errors.GuardRejected(
-                    f"offset {offset} 早于分区 low watermark {low}",
+                    f"offset {offset} is earlier than the partition low watermark {low}",
                     code=errors.DANGEROUS_OPERATION,
                 )
             if offset >= high:
@@ -200,7 +200,7 @@ class _KafkaClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"kafka 拉取失败：{exc}") from exc
+            raise errors.UpstreamUnavailable(f"kafka fetch failed: {exc}") from exc
         finally:
             await consumer.stop()
 

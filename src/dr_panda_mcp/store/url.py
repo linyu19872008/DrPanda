@@ -32,13 +32,13 @@ def normalize_database_url(raw: str) -> str:
     """把 ``mysql://`` / ``postgresql://`` / ``sqlite://`` 补成异步驱动形式。"""
     value = (raw or "").strip()
     if not value:
-        raise ConfigError("DR_PANDA_DATABASE_URL 不能为空")
+        raise ConfigError("DR_PANDA_DATABASE_URL must not be empty")
 
     scheme = urlsplit(value).scheme
     base = scheme.split("+", 1)[0]
     if base not in DATABASE_DRIVERS:
         raise ConfigError(
-            f"不支持的配置库类型：{scheme or '(空)'}；只支持 sqlite、mysql、postgresql"
+            f"unsupported config-store type: {scheme or '(empty)'}; supported: sqlite, mysql, postgresql"
         )
     if "+" in scheme:
         return value
@@ -65,11 +65,11 @@ def ensure_driver(url: str) -> None:
     if extra:
         hint = (
             f"{sync_extra_command(extra)}"
-            f'（或 pip install "dr-panda-mcp[{extra}]"）。'
-            "不要省略 --inexact，否则会卸掉其他已安装的 extra"
+            f' (or pip install "dr-panda-mcp[{extra}]"). '
+            "Do not omit --inexact; otherwise other installed extras will be removed"
         )
-        raise ConfigError(f"{base} 配置库需要 {driver}，当前环境没有安装；请执行：{hint}")
-    raise ConfigError(f"sqlite 配置库需要 {driver}，当前环境没有安装；请执行：uv sync")
+        raise ConfigError(f"{base} config store requires {driver}, which is not installed; run: {hint}")
+    raise ConfigError(f"sqlite config store requires {driver}, which is not installed; run: uv sync")
 
 
 def database_path(url: str) -> Path | None:
@@ -116,7 +116,7 @@ async def checkpoint_sqlite(engine: AsyncEngine) -> bool:
         # 这里不能用 logger 引入循环依赖吗？url.py 只依赖 errors/config；用标准 logging。
         import logging
 
-        logging.getLogger(__name__).warning("SQLite WAL checkpoint 失败", exc_info=True)
+        logging.getLogger(__name__).warning("SQLite WAL checkpoint failed", exc_info=True)
         return False
 
 

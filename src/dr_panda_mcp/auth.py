@@ -234,9 +234,9 @@ def load_or_create_session_key(path: Path) -> bytes:
         try:
             key = base64.b64decode(path.read_text(encoding="utf-8").strip(), validate=True)
         except (binascii.Error, ValueError) as exc:
-            raise StartupError(f"Session 密钥文件损坏：{path}") from exc
+            raise StartupError(f"session key file is corrupted: {path}") from exc
         if len(key) != SESSION_KEY_BYTES:
-            raise StartupError(f"Session 密钥必须是 {SESSION_KEY_BYTES} 字节：{path}")
+            raise StartupError(f"session key must be {SESSION_KEY_BYTES} bytes: {path}")
         return key
 
     key = os.urandom(SESSION_KEY_BYTES)
@@ -246,7 +246,7 @@ def load_or_create_session_key(path: Path) -> bytes:
     os.chmod(temp, 0o600)
     temp.replace(path)
     os.chmod(path, 0o600)
-    logger.warning("已生成新的 Session 密钥：%s（请与配置库一起备份）", path)
+    logger.warning("generated a new session key: %s (back it up together with the config store)", path)
     return key
 
 

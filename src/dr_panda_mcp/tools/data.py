@@ -40,16 +40,19 @@ def _items(target: Target, key: str) -> list[str]:
 def ensure_processlist_allowed(target: Target) -> None:
     if not target.options.get("allow_processlist"):
         raise errors.ScopeDenied(
-            f"目标 {target.name} 未启用 PROCESSLIST；该命令可能暴露其他库/用户的会话"
+            f"target {target.name} has not enabled PROCESSLIST; this command may "
+            "expose sessions from other databases or users"
         )
 
 
 def ensure_mongo_collection(target: Target, collection: str) -> str:
     value = (collection or "").strip()
     if not value:
-        raise errors.InvalidArgument("collection 不能为空")
+        raise errors.InvalidArgument("collection must not be empty")
     if value.lower().startswith("system."):
-        raise errors.ScopeDenied(f"不允许访问系统集合 {value}")
+        raise errors.ScopeDenied(
+            f"access to system collection {value} is not allowed"
+        )
     return value
 
 
@@ -58,9 +61,13 @@ def ensure_db(target: Target, db: str) -> str:
     default = str(target.options.get("default_db") or "")
     value = (db or "").strip() or default
     if not value:
-        raise errors.InvalidArgument("必须指定 db（目标未配置 default_db）")
+        raise errors.InvalidArgument(
+            "db is required (the target has no default_db configured)"
+        )
     if value not in allowed:
-        raise errors.ScopeDenied(f"库 {value} 不在目标 {target.name} 的授权范围内")
+        raise errors.ScopeDenied(
+            f"database {value} is not within the authorized scope of target {target.name}"
+        )
     return value
 
 
@@ -68,33 +75,35 @@ def ensure_index(target: Target, index: str) -> str:
     allowed = _items(target, "allowed_indices")
     value = (index or "").strip()
     if not value:
-        raise errors.InvalidArgument("必须指定 index")
+        raise errors.InvalidArgument("index is required")
     if value not in allowed:
-        raise errors.ScopeDenied(f"索引 {value} 不在目标 {target.name} 的授权范围内")
+        raise errors.ScopeDenied(
+            f"index {value} is not within the authorized scope of target {target.name}"
+        )
     return value
 
 
 def ensure_key(target: Target, key: str) -> str:
     value = (key or "").strip()
     if not value:
-        raise errors.InvalidArgument("key 不能为空")
+        raise errors.InvalidArgument("key must not be empty")
     prefix = str(target.options.get("key_prefix") or "")
     if prefix and not value.startswith(prefix):
-        raise errors.ScopeDenied(f"key 必须以 {prefix} 开头")
+        raise errors.ScopeDenied(f"key must start with {prefix}")
     return value
 
 
 def _json_object(text: str, name: str, *, required: bool) -> dict[str, Any]:
     if not (text or "").strip():
         if required:
-            raise errors.InvalidArgument(f"{name} 不能为空")
+            raise errors.InvalidArgument(f"{name} must not be empty")
         return {}
     try:
         value = json.loads(text)
     except ValueError as exc:
-        raise errors.InvalidArgument(f"{name} 不是合法 JSON：{exc}") from exc
+        raise errors.InvalidArgument(f"{name} is not valid JSON: {exc}") from exc
     if not isinstance(value, dict):
-        raise errors.InvalidArgument(f"{name} 必须是 JSON 对象")
+        raise errors.InvalidArgument(f"{name} must be a JSON object")
     return value
 
 
@@ -102,9 +111,9 @@ def _json_array(text: str, name: str) -> list[dict[str, Any]]:
     try:
         value = json.loads(text)
     except ValueError as exc:
-        raise errors.InvalidArgument(f"{name} 不是合法 JSON：{exc}") from exc
+        raise errors.InvalidArgument(f"{name} is not valid JSON: {exc}") from exc
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
-        raise errors.InvalidArgument(f"{name} 必须是对象数组")
+        raise errors.InvalidArgument(f"{name} must be an array of objects")
     return value
 
 
@@ -126,19 +135,25 @@ def _mysql_scope(target: Target, sql: str, default_db: str) -> None:
     if isinstance(expression, exp.Show):
         command = str(expression.this or "").upper()
         if command == "DATABASES":
-            raise errors.ScopeDenied("不允许在目标级查询所有数据库")
+            raise errors.ScopeDenied(
+                "listing all databases at the target level is not allowed"
+            )
         db = expression.args.get("db")
         if db is not None and str(db.name).lower() not in {
             item.lower() for item in _items(target, "allowed_dbs")
         }:
-            raise errors.ScopeDenied(f"库 {db.name} 不在目标 {target.name} 的授权范围内")
+            raise errors.ScopeDenied(
+                f"database {db.name} is not within the authorized scope of target {target.name}"
+            )
         return
     inner = expression.this if isinstance(expression, exp.Describe) else expression
     allowed = set(_items(target, "allowed_dbs"))
     for table in inner.find_all(exp.Table):
         db = (table.db or default_db).lower()
         if db and db not in {item.lower() for item in allowed}:
-            raise errors.ScopeDenied(f"库 {db} 不在目标 {target.name} 的授权范围内")
+            raise errors.ScopeDenied(
+                f"database {db} is not within the authorized scope of target {target.name}"
+            )
 
 
 def force_limit(sql: str, cap: int) -> str:
@@ -186,7 +201,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_tables(
         target: str, db: str = "", environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """列出授权库的表（名称、类型、行数估算、注释）。"""
+        """List tables in an authorized database (name, type, estimated rows, comment)."""
         params = {"db": db or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -225,14 +240,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_describe(
         target: str, table: str, db: str = "", environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看表结构（字段与索引）。"""
+        """Show table structure (columns and indexes)."""
         params = {"table": table, "db": db or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             chosen = ensure_db(tgt, db)
             if not table.strip():
-                raise errors.InvalidArgument("table 不能为空")
+                raise errors.InvalidArgument("table must not be empty")
             columns_sql = f"SHOW FULL COLUMNS FROM {_quote(table)} FROM {_quote(chosen)}"
             indexes_sql = f"SHOW INDEX FROM {_quote(table)} FROM {_quote(chosen)}"
             require(mysql_guard.check_sql(columns_sql))
@@ -278,7 +293,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_query(
         target: str, sql: str, limit: int = 0, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """执行单条只读 SQL（自动补 LIMIT）。"""
+        """Run a single read-only SQL statement (LIMIT is added automatically)."""
         params = {"sql": sql, "limit": limit or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -312,14 +327,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_explain(
         target: str, sql: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看 SELECT 的执行计划（sql 可带或不带 EXPLAIN 前缀；不使用 EXPLAIN ANALYZE）。"""
+        """Show the execution plan for a SELECT (sql may include the EXPLAIN prefix or not; EXPLAIN ANALYZE is never used)."""
         params = {"sql": sql}
 
         async def handler(tgt: Target) -> dict[str, Any]:
             started = time.monotonic()
             inner = _explain_inner(sql)
             if not inner:
-                raise errors.InvalidArgument("sql 不能为空")
+                raise errors.InvalidArgument("sql must not be empty")
             statement = f"EXPLAIN {inner}"
             require(mysql_guard.check_sql(statement))
             default_db = ensure_db(tgt, "")
@@ -344,7 +359,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mysql_processlist(
         target: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看当前会话列表（SHOW PROCESSLIST）。"""
+        """Show the current session list (SHOW PROCESSLIST)."""
         params: dict[str, Any] = {}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -369,7 +384,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def mongo_collections(
         target: str, db: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """列出库里的集合（文档数估算与索引数）。"""
+        """List collections in a database (estimated document and index counts)."""
         params = {"db": db}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -412,7 +427,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         skip: int = 0,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """按过滤条件查询文档（filter 必填）。"""
+        """Query documents by filter (filter is required)."""
         params = {
             "db": db, "collection": collection, "filter": filter,
             "projection": projection or None, "sort": sort or None,
@@ -425,10 +440,10 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             chosen = ensure_db(tgt, db)
             chosen_collection = ensure_mongo_collection(tgt, collection)
             if skip < 0:
-                raise errors.InvalidArgument("skip 不能为负数")
+                raise errors.InvalidArgument("skip must not be negative")
             if skip > 10_000:
                 raise errors.GuardRejected(
-                    "skip 不能超过 10000，请缩小过滤条件",
+                    "skip must not exceed 10000; narrow the filter conditions",
                     code=errors.DANGEROUS_OPERATION,
                 )
             filter_obj = _json_object(filter, "filter", required=True)
@@ -487,7 +502,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         limit: int = 0,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """执行聚合管道（阶段白名单；自动补 $limit）。"""
+        """Run an aggregation pipeline (stage allowlist; $limit is added automatically)."""
         params = {"db": db, "collection": collection, "pipeline": pipeline, "limit": limit or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -524,7 +539,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         collection: str = "",
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """查看集合或库的统计信息。"""
+        """Show statistics for a collection or database."""
         params = {"db": db, "collection": collection or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -559,7 +574,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def es_mapping(
         target: str, index: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看索引字段 mapping 与分片设置。"""
+        """Show an index's field mapping and shard settings."""
         params = {"index": index}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -594,7 +609,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         search_after: str = "",
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """搜索索引（script、深分页与超限 size 会被拒绝）。"""
+        """Search an index (scripts, deep pagination, and oversized size are rejected)."""
         params = {
             "index": index, "query": query or None, "from": from_,
             "size": size or None, "sort": sort or None,
@@ -609,26 +624,30 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             body["query"] = query_obj or {"match_all": {}}
             cap = connectors_base.max_rows(tgt)
             if size < 0:
-                raise errors.InvalidArgument("size 不能为负数")
+                raise errors.InvalidArgument("size must not be negative")
             requested = size or cap
             if requested > cap:
                 raise errors.GuardRejected(
-                    f"size {requested} 超过目标上限 {cap}",
+                    f"size {requested} exceeds the target limit {cap}",
                     code=errors.DANGEROUS_OPERATION,
                 )
             if from_ < 0:
-                raise errors.InvalidArgument("from 不能为负数")
+                raise errors.InvalidArgument("from must not be negative")
             if search_after:
                 if from_:
-                    raise errors.InvalidArgument("search_after 不能与 from 同时使用")
+                    raise errors.InvalidArgument(
+                        "search_after cannot be used together with from"
+                    )
                 if not sort:
-                    raise errors.InvalidArgument("search_after 必须配合 sort 使用")
+                    raise errors.InvalidArgument("search_after requires sort")
                 try:
                     after_value = json.loads(search_after)
                 except ValueError as exc:
-                    raise errors.InvalidArgument(f"search_after 不是合法 JSON：{exc}") from exc
+                    raise errors.InvalidArgument(
+                        f"search_after is not valid JSON: {exc}"
+                    ) from exc
                 if not isinstance(after_value, list):
-                    raise errors.InvalidArgument("search_after 必须是 JSON 数组")
+                    raise errors.InvalidArgument("search_after must be a JSON array")
                 body["search_after"] = after_value
                 body["from"] = 0
             else:
@@ -639,7 +658,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
                 try:
                     body["sort"] = json.loads(sort)
                 except ValueError as exc:
-                    raise errors.InvalidArgument(f"sort 不是合法 JSON：{exc}") from exc
+                    raise errors.InvalidArgument(f"sort is not valid JSON: {exc}") from exc
             require(es_guard.check_http("POST", f"/{chosen}/_search", body))
             connector = get_connector("elasticsearch")
             client = await runtime.catalog.client(tgt, connector)
@@ -663,7 +682,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def es_health(
         target: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """集群健康概览。"""
+        """Cluster health overview."""
         params: dict[str, Any] = {}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -685,7 +704,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def es_index_stats(
         target: str, index: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """索引文档数与存储统计。"""
+        """Document count and storage statistics for an index."""
         params = {"index": index}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -713,7 +732,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def redis_get(
         target: str, key: str, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """查看单个 key 的类型、TTL 与有限内容。"""
+        """Show a single key's type, TTL, and bounded content."""
         params = {"key": key}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -749,7 +768,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
         cursor: int = 0,
         environment: EnvironmentParam = "",
     ) -> dict[str, Any]:
-        """游标扫描 key（COUNT ≤ 200；pattern 受 key 前缀限制）。"""
+        """Scan keys with a cursor (COUNT <= 200; pattern is limited by the key prefix)."""
         params = {"pattern": pattern, "count": count, "cursor": cursor}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -757,13 +776,14 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
             value = (pattern or "*").strip()
             prefix = str(tgt.options.get("key_prefix") or "")
             if prefix and not value.startswith(prefix):
-                raise errors.ScopeDenied(f"pattern 必须以 {prefix} 开头")
+                raise errors.ScopeDenied(f"pattern must start with {prefix}")
             if count < 1 or count > 200:
                 raise errors.GuardRejected(
-                    "SCAN COUNT 必须在 1–200 之间", code=errors.DANGEROUS_OPERATION
+                    "SCAN COUNT must be between 1 and 200",
+                    code=errors.DANGEROUS_OPERATION,
                 )
             if cursor < 0:
-                raise errors.InvalidArgument("cursor 不能为负数")
+                raise errors.InvalidArgument("cursor must not be negative")
             require(redis_guard.check_redis("SCAN", [cursor, "MATCH", value, "COUNT", count]))
             connector = get_connector("redis")
             client = await runtime.catalog.client(tgt, connector)
@@ -787,7 +807,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def redis_info(
         target: str, section: str = "", environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """读取 INFO（可指定 section）。"""
+        """Read INFO (an optional section can be specified)."""
         params = {"section": section or None}
 
         async def handler(tgt: Target) -> dict[str, Any]:
@@ -813,7 +833,7 @@ def register_data_tools(server: FastMCP, runtime: Runtime) -> None:
     async def redis_slowlog(
         target: str, count: int = 10, environment: EnvironmentParam = ""
     ) -> dict[str, Any]:
-        """读取慢日志（SLOWLOG GET）。"""
+        """Read the slow log (SLOWLOG GET)."""
         params = {"count": count}
 
         async def handler(tgt: Target) -> dict[str, Any]:

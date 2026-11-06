@@ -269,7 +269,7 @@ async def test_analyst_is_limited_to_own_pages(tmp_path: Path) -> None:
             )
             personal = await client.get("/")
             assert ">环境</th>" in personal.text
-            assert "默认" in personal.text
+            assert "Default" in personal.text
             assert "mysql-target" in personal.text
 
             ada = await auth.get_user_by_username(runtime.session_factory, "ada")

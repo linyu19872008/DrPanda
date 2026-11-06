@@ -32,7 +32,7 @@ def main() -> int:
     try:
         config = load_config()
     except ConfigError as exc:
-        _fail(f"启动失败：{exc}")
+        _fail(f"startup failed: {exc}")
         return 2
 
     configure_logging(config.log_level)
@@ -40,7 +40,7 @@ def main() -> int:
     try:
         return asyncio.run(_run(config))
     except StartupError as exc:
-        _fail(f"启动失败：{exc}")
+        _fail(f"startup failed: {exc}")
         return 2
     except KeyboardInterrupt:
         return 0
@@ -51,13 +51,13 @@ async def _run(config: Config) -> int:
         logger.warning(
             format_event(
                 "app.warning",
-                "服务监听非 loopback 地址；请确保网络可信，并建议通过 HTTPS 反向代理访问",
+                "Listening on a non-loopback address; make sure the network is trusted and prefer HTTPS behind a reverse proxy",
             )
         )
     check_port_available(config.host, config.port)
     install_state = load_install_state(config.install_file, config.install_key_file)
     if install_state is None and not is_loopback_host(config.host):
-        raise StartupError("首次安装必须在 127.0.0.1 / localhost 完成，完成后再启用远程监听")
+        raise StartupError("the first installation must be completed on 127.0.0.1 / localhost; enable remote listening afterwards")
     runtime = None
     cleanup_task = None
     if install_state is not None:
@@ -65,7 +65,7 @@ async def _run(config: Config) -> int:
         runtime = await create_runtime(config)
         if not await auth.has_admin(runtime.session_factory):
             await runtime.close()
-            raise StartupError("安装状态存在但配置库没有管理员，请恢复备份或使用恢复命令")
+            raise StartupError("installation state exists but the config store has no administrator; restore a backup or use the recovery command")
         cleanup_task = asyncio.create_task(run_cleanup_loop(runtime))
         app = create_app(config, runtime, auth_required=True)
     else:

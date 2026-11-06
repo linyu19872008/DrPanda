@@ -82,7 +82,7 @@ def test_database_url_driver_completion(raw: str, expected: str) -> None:
 
 
 def test_unsupported_database_url_rejected() -> None:
-    with pytest.raises(ConfigError, match="不支持"):
+    with pytest.raises(ConfigError, match="unsupported"):
         load_config(_env(DR_PANDA_DATABASE_URL="redis://localhost:6379/0"))
 
 

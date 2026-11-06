@@ -34,20 +34,20 @@ def load_env_file(path: Path | None = None) -> Path | None:
     except FileNotFoundError:
         return None
     except OSError as exc:
-        raise EnvFileError(f"无法读取 {target}：{exc}") from exc
+        raise EnvFileError(f"cannot read {target}: {exc}") from exc
 
     if not stat.S_ISREG(info.st_mode):
-        raise EnvFileError(f"{target} 不是普通文件")
+        raise EnvFileError(f"{target} is not a regular file")
     if os.name == "posix" and info.st_mode & 0o077:
         raise EnvFileError(
-            f"{target} 权限过宽（{oct(info.st_mode & 0o777)}），"
-            "可能包含密钥，请 chmod 600 后重启"
+            f"{target} permissions are too open ({oct(info.st_mode & 0o777)}); "
+            "it may contain secrets; run chmod 600 and restart"
         )
 
     try:
         text = target.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
-        raise EnvFileError(f"无法读取 {target}：{exc}") from exc
+        raise EnvFileError(f"cannot read {target}: {exc}") from exc
 
     for lineno, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
@@ -55,13 +55,13 @@ def load_env_file(path: Path | None = None) -> Path | None:
             continue
         if not _LINE.match(stripped):
             raise EnvFileError(
-                f"{target} 第 {lineno} 行不是合法的 KEY=VALUE 或 export KEY=VALUE"
+                f"{target} line {lineno} is not a valid KEY=VALUE or export KEY=VALUE"
             )
 
     try:
         values = dotenv_values(target, interpolate=False, encoding="utf-8")
     except Exception as exc:
-        raise EnvFileError(f"解析 {target} 失败：{exc}") from exc
+        raise EnvFileError(f"failed to parse {target}: {exc}") from exc
 
     for key, value in values.items():
         if not key or value is None:

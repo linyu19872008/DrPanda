@@ -39,7 +39,7 @@ class _ESClient:
         if isinstance(hosts, str):
             hosts = [part.strip() for part in hosts.split(",") if part.strip()]
         if not hosts:
-            raise errors.UpstreamUnavailable("elasticsearch 目标没有配置 hosts")
+            raise errors.UpstreamUnavailable("elasticsearch target has no hosts configured")
         return [host if "://" in host else f"http://{host}" for host in hosts]
 
     def _client(self, base_url: str) -> httpx.AsyncClient:
@@ -81,7 +81,7 @@ class _ESClient:
                 )
                 if response.status_code >= 500:
                     last_error = errors.UpstreamUnavailable(
-                        f"elasticsearch 返回 HTTP {response.status_code}"
+                        f"elasticsearch returned HTTP {response.status_code}"
                     )
                     continue
                 return response
@@ -100,7 +100,7 @@ class _ESClient:
             finally:
                 await client.aclose()
         raise errors.UpstreamUnavailable(
-            f"elasticsearch 所有 host 均不可用：{last_error}"
+            f"all elasticsearch hosts are unavailable: {last_error}"
         )
 
     async def ping(self) -> None:

@@ -84,7 +84,7 @@ def mysql_kind(exc: BaseException) -> str:
 
 
 def mysql_error(exc: BaseException, label: str) -> errors.DrPandaError:
-    return _to_error(mysql_kind(exc), f"{label}：{exc}")
+    return _to_error(mysql_kind(exc), f"{label}: {exc}")
 
 
 # --- Mongo（pymongo / motor 的 error code 与异常类名） ---
@@ -120,7 +120,7 @@ def mongo_kind(exc: BaseException) -> str:
 
 
 def mongo_error(exc: BaseException, label: str) -> errors.DrPandaError:
-    return _to_error(mongo_kind(exc), f"{label}：{exc}")
+    return _to_error(mongo_kind(exc), f"{label}: {exc}")
 
 
 # --- Elasticsearch（HTTP 状态码） ---
@@ -154,4 +154,4 @@ def redis_kind(exc: BaseException) -> str:
 
 
 def redis_error(exc: BaseException, label: str) -> errors.DrPandaError:
-    return _to_error(redis_kind(exc), f"{label}：{exc}")
+    return _to_error(redis_kind(exc), f"{label}: {exc}")

@@ -90,7 +90,9 @@ def build_tls_context(
         )
         if client_cert or client_key:
             if not (client_cert and client_key):
-                raise errors.UpstreamUnavailable("客户端证书与私钥必须同时提供")
+                raise errors.UpstreamUnavailable(
+                    "client certificate and private key must be provided together"
+                )
             cert_path = _temp_pem(client_cert, "cert")
             key_path = _temp_pem(client_key, "key")
             os.chmod(key_path, 0o600)
@@ -107,7 +109,7 @@ def build_tls_context(
         raise
     except (ssl.SSLError, OSError) as exc:
         raise errors.UpstreamUnavailable(
-            "TLS 客户端证书/私钥/CA 无法加载"
+            "TLS client certificate/private key/CA could not be loaded"
         ) from exc
 
 
@@ -174,7 +176,8 @@ async def stream_http(
             and int(expected) > limit
         ):
             raise errors.UpstreamUnavailable(
-                f"{component} 响应声明长度 {expected} 超过目标字节上限 {limit}"
+                f"{component} response declares length {expected}, exceeding the target "
+                f"byte limit {limit}"
             )
 
         chunks: list[bytes] = []
@@ -184,7 +187,7 @@ async def stream_http(
             if total + len(chunk) > limit:
                 if not truncate:
                     raise errors.UpstreamUnavailable(
-                        f"{component} 响应超过目标字节上限 {limit}"
+                        f"{component} response exceeds the target byte limit {limit}"
                     )
                 chunks.append(chunk[: limit - total])
                 cut = True
@@ -207,7 +210,7 @@ async def run_with_timeout(awaitable, seconds: float):
     try:
         return await asyncio.wait_for(awaitable, timeout=seconds)
     except TimeoutError as exc:
-        raise errors.UpstreamTimeout(f"上游调用超过 {seconds:.0f} 秒") from exc
+        raise errors.UpstreamTimeout(f"upstream call exceeded {seconds:.0f}s") from exc
 
 
 def apply_row_limits(
@@ -259,7 +262,7 @@ def check_http_response(response, component: str) -> None:
     """把上游 HTTP 状态映射成统一错误。"""
     if response.status_code < 400:
         return
-    message = f"{component} 返回 HTTP {response.status_code}"
+    message = f"{component} returned HTTP {response.status_code}"
     if response.status_code == 404:
         raise errors.UpstreamNotFound(message)
     raise es_http_error(response.status_code, message)

@@ -15,7 +15,7 @@
 
 - `drpanda-mysql`：13306，挂载测试 CA/服务端证书（SAN `DNS:localhost,IP:127.0.0.1`）。
 - 新增 `drpanda-elasticsearch-tls`：19202，HTTPS + basic auth，证书由同一个测试 CA 签发；证书放到 ES 认可的 `config/certs` 目录。
-- 应用与 target 由脚本创建，详见 [scripts/integration/README.md](../../scripts/integration/README.md)。
+- 应用与 target 由脚本创建，详见 [scripts/integration/README.md](../../../scripts/integration/README.md)。
 
 ## 结果
 

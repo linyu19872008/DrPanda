@@ -4,7 +4,7 @@
 
 ## 环境
 
-沿用 [scripts/integration/compose.yaml](../../scripts/integration/compose.yaml) 的 5 个 `drpanda-*` 容器；应用 `0.1.0`，登记 18 个 target：
+沿用 [scripts/integration/compose.yaml](../../../scripts/integration/compose.yaml) 的 5 个 `drpanda-*` 容器；应用 `0.1.0`，登记 18 个 target：
 
 - 6 个基础/小上限 target（`drpanda-mysql`、`-mysql-small`、`-mongo`、`-es`、`-redis`、`-rabbit`）
 - 7 个扩展 target（`-mysql-wide`、`-es-wide`、`-es-small`、`-mongo-small`、`-redis-small`、`-rabbit-wide`、`-rabbit-small`）

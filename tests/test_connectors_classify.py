@@ -22,19 +22,19 @@ def test_mysql_error_kinds() -> None:
         1205: errors.UpstreamTimeout,
     }
     for errno, expected in cases.items():
-        caught = classify.mysql_error(_MySQLError(errno), "mysql 查询失败")
+        caught = classify.mysql_error(_MySQLError(errno), "mysql query failed")
         assert isinstance(caught, expected), errno
-        assert str(caught).startswith("mysql 查询失败：")
+        assert str(caught).startswith("mysql query failed: ")
 
 
 def test_mysql_sqlstate_fallback() -> None:
     exc = _MySQLError(0, "bad", sqlstate="42S22")
     assert isinstance(
-        classify.mysql_error(exc, "mysql 查询失败"), errors.UpstreamQueryError
+        classify.mysql_error(exc, "mysql query failed"), errors.UpstreamQueryError
     )
     exc = _MySQLError(0, "denied", sqlstate="28000")
     assert isinstance(
-        classify.mysql_error(exc, "mysql 查询失败"), errors.UpstreamAuthError
+        classify.mysql_error(exc, "mysql query failed"), errors.UpstreamAuthError
     )
 
 

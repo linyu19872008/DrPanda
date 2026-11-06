@@ -48,7 +48,7 @@ async def test_systems_status_returns_envelope(runtime: Runtime) -> None:
     assert payload["rows"] == [
         {
             "key": "default",
-            "title": "默认",
+            "title": "Default",
             "enabled": True,
             "targets": 0,
             "enabled_targets": 0,

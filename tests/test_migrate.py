@@ -54,7 +54,7 @@ async def test_migrate_creates_tables_and_defaults(tmp_path: Path) -> None:
         default_env = connection.execute(
             "SELECT key, title, enabled FROM environments"
         ).fetchall()
-    assert default_env == [("default", "默认", 1)]
+    assert default_env == [("default", "Default", 1)]
     assert settings_rows == {
         "audit_retention_days": "90",
         "target_max_concurrency": "10",

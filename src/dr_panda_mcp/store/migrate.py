@@ -63,7 +63,7 @@ def _prune_backups(backup_dir: Path, keep: int) -> None:
         try:
             old.unlink()
         except OSError:  # pragma: no cover - 清理失败不影响启动
-            logger.warning("清理旧备份失败：%s", old)
+            logger.warning("failed to remove an old backup: %s", old)
 
 
 def _alembic_config() -> AlembicConfig:

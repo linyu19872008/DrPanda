@@ -24,7 +24,7 @@ def _protocol(target: Target) -> int:
     except (TypeError, ValueError):
         value = 0
     if value not in SUPPORTED_PROTOCOLS:
-        raise errors.UpstreamUnavailable(f"redis 协议版本必须是 2 或 3，当前：{raw!r}")
+        raise errors.UpstreamUnavailable(f"redis protocol version must be 2 or 3, got {raw!r}")
     return value
 
 
@@ -45,7 +45,7 @@ class _RedisClient:
             if cert or key:
                 if not (cert and key):
                     raise errors.UpstreamUnavailable(
-                        "redis 客户端证书与私钥必须同时提供"
+                        "redis client certificate and private key must be provided together"
                     )
                 self._cert_path = _temp_pem(cert, "cert")
                 self._key_path = _temp_pem(key, "key")
@@ -101,10 +101,11 @@ class _RedisClient:
         except Exception as exc:
             if _is_hello_unsupported(exc):
                 raise errors.UpstreamUnavailable(
-                    "redis 服务端不支持 RESP3（unknown command 'HELLO'）：服务端可能是 "
-                    "Redis < 6.0 或代理型 Redis，请把该目标的「协议版本」改回 2。"
+                    "redis server does not support RESP3 (unknown command 'HELLO'): "
+                    "the server may be Redis < 6.0 or a proxied Redis; set the "
+                    "target's protocol version back to 2."
                 ) from exc
-            raise classify.redis_error(exc, "redis 读取失败") from exc
+            raise classify.redis_error(exc, "redis read failed") from exc
         finally:
             await client.aclose()
 
@@ -123,7 +124,7 @@ class _RedisClient:
                 size = await client.strlen(key)
                 if size > byte_limit:
                     raise errors.GuardRejected(
-                        f"redis string {key} 有 {size} 字节，超过目标字节上限 {byte_limit}",
+                        f"redis string {key} has {size} bytes, exceeding the target byte limit {byte_limit}",
                         code=errors.DANGEROUS_OPERATION,
                     )
                 require(redis_guard.check_redis("GET", [key]))
@@ -207,7 +208,7 @@ def _temp_pem(content: str, suffix: str) -> str:
 def _ensure_within(size: int, limit: int, kind: str, key: str) -> None:
     if size > limit:
         raise errors.GuardRejected(
-            f"redis {kind} {key} 有 {size} 个元素，超过目标上限 {limit}",
+            f"redis {kind} {key} has {size} elements, exceeding the target limit {limit}",
             code=errors.DANGEROUS_OPERATION,
         )
 

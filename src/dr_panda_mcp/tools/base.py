@@ -32,10 +32,13 @@ EnvironmentParam = Annotated[
     str,
     Field(
         description=(
-            "环境调用标识 key，不是展示名。"
-            "用户说乐畅生产这类名字时，先用 systems_status 对照 title 得到 key。"
-            "登记了多个环境时必填；只有一个环境时可以省略。"
-            "同一种类型有多台时仍必须另传 target，不会自动挑选。"
+            "Environment call key, not the display name. "
+            "When the user gives a name like Lechang Production, first call "
+            "systems_status and match it against title to get the key. "
+            "Required when multiple environments are registered; can be omitted "
+            "when there is only one. "
+            "When there is more than one target of the same type you must still "
+            "pass target; nothing is selected automatically."
         )
     ),
 ]
@@ -298,7 +301,7 @@ async def write_tool_audit(
             )
         )
     except Exception:  # noqa: BLE001 - 审计写失败不影响工具结果
-        logger.warning(failure_text("store.error", "工具审计写入失败", tool=tool))
+        logger.warning(failure_text("store.error", "failed to write tool audit", tool=tool))
 
 
 async def run_tool(
@@ -334,7 +337,10 @@ async def run_tool(
         raise
     except TimeoutError as exc:
         error_code = errors.UPSTREAM_TIMEOUT
-        error_message = f"工具调用超过 {timeout:.0f} 秒（含排队），目标可能繁忙"
+        error_message = (
+            f"tool call exceeded {timeout:.0f}s (including queueing); "
+            "the target may be busy"
+        )
         raise ToolError(f"{errors.UPSTREAM_TIMEOUT}: {error_message}") from exc
     except errors.DrPandaError as exc:
         error_code = code_for(exc)
@@ -343,7 +349,9 @@ async def run_tool(
     except Exception as exc:
         error_code = errors.INTERNAL
         error_message = str(exc)
-        raise ToolError(f"{errors.INTERNAL}: 工具执行失败（{type(exc).__name__}）") from exc
+        raise ToolError(
+            f"{errors.INTERNAL}: tool execution failed ({type(exc).__name__})"
+        ) from exc
     finally:
         environment_key = (
             target.environment_key
@@ -382,13 +390,17 @@ def finish(
         rows, connectors_base.max_rows(target), connectors_base.max_bytes(target)
     )
     effective = truncation or auto_truncation
-    notes = ["结果已截断，请缩小查询范围、时间窗或返回条数。"] if effective else []
+    notes = (
+        ["Results were truncated; narrow the query range, time window, or row count."]
+        if effective
+        else []
+    )
     if target.environment_key:
         label = target.environment_title or target.environment_key
-        notes.insert(0, f"环境 {target.environment_key}（{label}）。")
+        notes.insert(0, f"Environment {target.environment_key} ({label}).")
     stats, stats_truncated = _cap_stats(stats, connectors_base.max_bytes(target))
     if stats_truncated:
-        notes.append("统计信息已因目标字节上限被截断。")
+        notes.append("Statistics were truncated due to the target byte limit.")
     return connectors_base.build_envelope(
         target,
         summary=summary[:200],
@@ -425,14 +437,20 @@ def ensure_topic(target: Target, topic: str) -> str:
     """校验日志主题在授权范围内。"""
     allowed = [str(item) for item in target.options.get("allowed_topics", [])]
     if not allowed:
-        raise errors.ScopeDenied(f"目标 {target.name} 没有授权任何日志主题")
+        raise errors.ScopeDenied(
+            f"target {target.name} has no authorized log topics"
+        )
     value = topic.strip()
     if not value and len(allowed) == 1:
         return allowed[0]
     if not value:
-        raise errors.InvalidArgument("必须指定 topic（该目标授权了多个主题）")
+        raise errors.InvalidArgument(
+            "topic is required (this target authorizes multiple topics)"
+        )
     if value not in allowed:
-        raise errors.ScopeDenied(f"主题 {value} 不在目标 {target.name} 的授权范围内")
+        raise errors.ScopeDenied(
+            f"topic {value} is not within the authorized scope of target {target.name}"
+        )
     return value
 
 
@@ -440,21 +458,23 @@ def ensure_project(target: Target, project: str) -> str:
     allowed = [str(item) for item in target.options.get("allowed_projects", [])]
     value = project.strip()
     if not allowed:
-        raise errors.ScopeDenied(f"目标 {target.name} 没有授权任何项目")
+        raise errors.ScopeDenied(f"target {target.name} has no authorized projects")
     if value not in allowed:
-        raise errors.ScopeDenied(f"项目 {value} 不在目标 {target.name} 的授权范围内")
+        raise errors.ScopeDenied(
+            f"project {value} is not within the authorized scope of target {target.name}"
+        )
     return value
 
 
 def allowed_projects(target: Target) -> list[str]:
     values = [str(item) for item in target.options.get("allowed_projects", [])]
     if not values:
-        raise errors.ScopeDenied(f"目标 {target.name} 没有授权任何项目")
+        raise errors.ScopeDenied(f"target {target.name} has no authorized projects")
     return values
 
 
 def clamp_limit(value: int | None, target: Target, default: int) -> int:
     limit = default if value is None else int(value)
     if limit < 1:
-        raise errors.InvalidArgument("limit 必须大于 0")
+        raise errors.InvalidArgument("limit must be greater than 0")
     return min(limit, connectors_base.max_rows(target))

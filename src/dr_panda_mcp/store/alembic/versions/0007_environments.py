@@ -82,7 +82,7 @@ def _seed_default_environment() -> None:
     connection.execute(
         environments.insert().values(
             key="default",
-            title="默认",
+            title="Default",
             enabled=True,
             created_at=now,
             updated_at=now,

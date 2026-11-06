@@ -110,7 +110,7 @@ def log_tool_call(
         return
     reason = _clip(_scrub(error_message or "", hidden), 200)
     if error_code == INTERNAL:
-        line = format_event("tool.call", reason or "工具执行失败", **fields)
+        line = format_event("tool.call", reason or "tool execution failed", **fields)
         stack = _redacted_traceback(hidden)
         if stack:
             logger.error("%s\n%s", line, stack)
@@ -157,7 +157,7 @@ class RequestLogMiddleware:
         except Exception:
             line = format_event(
                 "http",
-                "未处理的异常",
+                "unhandled exception",
                 request=request_id,
                 actor=_scope_actor(scope),
                 elapsed_ms=int((time.perf_counter() - started) * 1000),

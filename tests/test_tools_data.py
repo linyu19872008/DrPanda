@@ -637,7 +637,7 @@ async def test_stats_larger_than_byte_limit_is_truncated(
 
     assert payload["stats"]["truncated"] is True
     assert payload["stats"]["reason"] == "bytes"
-    assert any("统计信息" in note for note in payload["notes"])
+    assert any("Statistics were truncated" in note for note in payload["notes"])
 
 
 async def test_mysql_query_keeps_lower_existing_limit(

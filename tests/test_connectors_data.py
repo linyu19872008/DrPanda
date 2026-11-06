@@ -267,7 +267,7 @@ def test_redis_client_rejects_invalid_protocol(
     with pytest.raises(errors.UpstreamUnavailable) as excinfo:
         redis_module.connector.create_client(target)._client()
 
-    assert "协议版本" in str(excinfo.value)
+    assert "protocol version" in str(excinfo.value)
     assert captured == {}
 
 
@@ -295,7 +295,7 @@ async def test_redis_hello_error_gets_resp2_hint(
 
     message = str(excinfo.value)
     assert "RESP3" in message
-    assert "协议版本" in message
+    assert "protocol version" in message
     assert fake.closed is True
 
 
@@ -309,7 +309,7 @@ async def test_redis_other_errors_keep_wrapped_prefix(
     with pytest.raises(errors.UpstreamUnavailable) as excinfo:
         await client.ping()
 
-    assert str(excinfo.value) == "redis 读取失败：boom"
+    assert str(excinfo.value) == "redis read failed: boom"
 
 
 async def test_redis_inspect_bounded_and_unbounded(
@@ -515,7 +515,7 @@ async def test_mongo_client_construction_error_is_mapped(
     with pytest.raises(errors.UpstreamUnavailable) as excinfo:
         async with client._connected():
             pass
-    assert "无法解析" in str(excinfo.value)
+    assert "cannot be parsed" in str(excinfo.value)
 
 
 async def test_redis_string_over_byte_limit_is_rejected(

@@ -51,7 +51,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
 
     host = env.get("DR_PANDA_HOST", DEFAULT_HOST).strip()
     if not host:
-        raise ConfigError("DR_PANDA_HOST 不能为空")
+        raise ConfigError("DR_PANDA_HOST must not be empty")
 
     port = _parse_port(env.get("DR_PANDA_PORT", str(DEFAULT_PORT)))
 
@@ -66,8 +66,8 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
     cookie_secure = env.get("DR_PANDA_COOKIE_SECURE", "auto").strip().lower()
     if cookie_secure not in COOKIE_SECURE_POLICIES:
         raise ConfigError(
-            "DR_PANDA_COOKIE_SECURE 必须是 auto/always/never 之一，"
-            f"当前：{cookie_secure or '(空)'}"
+            "DR_PANDA_COOKIE_SECURE must be one of auto/always/never; "
+            f"got: {cookie_secure or '(empty)'}"
         )
     trusted_hosts = tuple(
         part.strip()
@@ -78,7 +78,7 @@ def load_config(environ: Mapping[str, str] | None = None) -> Config:
     log_level = env.get("DR_PANDA_LOG_LEVEL", DEFAULT_LOG_LEVEL).strip().upper()
     if log_level not in LOG_LEVELS:
         raise ConfigError(
-            f"DR_PANDA_LOG_LEVEL 必须是 {sorted(LOG_LEVELS)} 之一，当前：{log_level or '(空)'}"
+            f"DR_PANDA_LOG_LEVEL must be one of {sorted(LOG_LEVELS)}; got: {log_level or '(empty)'}"
         )
 
     return Config(
@@ -102,9 +102,9 @@ def _parse_port(raw: str) -> int:
     try:
         port = int(str(raw).strip())
     except (TypeError, ValueError) as exc:
-        raise ConfigError(f"DR_PANDA_PORT 必须是整数，当前：{raw!r}") from exc
+        raise ConfigError(f"DR_PANDA_PORT must be an integer; got: {raw!r}") from exc
     if not 1 <= port <= 65535:
-        raise ConfigError(f"DR_PANDA_PORT 必须在 1–65535 之间，当前：{port}")
+        raise ConfigError(f"DR_PANDA_PORT must be between 1 and 65535; got: {port}")
     return port
 
 
@@ -115,9 +115,9 @@ def _parse_secret_key(raw: str | None) -> str | None:
     try:
         decoded = base64.b64decode(value, validate=True)
     except (binascii.Error, ValueError) as exc:
-        raise ConfigError("DR_PANDA_SECRET_KEY 必须是 base64 编码的字符串") from exc
+        raise ConfigError("DR_PANDA_SECRET_KEY must be a base64-encoded string") from exc
     if len(decoded) != 32:
         raise ConfigError(
-            f"DR_PANDA_SECRET_KEY 解码后必须是 32 字节，当前 {len(decoded)} 字节"
+            f"DR_PANDA_SECRET_KEY must decode to 32 bytes; got {len(decoded)} bytes"
         )
     return value

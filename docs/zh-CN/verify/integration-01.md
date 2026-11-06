@@ -12,7 +12,7 @@
   - `docker.elastic.co/elasticsearch/elasticsearch:8.13.4` → `drpanda-elasticsearch`，host `19200`
   - `public.ecr.aws/docker/library/redis:7.2-alpine` → `drpanda-redis`，host `16379`
   - `public.ecr.aws/docker/library/rabbitmq:3.13-management` → `drpanda-rabbitmq`，host `15673`
-- 复现与清理见 [scripts/integration/README.md](../../scripts/integration/README.md)
+- 复现与清理见 [scripts/integration/README.md](../../../scripts/integration/README.md)
 
 所有容器、卷、数据库、集合、索引、key 前缀、queue 名称均以 `drpanda` 开头。密码为本地测试值。
 

@@ -288,7 +288,7 @@ def test_split_install_command_keeps_old_and_new_forms() -> None:
 
     message, command = split_install_command(missing_client_message("mongo"))
     assert command == "uv sync --extra mongo --inexact"
-    assert message == "mongo 客户端未安装"
+    assert message == "mongo client is not installed"
     assert "uv sync" not in message
 
 
@@ -301,7 +301,7 @@ async def test_missing_client_offers_install_without_copy(runtime: Runtime) -> N
         )
         page = await client.get("/targets")
 
-    assert "mongo 客户端未安装" in page.text
+    assert "mongo client is not installed" in page.text
     assert "uv sync" not in page.text
     assert "data-copy-command" not in page.text
     assert "data-test-command" not in page.text

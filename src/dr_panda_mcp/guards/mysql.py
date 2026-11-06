@@ -25,25 +25,27 @@ DIALECT = "mysql"
 def check_sql(sql: str) -> Decision:
     """检查一条只读 SQL；返回放行（含规范化信息）或拒绝。"""
     if not isinstance(sql, str) or not sql.strip():
-        return guard_rejected("mysql.empty_sql", "SQL 不能为空")
+        return guard_rejected("mysql.empty_sql", "SQL must not be empty")
     # MySQL 会执行 /*! ... */ 版本注释中的 SQL；sqlglot 会把它当普通注释丢掉，
     # 因此必须在解析前显式拒绝，否则可绕过系统库与危险函数检查。
     if "/*!" in sql:
         return dangerous(
             "mysql.executable_comment",
-            "不允许 MySQL 可执行版本注释（/*! ... */）",
+            "MySQL executable version comments (/*! ... */) are not allowed",
         )
 
     try:
         statements = [stmt for stmt in sqlglot.parse(sql, dialect=DIALECT) if stmt is not None]
     except ParseError as exc:
-        return guard_rejected("mysql.parse_error", f"SQL 无法解析：{exc}")
+        return guard_rejected("mysql.parse_error", f"SQL cannot be parsed: {exc}")
 
     if not statements:
-        return guard_rejected("mysql.empty_sql", "SQL 不能为空")
+        return guard_rejected("mysql.empty_sql", "SQL must not be empty")
     if len(statements) != 1:
         return guard_rejected(
-            "mysql.multi_statement", "只允许单条语句，检测到多条或分号分隔的语句"
+            "mysql.multi_statement",
+            "only a single statement is allowed; multiple or semicolon-separated "
+            "statements were detected",
         )
 
     statement = statements[0]
@@ -55,26 +57,28 @@ def check_sql(sql: str) -> Decision:
         return _check_describe(statement, sql)
     return guard_rejected(
         "mysql.statement_not_allowed",
-        f"只允许 SELECT / SHOW / DESCRIBE / EXPLAIN，收到 {type(statement).__name__}",
+        f"only SELECT / SHOW / DESCRIBE / EXPLAIN are allowed, got "
+        f"{type(statement).__name__}",
     )
 
 
 def _check_select(statement: exp.Expression, sql: str) -> Decision:
     if list(statement.find_all(exp.Lock)):
         return dangerous(
-            "mysql.locking_read", "不允许 FOR UPDATE / LOCK IN SHARE MODE 这类加锁读"
+            "mysql.locking_read",
+            "locking reads such as FOR UPDATE / LOCK IN SHARE MODE are not allowed",
         )
     if list(statement.find_all(exp.Into)):
-        return dangerous("mysql.into_clause", "不允许 SELECT ... INTO 变量或文件")
+        return dangerous("mysql.into_clause", "SELECT ... INTO variables or files is not allowed")
     for table in statement.find_all(exp.Table):
         if (table.db or "").lower() in forbidden.MYSQL_SYSTEM_SCHEMAS:
             return dangerous(
-                "mysql.system_schema", f"不允许读取系统库 {table.db}"
+                "mysql.system_schema", f"reading system schema {table.db} is not allowed"
             )
     for function in statement.find_all(exp.Anonymous):
         if function.name.upper() in forbidden.MYSQL_DANGEROUS_FUNCTIONS:
             return dangerous(
-                "mysql.expensive_function", f"不允许调用 {function.name.upper()}"
+                "mysql.expensive_function", f"calling {function.name.upper()} is not allowed"
             )
 
     has_where = statement.args.get("where") is not None
@@ -85,11 +89,12 @@ def _check_select(statement: exp.Expression, sql: str) -> Decision:
             or statement.args.get("distinct")
         ):
             return dangerous(
-                "mysql.full_scan_sort", "没有 WHERE 的排序/分组/去重会扫全表"
+                "mysql.full_scan_sort",
+                "sort/group/dedup without WHERE scans the whole table",
             )
         if list(statement.find_all(exp.AggFunc)):
             return dangerous(
-                "mysql.full_scan_aggregate", "没有 WHERE 的聚合会扫全表"
+                "mysql.full_scan_aggregate", "aggregation without WHERE scans the whole table"
             )
 
     return allow({"kind": "select", "sql": sql})
@@ -99,7 +104,7 @@ def _check_show(statement: exp.Show) -> Decision:
     command = str(statement.this or "").upper()
     if command not in forbidden.MYSQL_SHOW_COMMANDS:
         return guard_rejected(
-            "mysql.show_not_allowed", f"不允许的 SHOW 命令：{command or '(空)'}"
+            "mysql.show_not_allowed", f"SHOW command not allowed: {command or '(empty)'}"
         )
     return allow({"kind": "show", "command": command})
 
@@ -108,15 +113,18 @@ def _check_describe(statement: exp.Describe, sql: str) -> Decision:
     style = str(statement.args.get("style") or "").upper()
     if style == "ANALYZE":
         return dangerous(
-            "mysql.explain_analyze", "EXPLAIN ANALYZE 会真正执行语句，开销不可控"
+            "mysql.explain_analyze",
+            "EXPLAIN ANALYZE actually executes the statement and has "
+            "unbounded cost",
         )
     inner = statement.this
     if isinstance(inner, exp.Select):
         return _check_select(inner, sql)
     if isinstance(inner, exp.Table):
         if (inner.db or "").lower() in forbidden.MYSQL_SYSTEM_SCHEMAS:
-            return dangerous("mysql.system_schema", f"不允许读取系统库 {inner.db}")
+            return dangerous("mysql.system_schema", f"reading system schema {inner.db} is not allowed")
         return allow({"kind": "describe", "table": inner.name, "db": inner.db})
     return guard_rejected(
-        "mysql.explain_target", "EXPLAIN / DESCRIBE 的目标必须是 SELECT 或表"
+        "mysql.explain_target",
+        "EXPLAIN / DESCRIBE target must be a SELECT or a table",
     )
