@@ -6,9 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <!-- PyPI badge is enabled after the first PyPI release:
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
-  -->
   <a href="https://github.com/linyu19872008/DrPanda/blob/main/LICENSE"><img alt="License: MIT" src="https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/badge-license.png" height="20"></a>
   <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/badge-python.png" height="20"></a>
 </p>
@@ -85,7 +83,7 @@ cp .env.example .env   # optional; defaults are used otherwise
 uv run dr-panda-mcp    # automatically loads ./.env from the current directory
 ```
 
-Or install as a command-line tool from PyPI (once the first release is published):
+Or install as a command-line tool from PyPI:
 
 ```bash
 uv tool install dr-panda-mcp

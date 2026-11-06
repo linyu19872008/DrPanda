@@ -4,9 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg?branch=main"></a>
-  <!-- PyPI badge is enabled after the first PyPI release:
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
-  -->
   <a href="LICENSE"><img alt="License: MIT" src="docs/assets/badge-license.png" height="20"></a>
   <a href="https://www.python.org/"><img alt="Python 3.11+" src="docs/assets/badge-python.png" height="20"></a>
 </p>
@@ -83,7 +81,7 @@ cp .env.example .env   # 可选；不建则使用环境变量与默认值
 uv run dr-panda-mcp    # 自动加载当前目录 ./.env
 ```
 
-或从 PyPI 安装为命令行工具（首次发布后可用）：
+或从 PyPI 安装为命令行工具：
 
 ```bash
 uv tool install dr-panda-mcp

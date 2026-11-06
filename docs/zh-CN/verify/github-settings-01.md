@@ -43,10 +43,7 @@ README 顶部已启用 GitHub Actions CI 徽标；PyPI 徽标继续保留注释�
 
 ### PyPI
 
-PyPI 1.0.0 尚未发布（`https://pypi.org/pypi/dr-panda-mcp/json` 返回 404）。发布后：
-
-1. 取消 README 中 PyPI 徽标注释；
-2. 注意 PyPI 不解析 README 的相对图片，发布前需处理绝对 raw URL 或 PyPI 专用 README。
+PyPI 1.0.0 已通过 Trusted Publishing 发布：<https://pypi.org/project/dr-panda-mcp/>；README 中 PyPI 徽标已启用。详见 `pypi-release-01.md`。
 
 ## 验证
 
