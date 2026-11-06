@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-06
+
+### Added
+
+- Deployment helper `scripts/setup.sh` with `check`, `install`, `service`, `start`, `status` and `upgrade`.
+- Source (`git + uv sync`) and PyPI (`uv tool install`) installation methods.
+- systemd unit for a dedicated `drpanda` user, with sandboxing and health-checked startup.
+- Automatic Python selection (system Python >=3.11 first; shared `/opt/uv-python` fallback), `--no-dev` production installs, and optional PyPI/python mirrors.
+- Preflight and post-install checks for interpreter accessibility, service-user execution and systemd unit validity.
+
+### Changed
+
+- Repository renamed from `DrPanda` to `dr-panda-mcp` for consistency with the package and CLI.
+- Documentation defaults to English under `docs/`; Chinese docs live under `docs/zh-CN/`.
+
+### Fixed
+
+- systemd unit path directives no longer use quotes.
+- Service startup failures are reported instead of being treated as success.
+
 ## [1.0.0] - 2026-11-06
 
 ### Added

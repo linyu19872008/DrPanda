@@ -1,6 +1,6 @@
 # GitHub 仓库设置 01 · 执行记录
 
-背景：仓库已开源为 `https://github.com/linyu19872008/DrPanda`，默认分支 `main`；按计划补齐仓库设置、启用 CI 徽标。
+背景：仓库已开源为 `https://github.com/linyu19872008/dr-panda-mcp`，默认分支 `main`；按计划补齐仓库设置、启用 CI 徽标。
 
 ## 已执行
 

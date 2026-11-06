@@ -6,6 +6,26 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-06
+
+### 新增
+
+- 部署脚本 `scripts/setup.sh`：`check`、`install`、`service`、`start`、`status`、`upgrade`。
+- source（`git + uv sync`）与 PyPI（`uv tool install`）两种安装方式。
+- 专用 `drpanda` 用户的 systemd 服务、沙箱配置与健康检查启动。
+- Python 自动选择（优先系统 >=3.11，fallback 到共享 `/opt/uv-python`）、生产 `--no-dev`、可选 PyPI/Python 镜像。
+- 安装前后检查解释器可访问性、服务用户执行权限和 systemd unit 合法性。
+
+### 变更
+
+- 仓库从 `DrPanda` 重命名为 `dr-panda-mcp`，与包名/CLI 对齐。
+- 文档默认英文在 `docs/`，中文在 `docs/zh-CN/`。
+
+### 修复
+
+- systemd unit 的路径指令不再使用引号。
+- 服务启动失败不再被误报为安装成功。
+
 ## [1.0.0] - 2026-11-06
 
 ### 新增

@@ -1,6 +1,6 @@
 # PyPI 1.0.0 发布 01 · 验证记录
 
-背景：PyPI Pending Publisher 已配置（项目 `dr-panda-mcp`、仓库 `linyu19872008/DrPanda`、workflow `publish.yml`、environment `(Any)`），通过 Trusted Publishing 发布 1.0.0。
+背景：PyPI Pending Publisher 已配置（项目 `dr-panda-mcp`、仓库 `linyu19872008/dr-panda-mcp`、workflow `publish.yml`、environment `(Any)`），通过 Trusted Publishing 发布 1.0.0。
 
 ## 发布准备
 

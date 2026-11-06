@@ -17,8 +17,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPO = "https://github.com/linyu19872008/DrPanda"
-RAW = "https://raw.githubusercontent.com/linyu19872008/DrPanda/main"
+REPO = "https://github.com/linyu19872008/dr-panda-mcp"
+RAW = "https://raw.githubusercontent.com/linyu19872008/dr-panda-mcp/main"
 SOURCE = ROOT / "README.md"
 TARGET = ROOT / "README.pypi.md"
 

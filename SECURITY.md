@@ -15,7 +15,7 @@ DrPanda MCP is a read-only troubleshooting service that stores connection metada
 
 Do **not** open a public issue for security problems.
 
-1. Use GitHub's private security advisory: <https://github.com/linyu19872008/DrPanda/security/advisories/new> (preferred), or
+1. Use GitHub's private security advisory: <https://github.com/linyu19872008/dr-panda-mcp/security/advisories/new> (preferred), or
 2. Email the maintainer at <linyu19872008@gmail.com> with the subject `[SECURITY] DrPanda MCP`.
 
 Please include:

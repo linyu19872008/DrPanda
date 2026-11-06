@@ -28,7 +28,7 @@
 
 ## 仓库信息与待办
 
-- GitHub 仓库已确认：`github.com/linyu19872008/DrPanda`，默认分支 `main`；README、模板、SECURITY、CONTRIBUTING、pyproject 已按此更新：
+- GitHub 仓库已确认：`github.com/linyu19872008/dr-panda-mcp`，默认分支 `main`；README、模板、SECURITY、CONTRIBUTING、pyproject 已按此更新：
   - README/README.zh-CN 顶部徽标链接；
   - `.github/ISSUE_TEMPLATE/config.yml` 的 SECURITY/文档链接；
   - `pyproject.toml` 的 `[project.urls]`；

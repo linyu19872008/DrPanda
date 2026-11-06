@@ -1,6 +1,6 @@
 [project]
 name = "dr-panda-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "Read-only MCP service for production troubleshooting: register connections in a web console, call tools by target name"
 readme = "README.pypi.md"
 license = "MIT"
@@ -50,11 +50,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/linyu19872008/DrPanda"
-Repository = "https://github.com/linyu19872008/DrPanda"
-Issues = "https://github.com/linyu19872008/DrPanda/issues"
-Documentation = "https://github.com/linyu19872008/DrPanda/tree/main/docs"
-Changelog = "https://github.com/linyu19872008/DrPanda/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/linyu19872008/dr-panda-mcp"
+Repository = "https://github.com/linyu19872008/dr-panda-mcp"
+Issues = "https://github.com/linyu19872008/dr-panda-mcp/issues"
+Documentation = "https://github.com/linyu19872008/dr-panda-mcp/tree/main/docs"
+Changelog = "https://github.com/linyu19872008/dr-panda-mcp/blob/main/CHANGELOG.md"
 
 [project.scripts]
 dr-panda-mcp = "dr_panda_mcp.cli:main"

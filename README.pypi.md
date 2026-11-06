@@ -1,17 +1,17 @@
 <!-- Generated from README.md by scripts/build_pypi_readme.py. Do not edit by hand. -->
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/logo.png" width="96" alt="DrPanda MCP">
+  <img src="https://raw.githubusercontent.com/linyu19872008/dr-panda-mcp/main/docs/assets/logo.png" width="96" alt="DrPanda MCP">
 </p>
 
 <p align="center">
-  <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml/badge.svg?branch=main"></a>
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp?cache=1"></a>
-  <a href="https://github.com/linyu19872008/DrPanda/blob/main/LICENSE"><img alt="License: MIT" src="https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/badge-license.png" height="20"></a>
-  <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/badge-python.png" height="20"></a>
+  <a href="https://github.com/linyu19872008/dr-panda-mcp/blob/main/LICENSE"><img alt="License: MIT" src="https://raw.githubusercontent.com/linyu19872008/dr-panda-mcp/main/docs/assets/badge-license.png" height="20"></a>
+  <a href="https://www.python.org/"><img alt="Python 3.11+" src="https://raw.githubusercontent.com/linyu19872008/dr-panda-mcp/main/docs/assets/badge-python.png" height="20"></a>
 </p>
 
-<p align="center"><strong>English</strong> · <a href="https://github.com/linyu19872008/DrPanda/blob/main/README.zh-CN.md">简体中文</a></p>
+<p align="center"><strong>English</strong> · <a href="https://github.com/linyu19872008/dr-panda-mcp/blob/main/README.zh-CN.md">简体中文</a></p>
 
 # DrPanda MCP
 
@@ -21,7 +21,7 @@ Register MySQL, MongoDB, Elasticsearch, Redis, GitLab, RabbitMQ, Kafka and CLS c
 
 **The model never supplies hosts, accounts, or passwords itself.**
 
-![Web console in English](https://raw.githubusercontent.com/linyu19872008/DrPanda/main/docs/assets/screenshot-en.png)
+![Web console in English](https://raw.githubusercontent.com/linyu19872008/dr-panda-mcp/main/docs/assets/screenshot-en.png)
 
 ---
 
@@ -76,7 +76,7 @@ Real integration coverage:
 From source (recommended for development):
 
 ```bash
-git clone https://github.com/linyu19872008/DrPanda.git
+git clone https://github.com/linyu19872008/dr-panda-mcp.git
 cd dr-panda-mcp
 uv sync
 cp .env.example .env   # optional; defaults are used otherwise
@@ -114,7 +114,7 @@ Health check:
 
 ```bash
 curl -fsS http://127.0.0.1:8111/healthz
-# {"ok":true,"version":"1.0.0","db":"ok"}
+# {"ok":true,"version":"1.1.0","db":"ok"}
 ```
 
 ### Optional dependencies
@@ -151,7 +151,7 @@ sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
 ./scripts/setup.sh start --dir /opt/dr-panda-mcp
 ```
 
-It also supports PyPI installation (`--method pypi --version 1.0.0`), health checks, upgrades and a dedicated `drpanda` systemd user. See [docs/deployment.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/deployment.md) for details.
+It also supports PyPI installation (`--method pypi --version 1.1.0`), health checks, upgrades and a dedicated `drpanda` systemd user. See [docs/deployment.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/deployment.md) for details.
 
 ---
 
@@ -291,7 +291,7 @@ Target names allow lowercase letters, digits and hyphens only, and are immutable
 - no frontend framework, Node build chain or third-party CDN;
 - without JavaScript, dedicated form/confirmation pages or manual copy hints are shown — no fake buttons.
 
-See [Security](https://github.com/linyu19872008/DrPanda/blob/main/docs/security.md) and [Verification](https://github.com/linyu19872008/DrPanda/blob/main/docs/verification.md) for the full policy and boundaries.
+See [Security](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/security.md) and [Verification](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/verification.md) for the full policy and boundaries.
 
 ---
 
@@ -336,7 +336,7 @@ Settings can only adjust runtime policy; they **cannot relax read-only rules, da
 | `DR_PANDA_COOKIE_SECURE` | `auto` | Cookie Secure policy: auto (request scheme) / always / never |
 | `DR_PANDA_TRUSTED_HOSTS` | unset | `/mcp` Host allowlist (comma-separated); otherwise FastMCP defaults apply |
 
-The repository ships [`.env.example`](https://github.com/linyu19872008/DrPanda/blob/main/.env.example) with all defaults commented out; no configuration is required to start locally.
+The repository ships [`.env.example`](https://github.com/linyu19872008/dr-panda-mcp/blob/main/.env.example) with all defaults commented out; no configuration is required to start locally.
 
 The service **automatically loads `./.env` from the current working directory**; when the file is absent it falls back to environment variables and code defaults. To override defaults:
 
@@ -464,12 +464,12 @@ Unverified capabilities are never treated as available just because other compon
 
 English documentation:
 
-- [docs/README.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/README.md): English documentation index
-- [docs/architecture.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/architecture.md): components, request flow, data model and deployment
-- [docs/security.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/security.md): security model, authentication, secrets and remote access
-- [docs/ui-design.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/ui-design.md): web console design system and page behavior
-- [docs/verification.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/verification.md): testing strategy, verified and unverified capabilities
-- [docs/deployment.md](https://github.com/linyu19872008/DrPanda/blob/main/docs/deployment.md): setup helper, systemd and first-install flow
+- [docs/README.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/README.md): English documentation index
+- [docs/architecture.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/architecture.md): components, request flow, data model and deployment
+- [docs/security.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/security.md): security model, authentication, secrets and remote access
+- [docs/ui-design.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/ui-design.md): web console design system and page behavior
+- [docs/verification.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/verification.md): testing strategy, verified and unverified capabilities
+- [docs/deployment.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/docs/deployment.md): setup helper, systemd and first-install flow
 
 The Chinese README links the Chinese design and verification docs.
 
@@ -477,11 +477,11 @@ The Chinese README links the Chinese design and verification docs.
 
 ## Contributing, security and license
 
-- [CONTRIBUTING.md](https://github.com/linyu19872008/DrPanda/blob/main/CONTRIBUTING.md): development setup, tests, pull-request rules and bilingual docs sync
-- [SECURITY.md](https://github.com/linyu19872008/DrPanda/blob/main/SECURITY.md): how to report vulnerabilities and scope
-- [CODE_OF_CONDUCT.md](https://github.com/linyu19872008/DrPanda/blob/main/CODE_OF_CONDUCT.md): community expectations
-- [CHANGELOG.md](https://github.com/linyu19872008/DrPanda/blob/main/CHANGELOG.md): release history
-- [LICENSE](https://github.com/linyu19872008/DrPanda/blob/main/LICENSE): MIT
+- [CONTRIBUTING.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/CONTRIBUTING.md): development setup, tests, pull-request rules and bilingual docs sync
+- [SECURITY.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/SECURITY.md): how to report vulnerabilities and scope
+- [CODE_OF_CONDUCT.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/CODE_OF_CONDUCT.md): community expectations
+- [CHANGELOG.md](https://github.com/linyu19872008/dr-panda-mcp/blob/main/CHANGELOG.md): release history
+- [LICENSE](https://github.com/linyu19872008/dr-panda-mcp/blob/main/LICENSE): MIT
 
 English is the default for code, comments, error codes and repository governance files. The UI and product docs also support Chinese; issues and pull requests may be written in English or Chinese.
 
