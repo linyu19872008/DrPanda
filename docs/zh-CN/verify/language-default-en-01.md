@@ -9,7 +9,7 @@
 | 英文默认目录 | `docs/README.md`、`docs/architecture.md`、`docs/security.md`、`docs/ui-design.md`、`docs/verification.md` |
 | 中文目录 | `docs/zh-CN/README.md`、`planning.md`、`milestones.md`、`ui-design.md`、`verify/`（历史记录保留） |
 | 截图 | 英文 `docs/assets/screenshot-en.png`；中文 `docs/zh-CN/assets/screenshot-zh.png`；logo 共用 `docs/assets/logo.png` |
-| README | 英文 README 只链英文文档；中文 README 只链 `docs/zh-CN/` 文档 |
+| README | 英文 README 只链英文文档；中文 README 只链 `docs/zh-CN/` 文档；License/Python 徽标改为仓库内 PNG（`docs/assets/badge-*.png`），本地预览不再依赖 shields.io |
 | 链接检查 | `scripts/check_docs_links.py` 递归扫描 **68 个 Markdown 文件**，通过 |
 
 ## 软件
@@ -35,3 +35,13 @@
 - Web 的正常页面、表单校验与设置页使用完整 en catalog；少数底层异常原文（如存储层目标名校验）仍可能以中文源直接展示，尚未逐条接入 catalog，属于后续 i18n 债务；
 - 已有安装的默认环境标题仍是之前写入的「默认」，不会自动迁移；
 - README 图片仍为相对路径；PyPI 渲染需要在仓库公开后改绝对 raw URL。
+
+
+## 补充：本地 README 徽标
+
+本地 Markdown 预览时，shields.io 外链徽标无法加载；已将 License / Python 徽标改为仓库内 PNG：
+
+- `docs/assets/badge-license.png`
+- `docs/assets/badge-python.png`
+
+中英文 README 共用这两个本地资源，GitHub 与本地预览均可显示；CI/PyPI 动态徽标仍保留在注释中，仓库公开并发布后再启用。
