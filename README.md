@@ -138,6 +138,21 @@ uv sync --all-extras
 
 ---
 
+## Deployment helper
+
+For a new machine, use [scripts/setup.sh](scripts/setup.sh) instead of running the manual steps above:
+
+```bash
+./scripts/setup.sh check
+./scripts/setup.sh install --method source --extras mysql,redis
+sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
+./scripts/setup.sh start --dir /opt/dr-panda-mcp
+```
+
+It also supports PyPI installation (`--method pypi --version 1.0.0`), health checks, upgrades and a dedicated `drpanda` systemd user. See [docs/deployment.md](docs/deployment.md) for details.
+
+---
+
 ## Files created by the first-run setup
 
 After setup, `data/` contains:
@@ -452,6 +467,7 @@ English documentation:
 - [docs/security.md](docs/security.md): security model, authentication, secrets and remote access
 - [docs/ui-design.md](docs/ui-design.md): web console design system and page behavior
 - [docs/verification.md](docs/verification.md): testing strategy, verified and unverified capabilities
+- [docs/deployment.md](docs/deployment.md): setup helper, systemd and first-install flow
 
 The Chinese README links the Chinese design and verification docs.
 

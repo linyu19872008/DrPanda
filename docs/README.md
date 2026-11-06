@@ -6,6 +6,7 @@ This directory contains the English documentation linked from [README.md](../REA
 - [Security](security.md): security model, authentication, secrets and remote-access guidance.
 - [UI design](ui-design.md): server-rendered console, design system and page behavior.
 - [Verification](verification.md): testing strategy, CI, verified and unverified capabilities.
+- [Deployment](deployment.md): setup helper, source/PyPI install, systemd and first-install flow.
 
 Historical verification records are maintained separately for maintainers; the pages above summarize the current design and boundaries.
 

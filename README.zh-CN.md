@@ -138,6 +138,21 @@ uv sync --all-extras
 
 ---
 
+## 部署脚本
+
+新机器建议用 [scripts/setup.sh](scripts/setup.sh) 代替手工命令：
+
+```bash
+./scripts/setup.sh check
+./scripts/setup.sh install --method source --extras mysql,redis
+sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
+./scripts/setup.sh start --dir /opt/dr-panda-mcp
+```
+
+也支持 PyPI 安装（`--method pypi --version 1.0.0`）、健康检查、升级和专用 `drpanda` systemd 用户。详见 [docs/zh-CN/deployment.md](docs/zh-CN/deployment.md)。
+
+---
+
 ## 首次安装会生成哪些文件
 
 安装完成后会在 `data/` 下生成：

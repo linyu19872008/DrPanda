@@ -78,3 +78,8 @@ logs/
 .Trashes
 Thumbs.db
 desktop.ini
+
+# 部署脚本生成的安装标记（不提交）
+.drpanda-method
+.drpanda-extras
+.drpanda-version
