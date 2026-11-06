@@ -37,12 +37,15 @@
 - 文档链接检查：通过；
 - `ruff check .`：通过。
 
-## 待完成
+## 发布结果
 
-- 推送后等 CI 通过；
-- 创建 `v1.1.0` GitHub Release，触发 Trusted Publishing 发布到 PyPI；
-- 发布后把 README 的 PyPI 徽标 cache 参数更新为 `?cache=1.1.0`，强制刷新缓存；
-- PyPI 1.0.0 的已发布元数据仍指向旧仓库 URL，无法修改；GitHub 旧地址跳转可兼容，1.1.0 起使用新 URL。
+- CI 通过；
+- `v1.1.0` GitHub Release 已发布；
+- 首次 Publish 因 PyPI Trusted Publisher 仍记录旧仓库名 `DrPanda` 失败；
+- 更新 PyPI Trusted Publisher 为 `dr-panda-mcp` 后重跑成功；
+- PyPI 已发布 **1.1.0**：<https://pypi.org/project/dr-panda-mcp/1.1.0/>；
+- README PyPI 徽标 cache 参数更新为 `?cache=1.1.0`；
+- PyPI 1.0.0 的已发布元数据仍指向旧仓库 URL，无法修改；1.1.0 起使用新 URL。
 
 ## 边界
 
