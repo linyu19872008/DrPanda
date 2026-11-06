@@ -17,7 +17,9 @@ from dr_panda_mcp import auth
 from dr_panda_mcp.errors import (
     INTERNAL,
     STORAGE_UNAVAILABLE,
+    UPSTREAM_AUTH,
     UPSTREAM_NOT_FOUND,
+    UPSTREAM_QUERY_ERROR,
     UPSTREAM_TIMEOUT,
     UPSTREAM_UNAVAILABLE,
 )
@@ -27,7 +29,15 @@ logger = logging.getLogger(__name__)
 
 _REQUEST_ID: ContextVar[str] = ContextVar("dr_panda_request_id", default="")
 _FIELDS = ("request", "actor", "tool", "env", "target", "elapsed_ms", "returned", "error")
-_UPSTREAM = frozenset({UPSTREAM_TIMEOUT, UPSTREAM_UNAVAILABLE, UPSTREAM_NOT_FOUND})
+_UPSTREAM = frozenset(
+    {
+        UPSTREAM_TIMEOUT,
+        UPSTREAM_UNAVAILABLE,
+        UPSTREAM_NOT_FOUND,
+        UPSTREAM_QUERY_ERROR,
+        UPSTREAM_AUTH,
+    }
+)
 _QUIET_PREFIXES = ("/static/",)
 _QUIET_PATHS = frozenset({"/healthz", "/favicon.ico"})
 _USERINFO = re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+):[^/\s@]+@")

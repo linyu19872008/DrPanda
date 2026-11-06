@@ -112,7 +112,13 @@ def test_check_http_response_mapping() -> None:
     with pytest.raises(errors.UpstreamUnavailable):
         base.check_http_response(httpx.Response(500), "es")
     with pytest.raises(errors.UpstreamUnavailable):
+        base.check_http_response(httpx.Response(429), "es")
+    with pytest.raises(errors.UpstreamAuthError):
         base.check_http_response(httpx.Response(401), "es")
+    with pytest.raises(errors.UpstreamAuthError):
+        base.check_http_response(httpx.Response(403), "es")
+    with pytest.raises(errors.UpstreamQueryError):
+        base.check_http_response(httpx.Response(400), "es")
 
 
 def test_stopwatch_elapsed() -> None:

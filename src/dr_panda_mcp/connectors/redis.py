@@ -7,7 +7,7 @@ import tempfile
 from typing import Any
 
 from dr_panda_mcp import errors
-from dr_panda_mcp.connectors import base
+from dr_panda_mcp.connectors import base, classify
 from dr_panda_mcp.guards import redis as redis_guard
 from dr_panda_mcp.guards.protocol import Decision, require
 from dr_panda_mcp.store.protocol import Target
@@ -104,7 +104,7 @@ class _RedisClient:
                     "redis 服务端不支持 RESP3（unknown command 'HELLO'）：服务端可能是 "
                     "Redis < 6.0 或代理型 Redis，请把该目标的「协议版本」改回 2。"
                 ) from exc
-            raise errors.UpstreamUnavailable(f"redis 读取失败：{exc}") from exc
+            raise classify.redis_error(exc, "redis 读取失败") from exc
         finally:
             await client.aclose()
 

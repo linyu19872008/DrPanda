@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import quote, urlsplit
 
 from dr_panda_mcp import errors
-from dr_panda_mcp.connectors import base
+from dr_panda_mcp.connectors import base, classify
 from dr_panda_mcp.guards import mongo as mongo_guard
 from dr_panda_mcp.guards.protocol import Decision, require
 from dr_panda_mcp.store.protocol import Target
@@ -212,7 +212,7 @@ class _MongoClient:
             try:
                 await client.admin.command("ping")
             except Exception as exc:
-                raise errors.UpstreamUnavailable(f"mongo 探测失败：{exc}") from exc
+                raise classify.mongo_error(exc, "mongo 探测失败") from exc
 
     async def collections(self, db_name: str, limit: int) -> list[dict[str, Any]]:
         require(mongo_guard.check_mongo_command("listCollections", {}))
@@ -237,7 +237,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise errors.UpstreamUnavailable(f"mongo 集合列表失败：{exc}") from exc
+                raise classify.mongo_error(exc, "mongo 集合列表失败") from exc
 
     async def find(
         self,
@@ -266,7 +266,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise errors.UpstreamUnavailable(f"mongo find 失败：{exc}") from exc
+                raise classify.mongo_error(exc, "mongo find 失败") from exc
 
     async def aggregate(
         self,
@@ -287,7 +287,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise errors.UpstreamUnavailable(f"mongo aggregate 失败：{exc}") from exc
+                raise classify.mongo_error(exc, "mongo aggregate 失败") from exc
 
     async def stats(
         self, db_name: str, collection: str | None
@@ -306,7 +306,7 @@ class _MongoClient:
             except errors.DrPandaError:
                 raise
             except Exception as exc:
-                raise errors.UpstreamUnavailable(f"mongo stats 失败：{exc}") from exc
+                raise classify.mongo_error(exc, "mongo stats 失败") from exc
 
 
 def _temp_text(content: str, suffix: str, mode: int) -> str:

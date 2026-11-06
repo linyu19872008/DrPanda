@@ -1026,7 +1026,9 @@ Management API 只发 `GET`，读取队列深度、消费者数量、未确认�
 | `SCOPE_DENIED` | 超出库、索引、topic、项目、vhost 范围 | 缩小范围或让用户扩范围 |
 | `UPSTREAM_NOT_FOUND` | 上游 404：库、索引、文件不存在 | 核对名称 |
 | `UPSTREAM_TIMEOUT` | 超时，含目标并发等待超时 | 缩小时间窗或稍后重试 |
-| `UPSTREAM_UNAVAILABLE` | 连接失败、上游 5xx | 让用户检查目标连通性 |
+| `UPSTREAM_UNAVAILABLE` | 连接失败、连接中断、上游 5xx、连接数满 | 让用户检查目标连通性，稍后重试 |
+| `UPSTREAM_QUERY_ERROR` | 上游拒绝了查询：SQL 语法/字段/表不存在、Mongo 命令或管道非法、ES 查询 DSL 非法、Redis 命令参数错误 | 修正 SQL / 管道 / DSL / 命令参数，不要等服务恢复 |
+| `UPSTREAM_AUTH` | 上游认证或授权失败：账号密码、库权限、认证方式 | 让用户核对密钥与授权，不要重试 |
 | `STORAGE_UNAVAILABLE` | 配置库不可用 | 提示联系维护者 |
 | `SECRET_UNAVAILABLE` | 该目标的密钥解不开（密钥缺失、被替换或密文损坏） | 让用户到网页重新录入密钥 |
 | `INTERNAL` | 未预期异常 | 附 trace id，重试或上报 |

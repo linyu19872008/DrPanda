@@ -1,6 +1,6 @@
 """展示层标签：错误码 → 中文短标签。
 
-只影响网页显示（`UPSTREAM_UNAVAILABLE（上游不可用）` 形式），不改变 MCP 工具返回的
+只影响网页显示（`UPSTREAM_UNAVAILABLE（上游不可达）` 形式），不改变 MCP 工具返回的
 ``CODE: message`` 契约，也不改审计数据；未知错误码原样回退。
 """
 
@@ -22,7 +22,9 @@ ERROR_LABELS: dict[str, str] = {
     errors.SCOPE_DENIED: "超出授权范围",
     errors.UPSTREAM_NOT_FOUND: "上游记录不存在",
     errors.UPSTREAM_TIMEOUT: "上游超时",
-    errors.UPSTREAM_UNAVAILABLE: "上游不可用",
+    errors.UPSTREAM_UNAVAILABLE: "上游不可达",
+    errors.UPSTREAM_QUERY_ERROR: "上游拒绝查询",
+    errors.UPSTREAM_AUTH: "上游认证失败",
     errors.STORAGE_UNAVAILABLE: "配置库不可用",
     errors.SECRET_UNAVAILABLE: "密钥不可用",
     errors.INTERNAL: "服务内部错误",

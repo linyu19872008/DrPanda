@@ -87,6 +87,14 @@ class _ESClient:
                 return response
             except errors.UpstreamNotFound:
                 raise
+            except errors.UpstreamAuthError:
+                raise
+            except errors.UpstreamQueryError:
+                raise
+            except errors.UpstreamUnavailable as exc:
+                last_error = exc
+            except errors.DrPandaError:
+                raise
             except Exception as exc:  # noqa: BLE001 - 统一映射并尝试下一个 host
                 last_error = exc
             finally:

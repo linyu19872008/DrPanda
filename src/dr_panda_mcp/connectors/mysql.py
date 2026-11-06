@@ -10,7 +10,7 @@ import ssl
 from typing import Any
 
 from dr_panda_mcp import errors
-from dr_panda_mcp.connectors import base
+from dr_panda_mcp.connectors import base, classify
 from dr_panda_mcp.guards import mysql as mysql_guard
 from dr_panda_mcp.guards.protocol import Decision
 from dr_panda_mcp.store.protocol import Target
@@ -49,7 +49,7 @@ class _MySQLClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"mysql 探测失败：{exc}") from exc
+            raise classify.mysql_error(exc, "mysql 探测失败") from exc
         finally:
             await _close(connection)
 
@@ -85,7 +85,7 @@ class _MySQLClient:
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"mysql 查询失败：{exc}") from exc
+            raise classify.mysql_error(exc, "mysql 查询失败") from exc
 
 
 async def _connect(asyncmy: Any, target: Target) -> Any:

@@ -53,6 +53,8 @@ _ERROR_CODES: tuple[tuple[type[errors.DrPandaError], str], ...] = (
     (errors.UpstreamTimeout, errors.UPSTREAM_TIMEOUT),
     (errors.UpstreamNotFound, errors.UPSTREAM_NOT_FOUND),
     (errors.UpstreamUnavailable, errors.UPSTREAM_UNAVAILABLE),
+    (errors.UpstreamQueryError, errors.UPSTREAM_QUERY_ERROR),
+    (errors.UpstreamAuthError, errors.UPSTREAM_AUTH),
     (errors.StorageUnavailable, errors.STORAGE_UNAVAILABLE),
 )
 

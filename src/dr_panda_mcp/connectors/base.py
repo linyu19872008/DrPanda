@@ -21,6 +21,7 @@ from typing import Any, Protocol, Self
 import httpx
 
 from dr_panda_mcp import errors
+from dr_panda_mcp.connectors.classify import es_http_error
 from dr_panda_mcp.guards.protocol import Decision
 from dr_panda_mcp.store.protocol import Target
 
@@ -261,7 +262,7 @@ def check_http_response(response, component: str) -> None:
     message = f"{component} 返回 HTTP {response.status_code}"
     if response.status_code == 404:
         raise errors.UpstreamNotFound(message)
-    raise errors.UpstreamUnavailable(message)
+    raise es_http_error(response.status_code, message)
 
 
 class Stopwatch:

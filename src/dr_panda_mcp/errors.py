@@ -27,6 +27,8 @@ SCOPE_DENIED = "SCOPE_DENIED"
 UPSTREAM_NOT_FOUND = "UPSTREAM_NOT_FOUND"
 UPSTREAM_TIMEOUT = "UPSTREAM_TIMEOUT"
 UPSTREAM_UNAVAILABLE = "UPSTREAM_UNAVAILABLE"
+UPSTREAM_QUERY_ERROR = "UPSTREAM_QUERY_ERROR"
+UPSTREAM_AUTH = "UPSTREAM_AUTH"
 
 # 本服务自身
 STORAGE_UNAVAILABLE = "STORAGE_UNAVAILABLE"
@@ -49,6 +51,8 @@ ALL_CODES = frozenset(
         UPSTREAM_NOT_FOUND,
         UPSTREAM_TIMEOUT,
         UPSTREAM_UNAVAILABLE,
+        UPSTREAM_QUERY_ERROR,
+        UPSTREAM_AUTH,
         STORAGE_UNAVAILABLE,
         SECRET_UNAVAILABLE,
         INTERNAL,
@@ -145,7 +149,15 @@ class UpstreamTimeout(UpstreamError):
 
 
 class UpstreamUnavailable(UpstreamError):
-    """上游连接失败或返回 5xx。"""
+    """上游连接失败、连接中断或返回 5xx。"""
+
+
+class UpstreamQueryError(UpstreamError):
+    """上游拒绝了查询：SQL / 管道 / DSL / 命令参数有误。"""
+
+
+class UpstreamAuthError(UpstreamError):
+    """上游认证或授权失败：凭据、权限或认证方式有问题。"""
 
 
 class UpstreamNotFound(UpstreamError):
