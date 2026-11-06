@@ -59,4 +59,6 @@ MySQL DDL 非事务性，失败后可能留下半迁移状态：
 
 - 版本：1.1.1；
 - 版本变更只修复 MySQL 迁移兼容性，不改变应用行为；
+- 已发布 1.1.1 到 PyPI：<https://pypi.org/project/dr-panda-mcp/1.1.1/>；
+- README PyPI 徽标 cache 参数更新为 `?cache=1.1.1`；
 - 发布后新 MySQL 安装使用修复后的 0007。
