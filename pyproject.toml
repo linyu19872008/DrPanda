@@ -2,7 +2,7 @@
 name = "dr-panda-mcp"
 version = "1.0.0"
 description = "Read-only MCP service for production troubleshooting: register connections in a web console, call tools by target name"
-readme = "README.md"
+readme = "README.pypi.md"
 license = "MIT"
 license-files = ["LICENSE"]
 keywords = ["mcp", "read-only", "troubleshooting", "observability", "fastmcp"]
