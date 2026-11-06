@@ -24,7 +24,7 @@
   `License-Expression: MIT`、`License-File: LICENSE`、`Project-URL` 与 classifiers。
 - `uv run ruff check .`：通过。
 - 全量 `pytest`：**561 passed, 1 failed**（既有的 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
-- GitHub Actions 已在 GitHub 实际运行；早期 test job 因 `test_healthz.py::test_mcp_route_mounted` 只解开一层中间件导致失败，已修复，本地全量 **567 passed, 0 failed**；修复推送后 CI 应通过。
+- GitHub Actions 已在 GitHub 实际运行；早期 test job 因 `test_healthz.py::test_mcp_route_mounted` 只解开一层中间件导致失败，已修复并推送；`main` 提交 `b37901a` 的 CI 已全部通过。
 
 ## 仓库信息与待办
 

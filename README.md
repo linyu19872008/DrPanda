@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <!-- CI / PyPI badges are re-enabled once the GitHub repository is public and the first PyPI release exists:
-  <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/DrPanda/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <!-- PyPI badge is enabled after the first PyPI release:
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
   -->
   <a href="LICENSE"><img alt="License: MIT" src="docs/assets/badge-license.png" height="20"></a>
