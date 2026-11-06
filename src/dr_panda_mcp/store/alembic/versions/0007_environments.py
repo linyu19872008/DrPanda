@@ -42,11 +42,15 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    default_environment_id = _default_environment_id()
+    if default_environment_id is None:
+        raise RuntimeError("default environment was not seeded")
+    targets = sa.table(
+        "targets",
+        sa.column("environment_id", sa.BigInteger().with_variant(sa.Integer, "sqlite")),
+    )
     op.execute(
-        sa.text(
-            "UPDATE targets SET environment_id = "
-            "(SELECT id FROM environments WHERE key = 'default')"
-        )
+        targets.update().values(environment_id=default_environment_id)
     )
     with op.batch_alter_table("targets") as batch:
         batch.alter_column("environment_id", nullable=False)
@@ -63,23 +67,31 @@ def upgrade() -> None:
     op.create_index("ix_targets_environment_id", "targets", ["environment_id"])
 
 
-def _seed_default_environment() -> None:
-    connection = op.get_bind()
-    existing = connection.execute(
-        sa.text("SELECT id FROM environments WHERE key = 'default'")
-    ).first()
-    if existing:
-        return
-    now = datetime.now(UTC)
-    environments = sa.table(
+def _environments_table() -> sa.TableClause:
+    return sa.table(
         "environments",
+        sa.column("id", sa.BigInteger().with_variant(sa.Integer, "sqlite")),
         sa.column("key", sa.String(64)),
         sa.column("title", sa.String(64)),
         sa.column("enabled", sa.Boolean()),
         sa.column("created_at", sa.DateTime(timezone=True)),
         sa.column("updated_at", sa.DateTime(timezone=True)),
     )
-    connection.execute(
+
+
+def _default_environment_id() -> int | None:
+    environments = _environments_table()
+    return op.get_bind().execute(
+        sa.select(environments.c.id).where(environments.c.key == "default")
+    ).scalar_one_or_none()
+
+
+def _seed_default_environment() -> None:
+    if _default_environment_id() is not None:
+        return
+    now = datetime.now(UTC)
+    environments = _environments_table()
+    op.get_bind().execute(
         environments.insert().values(
             key="default",
             title="Default",

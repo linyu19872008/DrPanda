@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-07
+
+### Fixed
+
+- MySQL first-install migration failed because `key` is a reserved word in migration `0007_environments`. The migration now uses SQLAlchemy expressions, so identifiers are quoted per dialect.
+- Added regression tests that compile the environment lookup/insert for the MySQL dialect.
+
 ## [1.1.0] - 2026-11-06
 
 ### Added

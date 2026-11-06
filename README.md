@@ -112,7 +112,7 @@ Health check:
 
 ```bash
 curl -fsS http://127.0.0.1:8111/healthz
-# {"ok":true,"version":"1.1.0","db":"ok"}
+# {"ok":true,"version":"1.1.1","db":"ok"}
 ```
 
 ### Optional dependencies
@@ -149,7 +149,7 @@ sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
 ./scripts/setup.sh start --dir /opt/dr-panda-mcp
 ```
 
-It also supports PyPI installation (`--method pypi --version 1.1.0`), health checks, upgrades and a dedicated `drpanda` systemd user. See [docs/deployment.md](docs/deployment.md) for details.
+It also supports PyPI installation (`--method pypi --version 1.1.1`), health checks, upgrades and a dedicated `drpanda` systemd user. See [docs/deployment.md](docs/deployment.md) for details.
 
 ---
 
