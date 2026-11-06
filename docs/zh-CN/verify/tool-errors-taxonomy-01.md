@@ -26,7 +26,7 @@
 - `tests/test_errors.py` / `test_labels.py` / `test_audit_page.py` 更新两码与「上游不可达」标签断言。
 - 全量 `pytest`：538 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）；`ruff check .` 全过。
 - 截图（测试客户端渲染审计弹层，Chrome 156）：
-  - [UPSTREAM_QUERY_ERROR（上游拒绝查询）+ 上游原文](assets/ui/audit-upstream-query-error-1440.png)
+  - [UPSTREAM_QUERY_ERROR（上游拒绝查询）+ 上游原文](assets/ui/audit-upstream-query-error-1440.webp)
 
 ## 边界
 

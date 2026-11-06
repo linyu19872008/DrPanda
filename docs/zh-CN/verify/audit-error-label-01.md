@@ -25,7 +25,7 @@
 - 全量 `pytest`：528 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 - 截图（测试客户端渲染 `/audit` 并打开失败详情，Chrome 156）：
-  - [失败结果卡片：CODE（中文标签）](assets/ui/audit-error-label-1440.png)
+  - [失败结果卡片：CODE（中文标签）](assets/ui/audit-error-label-1440.webp)
 
 ## 边界
 

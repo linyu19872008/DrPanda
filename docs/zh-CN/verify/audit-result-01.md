@@ -19,8 +19,8 @@
   - 浅色：成功 `rgb(21, 128, 61)`，失败 `rgb(180, 35, 24)`
   - 深色：成功 `rgb(63, 185, 80)`，失败 `rgb(248, 81, 73)`
 - 截图：
-  - 详情弹窗：[浅色](assets/ui/audit-result-light.png)、[深色](assets/ui/audit-result-dark.png)
-  - 概览表格：[浅色](assets/ui/overview-result-light.png)、[深色](assets/ui/overview-result-dark.png)
+  - 详情弹窗：[浅色](assets/ui/audit-result-light.webp)、[深色](assets/ui/audit-result-dark.webp)
+  - 概览表格：[浅色](assets/ui/overview-result-light.webp)、[深色](assets/ui/overview-result-dark.webp)
 - `pytest` 全量：525 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 

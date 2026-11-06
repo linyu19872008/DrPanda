@@ -45,8 +45,8 @@
 - 迁移在**真实数据副本**上验证：升级到 `0012_security_settings`，settings 共 13 行；
   `default_target_max_rows=1000` 原值保留，`backup_keep_count` 上限变为 100，审计数据未受影响。
 - 截图（测试客户端渲染，Chrome 156）：
-  - [认证与会话分组（Session / 登录保护 / MCP Token）](assets/ui/settings-auth-1440.png)
-  - [启动配置只读区（公网地址、远程监听）](assets/ui/settings-startup-1440.png)
+  - [认证与会话分组（Session / 登录保护 / MCP Token）](assets/ui/settings-auth-1440.webp)
+  - [启动配置只读区（公网地址、远程监听）](assets/ui/settings-startup-1440.webp)
 
 ## 边界
 

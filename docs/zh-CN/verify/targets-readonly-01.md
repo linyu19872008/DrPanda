@@ -38,10 +38,10 @@
 - 全量 `pytest`：528 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 - 真实页面截图（测试客户端以分析员登录渲染 `/targets`，Chrome 156 截图）：
-  - [默认环境](assets/ui/targets-readonly-1440.png)
-  - [停用环境](assets/ui/targets-readonly-legacy-1440.png)
-  - [390 堆叠](assets/ui/targets-readonly-390.png)
-  - [深色](assets/ui/targets-readonly-dark-1440.png)
+  - [默认环境](assets/ui/targets-readonly-1440.webp)
+  - [停用环境](assets/ui/targets-readonly-legacy-1440.webp)
+  - [390 堆叠](assets/ui/targets-readonly-390.webp)
+  - [深色](assets/ui/targets-readonly-dark-1440.webp)
 - 新模板 `t()` 文案已全部有英文翻译（脚本校验无缺失）。
 
 ## 安全与边界

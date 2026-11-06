@@ -30,8 +30,8 @@
   `0013_capacity_settings`，settings 共 17 行；`default_target_max_rows=1000` 与审计数据保留；
   `backup_keep_count` 上限仍为 100。
 - 截图（测试客户端渲染 + Chrome 156）：
-  - [并发与审计：全局并发、审计清理批量/时限](assets/ui/settings-runtime-p2-1440.png)
-  - [高级资源：连接器空闲回收](assets/ui/settings-advanced-p2-1440.png)
+  - [并发与审计：全局并发、审计清理批量/时限](assets/ui/settings-runtime-p2-1440.webp)
+  - [高级资源：连接器空闲回收](assets/ui/settings-advanced-p2-1440.webp)
 
 ## 边界
 

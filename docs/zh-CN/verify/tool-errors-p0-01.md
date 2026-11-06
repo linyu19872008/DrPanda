@@ -36,7 +36,7 @@
 - 迁移在**真实数据副本**上验证：升级到 `0011_audit_error_detail`，`audit` 列齐全，历史行 `error_detail` 全为 NULL。
 - 全量 `pytest`：532 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）；`ruff check .` 全过。
 - 截图（测试客户端渲染审计弹层，Chrome 156）：
-  - [失败卡片：错误码 + 脱敏错误详情](assets/ui/audit-error-detail-1440.png)
+  - [失败卡片：错误码 + 脱敏错误详情](assets/ui/audit-error-detail-1440.webp)
 
 ## 边界
 

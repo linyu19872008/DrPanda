@@ -35,7 +35,7 @@
   - `test_web.py`：启动配置页新增字段的英文全覆盖仍通过。
 - 全量 `pytest`：**554 passed, 1 failed**（既有的 `test_healthz.py::test_mcp_route_mounted`，与本次无关）；`ruff check .` 全过。
 - 截图（测试客户端渲染启动配置 + Chrome 156）：
-  - [启动配置：公网地址仅展示、Cookie Secure、受信 Host](assets/ui/settings-startup-v2-1440.png)
+  - [启动配置：公网地址仅展示、Cookie Secure、受信 Host](assets/ui/settings-startup-v2-1440.webp)
 
 ## 边界与风险
 

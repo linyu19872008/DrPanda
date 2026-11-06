@@ -16,7 +16,7 @@
 ## 验证
 
 - 真实页面截图（测试客户端 + 实际 `app.css`，中文、1440×900、浅色）：
-  - [方案 A 落地效果](assets/ui/brand-option-a-real-1440.png)
+  - [方案 A 落地效果](assets/ui/brand-option-a-real-1440.webp)
 - CSS 预算测试：`test_no_javascript_and_css_budget` 通过；`app.css` 当前 **54,759 字节**（上限 55,000）。
 - 全量 `pytest`：**561 passed, 1 failed**（既有的 `test_healthz.py::test_mcp_route_mounted`，与本次无关）；`ruff check .` 全过。
 

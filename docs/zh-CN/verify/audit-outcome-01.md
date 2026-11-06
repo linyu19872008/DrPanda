@@ -25,10 +25,10 @@
 - 全量 `pytest`：528 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 - 真实页面截图（测试客户端渲染 `/audit`，Chrome 156 截图）：
-  - [1440 列表](assets/ui/audit-outcome-1440.png)
-  - [仅失败筛选](assets/ui/audit-outcome-failed-1440.png)
-  - [深色主题](assets/ui/audit-outcome-dark-1440.png)
-  - [390 堆叠](assets/ui/audit-outcome-390.png)
+  - [1440 列表](assets/ui/audit-outcome-1440.webp)
+  - [仅失败筛选](assets/ui/audit-outcome-failed-1440.webp)
+  - [深色主题](assets/ui/audit-outcome-dark-1440.webp)
+  - [390 堆叠](assets/ui/audit-outcome-390.webp)
 
 ## 迁移与上线
 

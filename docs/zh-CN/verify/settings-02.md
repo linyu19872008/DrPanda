@@ -8,10 +8,10 @@
 
 ## 截图
 
-- [English 1440 · 新建目标默认值](assets/ui/settings-1440.png)
-- [English 1440 · 并发与审计](assets/ui/settings-runtime-1440.png)
-- [中文 1440](assets/ui/settings-zh-Hans-1440.png)
-- [English 390](assets/ui/settings-390.png)
+- [English 1440 · 新建目标默认值](assets/ui/settings-1440.webp)
+- [English 1440 · 并发与审计](assets/ui/settings-runtime-1440.webp)
+- [中文 1440](assets/ui/settings-zh-Hans-1440.webp)
+- [English 390](assets/ui/settings-390.webp)
 
 ## 布局检查
 

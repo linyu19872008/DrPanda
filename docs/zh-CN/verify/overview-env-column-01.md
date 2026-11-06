@@ -19,8 +19,8 @@
 - 全量 `pytest`：530 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 - 截图（测试客户端渲染个人概览，Chrome 156）：
-  - 个人概览：[环境列：默认 / 畅聊生产](assets/ui/overview-personal-env-column-1440.png)
-  - 管理概览：[最近操作环境列](assets/ui/overview-admin-env-column-1440.png)
+  - 个人概览：[环境列：默认 / 畅聊生产](assets/ui/overview-personal-env-column-1440.webp)
+  - 管理概览：[最近操作环境列](assets/ui/overview-admin-env-column-1440.webp)
 
 ## 边界
 

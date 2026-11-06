@@ -28,7 +28,7 @@
 - 全量 `pytest`：528 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）。
 - `ruff check .`：全过。
 - 截图（测试客户端渲染 `/audit` 并打开详情弹层，Chrome 156）：
-  - [SQL + limit 参数项](assets/ui/audit-limit-param-1440.png)
+  - [SQL + limit 参数项](assets/ui/audit-limit-param-1440.webp)
 
 ## 边界
 

@@ -7,7 +7,7 @@
 - 侧栏品牌保持两行文字；图标改为 36px 圆角容器（浅底 + 描边 + 内边距），标题 16px、副标题 11.5px，显式 2px 行距；
 - 品牌块与导航都从 16px 左边距开始，导航上方增加呼吸间距。
 
-![方案 A](assets/ui/brand-option-a-1440.png)
+![方案 A](assets/ui/brand-option-a-1440.webp)
 
 优点：改动最小，保留当前信息结构；缺点：仍受 216px 侧栏限制，品牌区不算特别出彩。
 
@@ -16,7 +16,7 @@
 - 桌面端顶栏左侧显示 logo + DrPanda + MCP 配置台；侧栏去掉品牌，直接从导航开始；
 - 右侧仍是版本/语言/主题/用户控件。
 
-![方案 B](assets/ui/brand-option-b-1440.png)
+![方案 B](assets/ui/brand-option-b-1440.webp)
 
 优点：品牌不受侧栏宽度限制，导航顶对齐，整体更像标准后台；缺点：需调整桌面 grid/断点，所有桌面截图与响应式要重新验收。
 
@@ -24,7 +24,7 @@
 
 - 保留侧栏品牌，但去掉「MCP 配置台」副标题，只留 32px 图标 + DrPanda 一行；导航紧跟其后。
 
-![方案 C](assets/ui/brand-option-c-1440.png)
+![方案 C](assets/ui/brand-option-c-1440.webp)
 
 优点：信息更克制、侧栏更干净；缺点：副标题承载的产品定位消失，需要另找位置（顶栏/关于页）。
 
@@ -35,4 +35,4 @@
 
 ---
 
-**落地结果**：已按方案 A 实施，实际截图见 [brand-option-a-real-1440.png](assets/ui/brand-option-a-real-1440.png)。
+**落地结果**：已按方案 A 实施，实际截图见 [brand-option-a-real-1440.webp](assets/ui/brand-option-a-real-1440.webp)。

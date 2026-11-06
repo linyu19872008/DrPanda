@@ -26,10 +26,10 @@
 - `tests/test_web.py`：导航顺序断言更新为「概览 < 管理概览 < 目标 < 环境 < 审计」；个人概览出现入口链接，空态「没有需要处理的目标」迁到管理概览。
 - 全量 `pytest`：530 passed, 1 failed（既有 `test_healthz.py::test_mcp_route_mounted`，与本次无关）；`ruff check .` 全过。
 - 真实页面截图（测试客户端渲染，Chrome 156）：
-  - [管理员个人概览（含入口与计数徽标）](assets/ui/overview-personal-1440.png)
-  - [管理概览](assets/ui/overview-admin-1440.png)
-  - [分析员个人概览（无管理入口）](assets/ui/overview-analyst-1440.png)
-  - [个人概览 390](assets/ui/overview-personal-390.png)
+  - [管理员个人概览（含入口与计数徽标）](assets/ui/overview-personal-1440.webp)
+  - [管理概览](assets/ui/overview-admin-1440.webp)
+  - [分析员个人概览（无管理入口）](assets/ui/overview-analyst-1440.webp)
+  - [个人概览 390](assets/ui/overview-personal-390.webp)
 
 ## 边界与说明
 
