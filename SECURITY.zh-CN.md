@@ -15,7 +15,7 @@ DrPanda MCP 是只读排障服务，会保存连接配置和加密后的凭证�
 
 **不要**为安全问题开公开 issue。
 
-1. 优先使用 GitHub 私密安全公告：<https://github.com/jacklin_zjut/dr-panda-mcp/security/advisories/new>；
+1. 优先使用 GitHub 私密安全公告：<https://github.com/linyu19872008/dr-panda-mcp/security/advisories/new>；
 2. 或发邮件到 <linyu19872008@gmail.com>，标题使用 `[SECURITY] DrPanda MCP`。
 
 请包含：

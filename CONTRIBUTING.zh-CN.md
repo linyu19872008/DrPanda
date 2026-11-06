@@ -10,7 +10,7 @@
 - [uv](https://docs.astral.sh/uv/)
 
 ```bash
-git clone https://github.com/jacklin_zjut/dr-panda-mcp.git
+git clone https://github.com/linyu19872008/dr-panda-mcp.git
 cd dr-panda-mcp
 uv sync --all-extras --dev
 cp .env.example .env   # 可选；服务会自动加载 ./.env

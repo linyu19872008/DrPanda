@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jacklin_zjut/dr-panda-mcp/master/docs/assets/logo.png" width="96" alt="DrPanda MCP">
+  <img src="docs/assets/logo.png" width="96" alt="DrPanda MCP">
 </p>
 
 <p align="center">
-  <a href="https://github.com/jacklin_zjut/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/jacklin_zjut/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/linyu19872008/dr-panda-mcp/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://pypi.org/project/dr-panda-mcp/"><img alt="PyPI" src="https://img.shields.io/pypi/v/dr-panda-mcp"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue.svg">
@@ -19,7 +19,7 @@ Register MySQL, MongoDB, Elasticsearch, Redis, GitLab, RabbitMQ, Kafka and CLS c
 
 **The model never supplies hosts, accounts, or passwords itself.**
 
-![Web console](https://raw.githubusercontent.com/jacklin_zjut/dr-panda-mcp/master/docs/verify/assets/ui/light-index.png)
+![Web console](docs/verify/assets/ui/light-index.png)
 
 ---
 
@@ -73,7 +73,7 @@ Real integration coverage:
 From source (recommended for development):
 
 ```bash
-git clone https://github.com/jacklin_zjut/dr-panda-mcp.git
+git clone https://github.com/linyu19872008/dr-panda-mcp.git
 cd dr-panda-mcp
 uv sync
 cp .env.example .env   # optional; defaults are used otherwise

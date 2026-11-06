@@ -50,11 +50,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/jacklin_zjut/dr-panda-mcp"
-Repository = "https://github.com/jacklin_zjut/dr-panda-mcp"
-Issues = "https://github.com/jacklin_zjut/dr-panda-mcp/issues"
-Documentation = "https://github.com/jacklin_zjut/dr-panda-mcp/tree/master/docs"
-Changelog = "https://github.com/jacklin_zjut/dr-panda-mcp/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/linyu19872008/dr-panda-mcp"
+Repository = "https://github.com/linyu19872008/dr-panda-mcp"
+Issues = "https://github.com/linyu19872008/dr-panda-mcp/issues"
+Documentation = "https://github.com/linyu19872008/dr-panda-mcp/tree/master/docs"
+Changelog = "https://github.com/linyu19872008/dr-panda-mcp/blob/master/CHANGELOG.md"
 
 [project.scripts]
 dr-panda-mcp = "dr_panda_mcp.cli:main"
