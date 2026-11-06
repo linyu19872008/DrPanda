@@ -49,3 +49,32 @@
 - GitHub 重命名后旧 URL 重定向通常有效，但 raw 图片/徽标/外部引用不应依赖跳转；
 - GitHub Actions 的 badge 路径已随仓库名更新；
 - Branch protection 与 topics 随仓库保留。
+
+## PyPI Trusted Publisher 的重要变更
+
+仓库改名后，PyPI 上已有的 trusted publisher 仍然记录旧仓库名：
+
+```text
+linyu19872008/DrPanda
+```
+
+1.1.0 发布前必须在 PyPI 项目设置中更新为：
+
+```text
+Publisher: GitHub
+Owner: linyu19872008
+Repository: dr-panda-mcp
+Workflow: publish.yml
+Environment: (Any)
+```
+
+否则 GitHub OIDC 的 repository claim 与 PyPI 记录不一致，publish workflow 会失败。
+
+已准备 `v1.1.0` GitHub Release（draft），更新 PyPI trusted publisher 后再发布，触发 Trusted Publishing。
+
+## 发布后待办
+
+- 确认 PyPI 1.1.0；
+- README PyPI 徽标 cache 参数改为 `?cache=1.1.0`；
+- 检查新仓库 raw 图片地址；
+- 旧 1.0.0 元数据仍指向旧仓库 URL，属于历史发布记录，无法修改。
