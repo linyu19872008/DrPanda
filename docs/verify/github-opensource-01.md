@@ -43,4 +43,4 @@
 - 之前 README 使用 `raw.githubusercontent.com/jacklin_zjut/...` 的绝对图片地址，GitHub 页面实际无法加载（owner 不存在/仓库未公开），因此显示裂图；
 - 现已改为相对路径 `docs/assets/logo.png` 与 `docs/verify/assets/ui/light-index.png`，GitHub 仓库页可直接渲染，且不依赖仓库是否公开；
 - **PyPI 页面不解析相对图片**：等 GitHub 仓库公开、确认 owner/分支后，发布到 PyPI 前需把图片改为绝对 raw URL（或在发布脚本中替换）；
-- CI 徽标在仓库公开且 Actions 运行后会正常显示；PyPI 徽标在首次发布后才会显示版本。
+- CI / PyPI 徽标在仓库公开并且首次发布前会显示 404 / "package or version not found"，因此已在 README 中暂时移除，并保留 HTML 注释；仓库公开、Actions 跑过、PyPI 发布后取消注释即可恢复。
