@@ -45,6 +45,8 @@ class _CLSClient:
         try:
             from tencentcloud.cls.v20201016 import cls_client, models
             from tencentcloud.common import credential
+            from tencentcloud.common.profile.client_profile import ClientProfile
+            from tencentcloud.common.profile.http_profile import HttpProfile
         except ImportError as exc:  # pragma: no cover - 依赖缺失路径
             raise errors.UpstreamUnavailable(errors.missing_client_message("cls")) from exc
         options = self.target.options
@@ -52,25 +54,32 @@ class _CLSClient:
         credential_obj = credential.Credential(
             secrets.get("secret_id", ""), secrets.get("secret_key", "")
         )
+        # Tencent SDK's ClsClient/AbstractClient accepts
+        # (credential, region, profile), not ``timeout``. The timeout belongs
+        # on HttpProfile so it remains compatible across SDK minor versions.
+        http_profile = HttpProfile(reqTimeout=int(base.timeout_seconds(self.target)))
+        profile = ClientProfile(httpProfile=http_profile)
         client = cls_client.ClsClient(
             credential_obj,
-            options.get("region", ""),
-            timeout=int(base.timeout_seconds(self.target)),
+            str(options.get("region", "")),
+            profile,
         )
         return client, models
 
     async def ping(self) -> None:
-        client, models = self._sdk()
-
-        def _call() -> None:
-            client.DescribeLogsets(models.DescribeLogsetsRequest())
-
         try:
+            client, models = self._sdk()
+
+            def _call() -> None:
+                client.DescribeLogsets(models.DescribeLogsetsRequest())
+
             await asyncio.to_thread(_call)
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls probe failed: {exc}") from exc
+            raise errors.UpstreamUnavailable(
+                f"cls probe failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
     async def search_log(
         self,
@@ -82,25 +91,27 @@ class _CLSClient:
         limit: int,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        client, models = self._sdk()
-
-        def _call():
-            request = models.SearchLogRequest()
-            request.TopicId = topic_id(topic)
-            request.Query = query
-            request.From = int(start.timestamp())
-            request.To = int(end.timestamp())
-            request.Limit = limit
-            request.Offset = offset
-            request.Sort = "desc"
-            return client.SearchLog(request)
-
         try:
+            client, models = self._sdk()
+
+            def _call():
+                request = models.SearchLogRequest()
+                request.TopicId = topic_id(topic)
+                request.Query = query
+                request.From = int(start.timestamp())
+                request.To = int(end.timestamp())
+                request.Limit = limit
+                request.Offset = offset
+                request.Sort = "desc"
+                return client.SearchLog(request)
+
             response = await asyncio.to_thread(_call)
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls search failed: {exc}") from exc
+            raise errors.UpstreamUnavailable(
+                f"cls search failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
         rows: list[dict[str, Any]] = []
         for item in getattr(response, "Results", None) or []:
@@ -129,24 +140,26 @@ class _CLSClient:
         before: int,
         after: int,
     ) -> list[dict[str, Any]]:
-        client, models = self._sdk()
-
-        def _call():
-            request = models.DescribeLogContextRequest()
-            request.TopicId = topic_id(topic)
-            request.PkgId = log_id
-            request.BTime = btime
-            request.PkgLogId = pkg_log_id
-            request.PrevLogs = before
-            request.NextLogs = after
-            return client.DescribeLogContext(request)
-
         try:
+            client, models = self._sdk()
+
+            def _call():
+                request = models.DescribeLogContextRequest()
+                request.TopicId = topic_id(topic)
+                request.PkgId = log_id
+                request.BTime = btime
+                request.PkgLogId = pkg_log_id
+                request.PrevLogs = before
+                request.NextLogs = after
+                return client.DescribeLogContext(request)
+
             response = await asyncio.to_thread(_call)
         except errors.DrPandaError:
             raise
         except Exception as exc:
-            raise errors.UpstreamUnavailable(f"cls context read failed: {exc}") from exc
+            raise errors.UpstreamUnavailable(
+                f"cls context read failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
         items = (
             getattr(response, "LogContextInfos", None)

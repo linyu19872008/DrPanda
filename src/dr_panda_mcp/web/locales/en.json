@@ -715,5 +715,6 @@
   "受信 Host": "Trusted hosts",
   "请求已过期": "Request expired",
   "页面已过期，请刷新后重试": "This page has expired. Refresh and try again.",
-  "客户端安装完成，请重新测试连接": "Client installed. Test the connection again."
+  "客户端安装完成，请重新测试连接": "Client installed. Test the connection again.",
+  "例如 ap-shanghai；腾讯云地域通常以 ap- 开头。": "For example ap-shanghai. Tencent Cloud regions usually start with ap-."
 }

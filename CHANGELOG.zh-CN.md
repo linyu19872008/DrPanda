@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-07
+
+### 修复
+
+- CLS 客户端不再向 `ClsClient` 传入 SDK 不支持的 `timeout` 参数，改为通过 `ClientProfile`/`HttpProfile.reqTimeout` 设置，兼容当前腾讯云 SDK。
+- CLS 探测/搜索/上下文读取的客户端初始化错误统一包装为上游失败，并保留异常类型与信息。
+- CLS 表单增加地域示例提示（`ap-shanghai`）。
+
 ## [1.2.4] - 2026-11-07
 
 ### 修复

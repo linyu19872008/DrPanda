@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-11-07
+
+### Fixed
+
+- CLS client construction no longer passes the unsupported `timeout` keyword to `ClsClient`; it configures `HttpProfile.reqTimeout` through `ClientProfile`, compatible with the current Tencent Cloud SDK.
+- CLS probe/search/context initialization errors are wrapped as upstream failures with the exception type and message.
+- Added the Tencent region example hint (`ap-shanghai`) to the CLS form.
+
 ## [1.2.4] - 2026-11-07
 
 ### Fixed

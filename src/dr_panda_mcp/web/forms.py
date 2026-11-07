@@ -282,7 +282,7 @@ TYPE_SPECS: dict[str, TypeSpec] = {
         "cls",
         "CLS",
         (
-            Field("region", "地域", "text", required=True),
+            Field("region", "地域", "text", required=True, help="例如 ap-shanghai；腾讯云地域通常以 ap- 开头。"),
             Field("allowed_topics", "允许的日志主题（一行一个，日志集/topic）", "list", required=True),
             Field("default_window_minutes", "默认时间窗（分钟）", "int", default=60),
             Field("max_window_minutes", "最大时间窗（分钟）", "int", default=1440),
