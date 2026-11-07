@@ -175,3 +175,82 @@ async def test_stream_http_can_truncate_file_content() -> None:
         )
     assert cut is True
     assert response.content == b"x" * 10
+
+
+async def test_stream_http_decodes_gzip_once_and_strips_encoding_headers() -> None:
+    import gzip
+
+    body = gzip.compress(b'{"ok":true,"compressed":true}')
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "content-length": str(len(body)),
+            },
+            content=body,
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        response, cut = await base.stream_http(
+            client, "GET", "http://example.test/", component="test", limit=1024
+        )
+
+    assert cut is False
+    assert response.status_code == 200
+    assert response.json() == {"ok": True, "compressed": True}
+    assert "content-encoding" not in response.headers
+    # httpx recalculates Content-Length for the decoded body when constructing
+    # the sanitized response; it must not keep the compressed length.
+    assert response.headers["content-length"] == str(len(b'{"ok":true,"compressed":true}'))
+    assert response.headers["content-type"] == "application/json"
+
+
+async def test_stream_http_keeps_uncompressed_response_compatible() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            content=b'{"ok":true}',
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as client:
+        response, cut = await base.stream_http(
+            client, "GET", "http://example.test/", component="test", limit=1024
+        )
+
+    assert cut is False
+    assert response.json() == {"ok": True}
+    assert response.headers["content-type"] == "application/json"
+
+
+async def test_es_ping_handles_gzip_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    import gzip
+
+    from dr_panda_mcp.connectors.es import _ESClient
+
+    body = gzip.compress(b'{"cluster_name":"test","status":"green"}')
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json", "content-encoding": "gzip"},
+            content=body,
+        )
+
+    target = make_target(
+        type_="elasticsearch", options={"hosts": "http://es.test"}
+    )
+    client = _ESClient(target)
+
+    def fake_client(base_url: str) -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            base_url=base_url, transport=httpx.MockTransport(handler)
+        )
+
+    monkeypatch.setattr(client, "_client", fake_client)
+    await client.ping()

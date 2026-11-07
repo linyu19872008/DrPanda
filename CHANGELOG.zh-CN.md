@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-11-07
+
+### 修复
+
+- HTTP 连接器收到 `Content-Encoding: gzip` 响应（典型为 Elasticsearch）时，httpx 已解压一次，重建 `httpx.Response` 时又按原响应头解压第二次，报 `Error -3 while decompressing data: incorrect header check`。
+- 重建响应时移除 `content-encoding`、`content-length`、`transfer-encoding`，保留已解码内容和其它响应头。
+- 新增 `stream_http` 与 Elasticsearch ping 的 gzip 回归测试。
+
 ## [1.2.3] - 2026-11-07
 
 ### 修复

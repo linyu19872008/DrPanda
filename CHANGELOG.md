@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-11-07
+
+### Fixed
+
+- HTTP connector responses with `Content-Encoding: gzip` (notably Elasticsearch) were decompressed by httpx and then decompressed again when the sanitized `httpx.Response` was rebuilt, producing `Error -3 while decompressing data: incorrect header check`.
+- The sanitized response now drops `content-encoding`, `content-length`, and `transfer-encoding`, while preserving decoded content and other headers.
+- Added gzip regression coverage for `stream_http` and Elasticsearch ping.
+
 ## [1.2.3] - 2026-11-07
 
 ### Fixed

@@ -195,10 +195,17 @@ async def stream_http(
             chunks.append(chunk)
             total += len(chunk)
         content = b"".join(chunks)
+        # ``aiter_bytes`` has already decoded any Content-Encoding (gzip, br,
+        # etc.). Reusing the original headers would make httpx try to decode
+        # the plain body a second time; Content-Length also describes the
+        # encoded body length and must not be carried over.
+        headers = response.headers.copy()
+        for name in ("content-encoding", "content-length", "transfer-encoding"):
+            headers.pop(name, None)
         return (
             httpx.Response(
                 response.status_code,
-                headers=response.headers,
+                headers=headers,
                 content=content,
                 request=response.request,
             ),
