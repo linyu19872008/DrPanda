@@ -20,7 +20,13 @@ from dr_panda_mcp.web import async_api, render
 
 logger = logging.getLogger(__name__)
 
-PUBLIC_PATHS = {"/healthz", "/login", "/favicon.ico"}
+PUBLIC_PATHS = {
+    "/healthz",
+    "/login",
+    "/language",
+    "/theme",
+    "/favicon.ico",
+}
 PUBLIC_PREFIXES = ("/static/",)
 _ADMIN_PREFIXES = ("/admin", "/targets", "/environments", "/settings", "/users")
 # 只读页：分析员仅能 GET 这一个精确路径；/targets/new、/targets/{id}/edit 等仍为管理员专属。
@@ -139,9 +145,13 @@ class AuthMiddleware:
 
         session = await self._session_user(request)
         if session is None:
-            target = request.url.path
-            if request.url.query:
-                target += "?" + request.url.query
+            # Only GET pages are safe login landing targets. A POST-only route
+            # such as /language or /theme must not be preserved as ``next``.
+            target = "/"
+            if request.method == "GET":
+                target = request.url.path
+                if request.url.query:
+                    target += "?" + request.url.query
             if async_api.wants_json(request):
                 response = async_api.fail(
                     request,

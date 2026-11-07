@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-07
+
+### Fixed
+
+- Login page language/theme switches were blocked by authentication when logged out, redirecting to `/login?next=/language`; after login the browser then issued `GET /language` and received 405.
+- `/language` and `/theme` are now public cookie-only routes.
+- Login `next` no longer accepts POST-only routes, and unauthenticated non-GET requests do not preserve their POST path as the post-login landing page.
+
 ## [1.1.2] - 2026-11-07
 
 ### Fixed

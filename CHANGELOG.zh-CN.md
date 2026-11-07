@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-07
+
+### 修复
+
+- 未登录时登录页语言/主题切换被鉴权拦截，跳转成 `/login?next=/language`；登录后浏览器 GET `/language` 返回 405。
+- `/language` 和 `/theme` 改为公开的 Cookie-only 路由。
+- 登录 `next` 不再接受 POST-only 路由，未登录的非 GET 请求不保留 POST 路径作为登录后落点。
+
 ## [1.1.2] - 2026-11-07
 
 ### 修复

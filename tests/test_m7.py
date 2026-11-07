@@ -230,6 +230,82 @@ async def test_login_session_csrf_and_actor(tmp_path: Path) -> None:
     # actor 通过认证上下文写入；本用例覆盖认证门与 CSRF，审计 actor 由现有 store 测试覆盖。
 
 
+async def test_language_and_theme_are_public_on_login_page(tmp_path: Path) -> None:
+    runtime, cfg, key, _token = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url=BASE
+        ) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            language = await client.post(
+                "/language",
+                data={"_csrf": csrf, "lang": "zh-Hans", "next": "/login"},
+                follow_redirects=False,
+            )
+            assert language.status_code == 303
+            assert language.headers["location"] == "/login"
+            assert client.cookies.get("drpanda_lang") == "zh-Hans"
+
+            theme = await client.post(
+                "/theme",
+                data={"_csrf": csrf, "mode": "dark", "next": "/login"},
+                follow_redirects=False,
+            )
+            assert theme.status_code == 303
+            assert theme.headers["location"] == "/login"
+            assert client.cookies.get("drpanda_theme") == "dark"
+    finally:
+        await runtime.close()
+
+
+async def test_login_next_rejects_post_only_route(tmp_path: Path) -> None:
+    runtime, cfg, key, _token = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url=BASE
+        ) as client:
+            await client.get("/login?next=/language")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            response = await client.post(
+                "/login",
+                data={
+                    "_csrf": csrf,
+                    "username": "admin",
+                    "password": "abcdefgh",
+                    "next": "/language",
+                },
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            assert response.headers["location"] == "/"
+    finally:
+        await runtime.close()
+
+
+async def test_unauthenticated_post_does_not_use_post_path_as_next(tmp_path: Path) -> None:
+    runtime, cfg, key, _token = await _auth_runtime(tmp_path)
+    app = create_app(cfg, runtime, auth_required=True, session_key=key)
+    try:
+        async with httpx.AsyncClient(
+            transport=ASGITransport(app=app), base_url=BASE
+        ) as client:
+            await client.get("/login")
+            csrf = client.cookies.get(auth.CSRF_COOKIE)
+            response = await client.post(
+                "/settings/reset",
+                data={"_csrf": csrf},
+                follow_redirects=False,
+            )
+            assert response.status_code == 303
+            assert response.headers["location"].startswith("/login")
+            assert "settings" not in response.headers["location"]
+    finally:
+        await runtime.close()
+
+
 async def test_session_ttl_setting_controls_login_cookie(tmp_path: Path) -> None:
     runtime, cfg, key, _ = await _auth_runtime(tmp_path)
     await runtime.store.update_settings({"session_ttl_minutes": "30"}, "admin")

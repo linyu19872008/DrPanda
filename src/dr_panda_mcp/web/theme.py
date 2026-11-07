@@ -15,6 +15,9 @@ from starlette.responses import Response
 COOKIE_NAME = "drpanda_theme"
 MODES = ("system", "light", "dark")
 COOKIE_MAX_AGE = 365 * 24 * 3600
+# These routes only accept POST; a login ``next`` landing on one would
+# produce a GET 405 after a successful login.
+_POST_ONLY_PATHS = frozenset({"/language", "/theme"})
 
 
 def normalize_mode(value: str | None) -> str:
@@ -42,6 +45,8 @@ def safe_next(candidate: str | None, fallback: str = "/") -> str:
         return fallback
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc:
+        return fallback
+    if parsed.path in _POST_ONLY_PATHS:
         return fallback
     return value
 

@@ -711,6 +711,9 @@ def test_theme_next_rejects_backslash_variants() -> None:
     assert safe_next("/\\evil.example") == "/"
     assert safe_next("/%5Cevil.example") == "/"
     assert safe_next("//evil.example") == "/"
+    assert safe_next("/language") == "/"
+    assert safe_next("/language?next=/") == "/"
+    assert safe_next("/theme") == "/"
 
 
 async def test_ca_pem_validation_and_persistence(runtime: Runtime) -> None:
