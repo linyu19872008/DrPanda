@@ -714,5 +714,6 @@
   "仅展示": "Display only",
   "受信 Host": "Trusted hosts",
   "请求已过期": "Request expired",
-  "页面已过期，请刷新后重试": "This page has expired. Refresh and try again."
+  "页面已过期，请刷新后重试": "This page has expired. Refresh and try again.",
+  "客户端安装完成，请重新测试连接": "Client installed. Test the connection again."
 }

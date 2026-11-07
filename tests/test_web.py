@@ -1165,3 +1165,117 @@ async def test_test_connection_action_does_not_save(
     assert response.status_code == 200
     assert "连接测试通过" in response.text
     assert target is None
+
+
+def test_probe_install_extra_matches_fixed_commands() -> None:
+    from dr_panda_mcp.web import views
+
+    for extra in ("mysql", "mongo", "redis", "kafka", "cls"):
+        assert views.probe_install_extra(extra, missing_client_message(extra)) == extra
+    assert views.probe_install_extra("mongo", "mongo 探测失败：refused") is None
+    assert views.probe_install_extra("elasticsearch", missing_client_message("mongo")) is None
+
+
+async def test_probe_json_exposes_install_extra(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dr_panda_mcp.web import routes as routes_module
+
+    async def fake_probe(draft, existing):
+        return {
+            "ok": False,
+            "message": missing_client_message("mongo"),
+            "code": None,
+            "install_extra": "mongo",
+            "checked_at": "2026-01-01 00:00:00 UTC",
+            "duration_ms": 1,
+        }
+
+    monkeypatch.setattr(routes_module, "_test_draft_target", fake_probe)
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/targets/probe",
+            data=PAYLOADS["mongo"],
+            headers={"accept": "application/json"},
+        )
+        html = await client.post(
+            "/targets/probe",
+            data=PAYLOADS["mongo"],
+            headers={"accept": "text/html"},
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["install_extra"] == "mongo"
+    assert "uv sync" not in body["message"]
+    assert html.status_code == 200
+    assert "data-probe-install" in html.text
+    assert 'form="target-install-client-form"' in html.text
+    assert "/targets/install-client" in html.text
+    assert "uv sync" not in html.text
+
+
+async def test_form_install_route_uses_fixed_extra(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dr_panda_mcp.web import routes as routes_module
+
+    installed: list[str] = []
+
+    async def fake_install(extra: str) -> None:
+        installed.append(extra)
+
+    monkeypatch.setattr(routes_module.client_install, "install_extra", fake_install)
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/targets/install-client",
+            data={"type": "mongo"},
+            headers={"accept": "application/json"},
+        )
+        unsupported = await client.post(
+            "/targets/install-client",
+            data={"type": "elasticsearch"},
+            headers={"accept": "application/json"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["install_extra"] == "mongo"
+    assert installed == ["mongo"]
+    assert unsupported.status_code == 400
+
+
+async def test_probe_failure_marks_install_extra(runtime: Runtime) -> None:
+    from dr_panda_mcp.web import routes as routes_module
+
+    async with _client(runtime) as client:
+        await client.post("/targets", data=PAYLOADS["mongo"])
+    target = await runtime.store.get("mongo-target")
+    result = routes_module._probe_failure(
+        0, Exception(missing_client_message("mongo")), target
+    )
+    assert result["install_extra"] == "mongo"
+    assert "uv sync" in result["message"]
+
+
+async def test_form_install_failure_is_clean(
+    runtime: Runtime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dr_panda_mcp.client_install import InstallError
+    from dr_panda_mcp.web import routes as routes_module
+
+    async def fake_install(extra: str) -> None:
+        raise InstallError("network down uv sync --extra mongo --inexact")
+
+    monkeypatch.setattr(routes_module.client_install, "install_extra", fake_install)
+    async with _client(runtime) as client:
+        response = await client.post(
+            "/targets/install-client",
+            data={"type": "mongo"},
+            headers={"accept": "application/json"},
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["install_extra"] == "mongo"
+    assert "network down" in body["message"]
+    assert "uv sync" not in body["message"]

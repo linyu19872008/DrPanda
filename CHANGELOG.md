@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
+### Added
+
+- New/edit target forms now offer the same one-click client installation as the target list, for every optional target client (`mysql`, `mongo`, `redis`, `kafka`, `cls`).
+- Probe responses expose a structured `install_extra`; the form shows an install action, installs the fixed extra, and automatically retries the connection.
+- New `POST /targets/install-client` endpoint for unsaved target forms; it accepts only a target type and derives the fixed extra server-side.
+- Install failures are surfaced without exposing the raw `uv sync` command.
+
 ## [1.1.3] - 2026-11-07
 
 ### Fixed

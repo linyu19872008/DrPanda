@@ -187,6 +187,16 @@ def client_extra(target_type: str) -> str | None:
     return None
 
 
+def probe_install_extra(target_type: str, message: str | None) -> str | None:
+    """从探测错误里识别“缺少客户端”，返回可安装的固定 extra。"""
+    extra = client_extra(target_type)
+    if extra is None:
+        return None
+    _, command = split_install_command(message)
+    allowed = {f"uv sync --extra {extra}", sync_extra_command(extra)}
+    return extra if command in allowed else None
+
+
 def requested_install_extra(target: Target) -> str | None:
     """只有「客户端未安装」才允许安装，并且只装这个目标类型自己的 extra。"""
     extra = client_extra(target.type)

@@ -375,7 +375,13 @@
       else hint.textContent = hints.pending;
     };
 
-    const renderResult = (tone, title, detail) => {
+    const installSlot = form.querySelector("[data-probe-install]");
+    const installForm = document.querySelector("[data-probe-install-form]");
+    const installButton = installForm
+      ? installForm.querySelector("[data-probe-install-button]")
+      : null;
+
+    const renderResult = (tone, title, detail, showInstall = false) => {
       if (!resultRegion || !alertBox) return;
       resultRegion.hidden = false;
       alertBox.className = `alert alert--${tone}`;
@@ -386,6 +392,7 @@
       if (titleSlot) titleSlot.textContent = title || "";
       if (detailSlot) detailSlot.textContent = detail || "";
       if (metaSlot && tone !== "success") metaSlot.replaceChildren();
+      if (installSlot) installSlot.hidden = !showInstall;
       focusResult(resultRegion);
     };
 
@@ -408,7 +415,7 @@
     const setBusy = (value) => {
       busy = value;
       form.setAttribute("aria-busy", value ? "true" : "false");
-      [probeButton, saveButton].forEach((button) => {
+      [probeButton, saveButton, installButton].forEach((button) => {
         if (button) button.disabled = value;
       });
     };
@@ -430,7 +437,12 @@
         if (error.kind === "rejected" && error.data && error.data.errors) {
           applyFieldErrors(form, error.data.errors);
         }
-        renderResult("danger", failTitle, errorMessage(form, error));
+        renderResult(
+          "danger",
+          failTitle,
+          errorMessage(form, error),
+          Boolean(error.data && error.data.install_extra),
+        );
       } finally {
         setBusy(false);
         probeButton.textContent = probeLabel;
@@ -438,6 +450,39 @@
         refreshGate();
       }
     };
+
+    const doInstall = async () => {
+      if (busy || !installForm || !installButton) return;
+      setBusy(true);
+      busyButton(installButton, true);
+      try {
+        const data = await postForm(installForm, installForm.getAttribute("action"), {
+          timeoutMs: 130000,
+        });
+        renderResult("success", data.message || okTitle, "");
+        setBusy(false);
+        busyButton(installButton, false);
+        await doProbe();
+        return;
+      } catch (error) {
+        renderResult(
+          "danger",
+          failTitle,
+          errorMessage(installForm, error),
+          Boolean(error.data && error.data.install_extra),
+        );
+      } finally {
+        setBusy(false);
+        busyButton(installButton, false);
+      }
+    };
+
+    if (installForm) {
+      installForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        doInstall();
+      });
+    }
 
     const doSave = async () => {
       if (busy || saveButton.disabled) return;
@@ -458,7 +503,12 @@
           const payload = error.data;
           if (payload.errors) applyFieldErrors(form, payload.errors);
           if (payload.phase === "probe") tested = null;
-          renderResult("danger", failTitle, payload.message || errorMessage(form, error));
+          renderResult(
+            "danger",
+            failTitle,
+            payload.message || errorMessage(form, error),
+            Boolean(payload.install_extra),
+          );
         } else {
           renderResult("danger", failTitle, errorMessage(form, error));
         }

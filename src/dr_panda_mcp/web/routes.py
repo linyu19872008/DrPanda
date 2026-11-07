@@ -510,6 +510,46 @@ def register_web_routes(server: FastMCP, runtime: Runtime) -> None:
         ok, message = await _probe_saved_target(target)
         return await _test_response(request, target, ok, message)
 
+    @server.custom_route("/targets/install-client", methods=["POST"])
+    async def install_form_client(request: Request) -> Response:
+        """安装新建/编辑表单探测到的缺失客户端，不写目标记录。"""
+        form = await request.form()
+        type_ = str(form.get("type", "")).strip()
+        spec = forms.spec_for(type_)
+        extra = views.client_extra(type_)
+        if spec is None or extra is None:
+            message = "当前目标类型没有可自动安装的客户端"
+            if async_api.wants_json(request):
+                return async_api.fail(request, async_api.CODE_BAD_REQUEST, message, status=400)
+            return _error(request, message, 400)
+        try:
+            await client_install.install_extra(extra)
+        except client_install.InstallBusy:
+            message = "已有客户端正在安装，请稍后再试"
+            if async_api.wants_json(request):
+                return async_api.fail(request, async_api.CODE_CONFLICT, message, status=409)
+            return _error(request, message, 409)
+        except client_install.InstallError as exc:
+            raw = redact(app_errors.install_failed_message(extra, exc.reason), ())
+            message, _ = views.split_install_command(raw)
+            message = message or "安装没有完成"
+            if async_api.wants_json(request):
+                return async_api.fail(
+                    request,
+                    async_api.CODE_UNAVAILABLE,
+                    message,
+                    status=400,
+                    data={"install_extra": extra},
+                )
+            return _error(request, message, 400)
+        success = "客户端安装完成，请重新测试连接"
+        if async_api.wants_json(request):
+            return async_api.ok(request, message=success, data={"install_extra": extra})
+        target_id = str(form.get("target_id", "")).strip()
+        if target_id.isdigit():
+            return RedirectResponse(f"/targets/{int(target_id)}/edit", status_code=303)
+        return RedirectResponse(f"/targets/new?type={spec.type}", status_code=303)
+
     @server.custom_route("/targets/{target_id:int}/install-client", methods=["POST"])
     async def install_client(request: Request) -> Response:
         target = await _target(store, request.path_params["target_id"])
@@ -1082,27 +1122,38 @@ async def _probe_render(
         store=store,
         status=status,
         common_defaults=common_defaults,
-        test_result=result,
+        test_result=_display_probe_result(result),
     )
+
+
+def _display_probe_result(result: dict[str, object]) -> dict[str, object]:
+    """HTML 展示时隐藏安装命令，只保留业务错误和可安装 extra。"""
+    if not result.get("install_extra"):
+        return result
+    message, _ = views.split_install_command(str(result.get("message") or ""))
+    return {**result, "message": message or result.get("message")}
 
 
 def _probe_json(request: Request, result: dict[str, object]) -> Response:
     checked = result.get("checked_at_at")
+    display = _display_probe_result(result)
     data = {
         "checked_at": result.get("checked_at"),
         "checked_at_instant": clock.utc_instant(checked) if isinstance(checked, datetime) else None,
         "duration_ms": result.get("duration_ms"),
     }
+    if result.get("install_extra"):
+        data["install_extra"] = result["install_extra"]
     if result.get("ok"):
         return async_api.ok(
             request,
-            message=str(result.get("message") or "连接测试通过，可以保存。"),
+            message=str(display.get("message") or "连接测试通过，可以保存。"),
             data=data,
         )
     return async_api.fail(
         request,
         async_api.CODE_PROBE_FAILED,
-        str(result.get("message") or "连接测试失败"),
+        str(display.get("message") or "连接测试失败"),
         status=400,
         phase="probe",
         data=data,
@@ -1296,6 +1347,7 @@ def _probe_failure(
         "ok": False,
         "message": message,
         "code": code,
+        "install_extra": views.probe_install_extra(target.type, message),
         **_checked_now(),
         "duration_ms": _elapsed_ms(started),
     }

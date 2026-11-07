@@ -62,7 +62,8 @@
         data-duration-label="{{ t('耗时') }}"
         action="{{ '/targets' if mode == 'create' else '/targets/' ~ existing.id }}">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    {% if mode == "create" %}<input type="hidden" name="type" value="{{ spec.type }}">{% endif %}
+    <input type="hidden" name="type" value="{{ spec.type }}">
+    {% if mode == "edit" %}<input type="hidden" name="target_id" value="{{ existing.id }}">{% endif %}
 
     <section class="card form-section">
       <h2 class="form-section__title">{{ t('基本信息') }}</h2>
@@ -171,6 +172,11 @@
           <strong data-probe-title>{% if test_result %}{{ t('连接测试通过') if test_result.ok else t('连接测试失败') }}{% else %}{{ t('未测试') }}{% endif %}</strong>
           <span class="alert__detail" data-probe-detail>{% if test_result and test_result.ok %}{{ t('连接测试通过，可以保存。') }}{% elif test_result and test_result.message %}{{ test_result.message }}{% endif %}</span>
           <span class="probe-result__meta" data-probe-meta>{% if test_result and test_result.checked_at_at %}{{ local_time(test_result.checked_at_at, true) }}{% elif test_result and test_result.checked_at %}{{ test_result.checked_at }}{% endif %}{% if test_result and test_result.duration_ms %} · {{ t('耗时') }} {{ test_result.duration_ms }} ms{% endif %}</span>
+          <div class="install-line" data-probe-install{% if not (test_result and test_result.install_extra) %} hidden{% endif %}>
+            <button class="btn btn--secondary btn--sm btn--stable" type="submit"
+                    form="target-install-client-form" data-probe-install-button
+                    data-loading-label="{{ t('安装中…') }}">{{ t('安装客户端') }}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -183,6 +189,13 @@
               data-loading-label="{{ t('保存中…') }}"
               {% if mode == 'create' %}disabled aria-disabled="true"{% endif %}>{{ t("创建目标") if mode == "create" else t("保存修改") }}</button>
     </div>
+  </form>
+
+  <form id="target-install-client-form" method="post" action="/targets/install-client"
+        data-probe-install-form>
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="type" value="{{ spec.type }}">
+    {% if mode == "edit" %}<input type="hidden" name="target_id" value="{{ existing.id }}">{% endif %}
   </form>
 
   <aside class="form-aside">
