@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-11-07
+
+### Fixed
+
+- The target form's Install client button was bound to the external hidden install form's button lookup, so `doInstall()` returned early and no request was sent. The button is now looked up from the main form.
+
 ## [1.2.2] - 2026-11-07
 
 ### Fixed

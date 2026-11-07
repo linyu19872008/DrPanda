@@ -377,9 +377,9 @@
 
     const installSlot = form.querySelector("[data-probe-install]");
     const installForm = document.querySelector("[data-probe-install-form]");
-    const installButton = installForm
-      ? installForm.querySelector("[data-probe-install-button]")
-      : null;
+    // The submit button lives in the main form; only the hidden fields live
+    // in the external install form (nested forms are invalid HTML).
+    const installButton = form.querySelector("[data-probe-install-button]");
 
     const renderResult = (tone, title, detail, showInstall = false) => {
       if (!resultRegion || !alertBox) return;
