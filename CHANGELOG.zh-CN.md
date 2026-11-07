@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-07
+
+### 修复
+
+- systemd 沙箱下无法使用一键客户端安装：服务 PATH 中没有 `uv`、没有可写 uv cache，且 `ProtectSystem=strict` 阻止写 `.venv`。
+- 新生成的 unit 会把 `uv` 安装到 `/usr/local/bin`，把 `UV_CACHE_DIR` 放到 `data/`，并只放行已有 `.venv`/`uv.lock` 的写入。
+
 ## [1.2.0] - 2026-11-07
 
 ### 新增

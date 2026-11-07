@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-07
+
+### Fixed
+
+- One-click client installation could not run from the hardened systemd service: the service did not have `uv` on PATH, had no writable uv cache, and `ProtectSystem=strict` blocked `.venv` updates.
+- The generated unit now copies `uv` to `/usr/local/bin`, sets `UV_CACHE_DIR` under `data/`, and allows writes to the existing `.venv`/`uv.lock` only.
+
 ## [1.2.0] - 2026-11-07
 
 ### Added

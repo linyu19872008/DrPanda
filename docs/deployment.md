@@ -20,7 +20,7 @@ The first installation must be completed on loopback (`127.0.0.1` / `localhost`)
 ./scripts/setup.sh install --method source --dev
 
 # PyPI installation into a dedicated directory
-sudo ./scripts/setup.sh install --method pypi --version 1.2.0 --dir /opt/dr-panda-mcp
+sudo ./scripts/setup.sh install --method pypi --version 1.2.1 --dir /opt/dr-panda-mcp
 
 # systemd service (Linux, root); dedicated user drpanda by default
 sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
@@ -86,10 +86,14 @@ ssh -L 8111:127.0.0.1:8111 user@server
 
 The unit runs with:
 
-- `ProtectSystem=strict`, `ReadWritePaths=<dir>/data`
+- `ProtectSystem=strict`, with writes allowed only to `<dir>/data`, an existing `.venv`, and `uv.lock`
+- `UV_CACHE_DIR=<dir>/data/.uv-cache`
+- `uv` copied to `/usr/local/bin` so the service user can run one-click client installation
 - `ProtectHome=true` unless the app directory is under `/home`
 - `NoNewPrivileges=true`
 - automatic restart on failure
+
+The UI's one-click client installation only works for source installs. After upgrading the service script, rerun `sudo ./scripts/setup.sh service --dir <dir>` to refresh the unit before using the install button.
 
 Inspect logs with:
 

@@ -20,7 +20,7 @@
 ./scripts/setup.sh install --method source --dev
 
 # PyPI 安装到专用目录
-sudo ./scripts/setup.sh install --method pypi --version 1.2.0 --dir /opt/dr-panda-mcp
+sudo ./scripts/setup.sh install --method pypi --version 1.2.1 --dir /opt/dr-panda-mcp
 
 # systemd 服务（Linux、root）；默认专用用户 drpanda
 sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
@@ -86,10 +86,14 @@ ssh -L 8111:127.0.0.1:8111 user@server
 
 单元默认：
 
-- `ProtectSystem=strict`、`ReadWritePaths=<目录>/data`
+- `ProtectSystem=strict`，只允许写 `<目录>/data`、已存在的 `.venv` 和 `uv.lock`
+- `UV_CACHE_DIR=<目录>/data/.uv-cache`
+- `uv` 会复制到 `/usr/local/bin`，服务用户才能执行配置台的一键安装
 - 应用目录不在 `/home` 时启用 `ProtectHome=true`
 - `NoNewPrivileges=true`
 - 失败自动重启
+
+配置台的一键客户端安装只适用于 source 安装。升级部署脚本后，重跑 `sudo ./scripts/setup.sh service --dir <目录>` 刷新 unit，再使用安装按钮。
 
 查看日志：
 

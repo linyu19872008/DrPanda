@@ -12,7 +12,7 @@
 # Examples:
 #   ./scripts/setup.sh check
 #   ./scripts/setup.sh install --method source --extras mysql,redis
-#   ./scripts/setup.sh install --method pypi --version 1.2.0
+#   ./scripts/setup.sh install --method pypi --version 1.2.1
 #   sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
 #   ./scripts/setup.sh start
 #
@@ -27,7 +27,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 REPO_URL="${DR_PANDA_REPO_URL:-https://github.com/linyu19872008/dr-panda-mcp.git}"
-DEFAULT_VERSION="${DR_PANDA_VERSION:-1.2.0}"
+DEFAULT_VERSION="${DR_PANDA_VERSION:-1.2.1}"
 VERSION=""
 DEFAULT_USER="${DR_PANDA_SERVICE_USER:-drpanda}"
 DEFAULT_SERVICE_NAME="${DR_PANDA_SERVICE_NAME:-dr-panda-mcp}"
@@ -62,7 +62,7 @@ Options:
   --dir PATH              Application directory (default: current repo for source,
                           /opt/dr-panda-mcp for pypi/service)
   --method source|pypi    Installation method (install/upgrade)
-  --version VERSION       PyPI version (default 1.2.0)
+  --version VERSION       PyPI version (default 1.2.1)
   --python PYTHON         Python interpreter (default: auto; system >=3.11 first)
   --dev                   Install the dev dependency group (source only)
   --index-url URL         PyPI index (sets UV_DEFAULT_INDEX)
@@ -224,6 +224,7 @@ health_host() {
 install_uv() {
   if have uv; then
     info "uv found: $(uv --version)"
+    ensure_service_uv
     return 0
   fi
   warn "uv not found"
@@ -238,6 +239,21 @@ install_uv() {
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
   have uv || die "uv installation did not put uv on PATH; add ~/.local/bin to PATH"
+  ensure_service_uv
+}
+
+ensure_service_uv() {
+  # systemd does not inherit the root installer PATH; make uv reachable by the
+  # dedicated service user without exposing /root.
+  if [[ "$EUID" -ne 0 ]]; then
+    return 0
+  fi
+  have uv || return 0
+  local uv_path target=/usr/local/bin/uv
+  uv_path="$(command -v uv)"
+  [[ "$uv_path" == "$target" ]] && return 0
+  install -m 0755 "$uv_path" "$target"
+  info "uv available to service: $target"
 }
 
 ensure_git() {
@@ -454,6 +470,9 @@ install_service() {
   [[ -f "$DIR/.env" ]] && chmod 600 "$DIR/.env"
   [[ -d "$DIR/data" ]] && chmod 700 "$DIR/data"
   assert_service_exec "$binary"
+  local write_paths="$DIR/data"
+  [[ -d "$DIR/.venv" ]] && write_paths+=" $DIR/.venv"
+  [[ -f "$DIR/uv.lock" ]] && write_paths+=" $DIR/uv.lock"
   tmp_dir="$(mktemp -d)"
   tmpfile="$tmp_dir/unit"
   {
@@ -474,7 +493,9 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=$DIR/data
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=UV_CACHE_DIR=$DIR/data/.uv-cache
+ReadWritePaths=$write_paths
 UMask=0077
 EOF
     if [[ "$DIR" != /home/* ]]; then
