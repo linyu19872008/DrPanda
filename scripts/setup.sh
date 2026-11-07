@@ -12,7 +12,7 @@
 # Examples:
 #   ./scripts/setup.sh check
 #   ./scripts/setup.sh install --method source --extras mysql,redis
-#   ./scripts/setup.sh install --method pypi --version 1.2.1
+#   ./scripts/setup.sh install --method pypi --version 1.2.2
 #   sudo ./scripts/setup.sh service --dir /opt/dr-panda-mcp
 #   ./scripts/setup.sh start
 #
@@ -27,7 +27,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 REPO_URL="${DR_PANDA_REPO_URL:-https://github.com/linyu19872008/dr-panda-mcp.git}"
-DEFAULT_VERSION="${DR_PANDA_VERSION:-1.2.1}"
+DEFAULT_VERSION="${DR_PANDA_VERSION:-1.2.2}"
 VERSION=""
 DEFAULT_USER="${DR_PANDA_SERVICE_USER:-drpanda}"
 DEFAULT_SERVICE_NAME="${DR_PANDA_SERVICE_NAME:-dr-panda-mcp}"
@@ -62,7 +62,7 @@ Options:
   --dir PATH              Application directory (default: current repo for source,
                           /opt/dr-panda-mcp for pypi/service)
   --method source|pypi    Installation method (install/upgrade)
-  --version VERSION       PyPI version (default 1.2.1)
+  --version VERSION       PyPI version (default 1.2.2)
   --python PYTHON         Python interpreter (default: auto; system >=3.11 first)
   --dev                   Install the dev dependency group (source only)
   --index-url URL         PyPI index (sets UV_DEFAULT_INDEX)
@@ -248,9 +248,12 @@ ensure_service_uv() {
   if [[ "$EUID" -ne 0 ]]; then
     return 0
   fi
-  have uv || return 0
   local uv_path target=/usr/local/bin/uv
-  uv_path="$(command -v uv)"
+  uv_path="$(command -v uv 2>/dev/null || true)"
+  if [[ -z "$uv_path" && -x /root/.local/bin/uv ]]; then
+    uv_path=/root/.local/bin/uv
+  fi
+  [[ -n "$uv_path" ]] || return 0
   [[ "$uv_path" == "$target" ]] && return 0
   install -m 0755 "$uv_path" "$target"
   info "uv available to service: $target"
@@ -470,6 +473,7 @@ install_service() {
   [[ -f "$DIR/.env" ]] && chmod 600 "$DIR/.env"
   [[ -d "$DIR/data" ]] && chmod 700 "$DIR/data"
   assert_service_exec "$binary"
+  ensure_service_uv
   local write_paths="$DIR/data"
   [[ -d "$DIR/.venv" ]] && write_paths+=" $DIR/.venv"
   [[ -f "$DIR/uv.lock" ]] && write_paths+=" $DIR/uv.lock"

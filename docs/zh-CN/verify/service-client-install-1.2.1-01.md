@@ -54,3 +54,12 @@ sudo ./scripts/setup.sh service --dir /data/code/dr-panda-mcp
 ```
 
 否则旧 unit 仍然是只读 `.venv`、没有 uv 路径。
+
+## 1.2.2 补充
+
+`setup.sh service` 现在在写 unit 前调用 `ensure_service_uv`，因此即使 `uv` 只安装在 `/root/.local/bin`，也会先复制到 `/usr/local/bin/uv`，再生成服务配置。
+
+验证：
+
+- `bash -n scripts/setup.sh`：通过；
+- 全量测试：578 passed。

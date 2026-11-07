@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-07
+
+### 修复
+
+- `setup.sh service` 在写 unit 前确保把当前 `uv` 复制到 `/usr/local/bin`，包括 `uv` 只在 `/root/.local/bin` 的情况。
+
 ## [1.2.1] - 2026-11-07
 
 ### 修复

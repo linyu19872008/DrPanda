@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-07
+
+### Fixed
+
+- `setup.sh service` now ensures the current `uv` binary is copied to `/usr/local/bin` before writing the unit, including when `uv` is only under `/root/.local/bin`.
+
 ## [1.2.1] - 2026-11-07
 
 ### Fixed
