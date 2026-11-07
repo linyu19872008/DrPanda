@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-07
+
+### Fixed
+
+- MySQL migration 0007 failed at `batch.alter_column` because MySQL requires the existing column type for `CHANGE/MODIFY COLUMN`. The migration now passes `existing_type` and `existing_nullable`.
+- Added a real MySQL/PostgreSQL first-install integration check that runs the full SetupApp flow, pages, schema checks and an idempotent re-migration.
+- Added a CI job with MySQL 8.0 and PostgreSQL 16 service containers.
+
 ## [1.1.1] - 2026-11-07
 
 ### Fixed

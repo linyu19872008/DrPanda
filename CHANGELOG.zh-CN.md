@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-07
+
+### 修复
+
+- MySQL 迁移 0007 的 `batch.alter_column` 因 MySQL 要求提供现有列类型而失败；现在传入 `existing_type` 和 `existing_nullable`。
+- 新增真实 MySQL/PostgreSQL 首次安装集成检查：完整 SetupApp 流程、页面、schema 校验和幂等迁移。
+- CI 增加 MySQL 8.0 / PostgreSQL 16 service container 任务。
+
 ## [1.1.1] - 2026-11-07
 
 ### 修复

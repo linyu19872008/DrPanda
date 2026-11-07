@@ -53,7 +53,12 @@ def upgrade() -> None:
         targets.update().values(environment_id=default_environment_id)
     )
     with op.batch_alter_table("targets") as batch:
-        batch.alter_column("environment_id", nullable=False)
+        batch.alter_column(
+            "environment_id",
+            existing_type=sa.BigInteger().with_variant(sa.Integer, "sqlite"),
+            existing_nullable=True,
+            nullable=False,
+        )
         batch.create_foreign_key(
             "fk_targets_environment_id",
             "environments",

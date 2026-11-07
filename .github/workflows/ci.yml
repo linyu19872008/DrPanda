@@ -25,6 +25,47 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -q
 
+  database:
+    name: database setup (MySQL + PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: drpanda_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: drpanda_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d drpanda_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --all-extras --dev
+      - name: Run full setup flow against real databases
+        run: uv run python scripts/integration/check_db_setup.py
+        env:
+          DR_PANDA_TEST_MYSQL_URL: mysql+asyncmy://root:root@127.0.0.1:3306/drpanda_test?charset=utf8mb4
+          DR_PANDA_TEST_POSTGRES_URL: postgresql+asyncpg://postgres:root@127.0.0.1:5432/drpanda_test
+
   package:
     name: build package
     runs-on: ubuntu-latest
